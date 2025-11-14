@@ -1,0 +1,25 @@
+moveit_setup_assistant_config:
+  urdf:
+    package: ros_robotiq_description
+    relative_path: ros_robotiq_description/urdf/moveit_urdf.urdf
+  srdf:
+    relative_path: config/ur3_robotiq.srdf
+  package_settings:
+    author_name: pierce
+    author_email: coylep2@wwu.edu
+    generated_timestamp: 1762911024
+  control_xacro:
+    command:
+      - position
+    state:
+      - position
+      - velocity
+  modified_urdf:
+    xacros:
+      - control_xacro
+  control_xacro:
+    command:
+      - position
+    state:
+      - position
+      - velocity

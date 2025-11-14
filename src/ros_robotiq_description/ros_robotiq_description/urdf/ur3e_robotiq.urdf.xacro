@@ -1,0 +1,188 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="ur3_robotiq">
+  <!-- robot name parameter -->
+  <xacro:arg name="name" default="ur"/>
+  <!-- import arm macros -->
+  <xacro:include filename="$(find ur_description)/urdf/ur_macro.xacro"/>
+  <xacro:include filename="$(find ur_description)/urdf/inc/ur_joint_control.xacro" />
+  <xacro:include filename="$(find ur_description)/urdf/inc/ur_sensors.xacro" />
+  <!--<xacro:include filename="$(find ur_description)/urdf/ros2_control_mock_hardware.xacro" />  This doesnt work with gazebo -->
+
+  <!-- import end effector -->
+  <xacro:include filename="$(find robotiq_description)/urdf/robotiq_2f_85_macro.urdf.xacro" />
+  <!-- import dapter macro -->
+  <xacro:include filename="$(find robotiq_description)/urdf/ur_to_robotiq_adapter.urdf.xacro" />
+
+  <!-- possible 'ur_type' values: ur3, ur5, ur10, ur3e, ur5e, ur7e, ur10e, ur12e, ur16e, ur8long, ur15, ur20, ur30 -->
+  <!-- the default value should raise an error in case this was called without defining the type -->
+  <xacro:arg name="ur_type" default="ur3e"/>
+
+  <!-- ur parameters -->
+  <xacro:arg name="tf_prefix" default="" />
+  
+  <xacro:arg name="joint_limit_params" default="$(find ur3e_moveit_config)/config/joint_limits.yaml"/>
+  <!--<xacro:arg name="joint_limit_params" default="$(find ur_description)/config/$(arg ur_type)/joint_limits.yaml"/> -->
+
+  <xacro:arg name="kinematics_params" default="$(find ur_description)/config/$(arg ur_type)/default_kinematics.yaml"/>
+  <xacro:arg name="physical_params" default="$(find ur_description)/config/$(arg ur_type)/physical_parameters.yaml"/>
+  <xacro:arg name="visual_params" default="$(find ur_description)/config/$(arg ur_type)/visual_parameters.yaml"/>
+  <xacro:arg name="transmission_hw_interface" default=""/>
+  <xacro:arg name="safety_limits" default="false"/>
+  <xacro:arg name="safety_pos_margin" default="0.15"/>
+  <xacro:arg name="safety_k_position" default="20"/>
+  <xacro:arg name="mock_sensor_commands" default="false" />
+
+  <!-- robotiq parameters -->
+  <xacro:arg name="prefix" default="" />
+  <xacro:arg name="sim_ignition" default="false" />
+  <xacro:arg name="sim_isaac" default="false" />
+
+  <!-- Change if using real hardware -->
+  <xacro:arg name="use_fake_hardware" default="true" />
+  <xacro:arg name="fake_sensor_commands" default="true" />
+  <xacro:arg name="com_port" default="/dev/ttyUSB0" />
+  
+  <xacro:arg name="force_abs_paths" default="false" />
+
+  <xacro:arg name="initial_positions_file" default="$(find ur_description)/config/initial_positions.yaml"/>
+
+  <!-- convert to property to use substitution in function -->
+  <xacro:property name="initial_positions_file" default="$(arg initial_positions_file)"/>
+
+  <!-- create link fixed to the "world" -->
+  <link name="world" />
+
+  <!-- arm -->
+  <xacro:ur_robot
+    name="$(arg name)"
+    tf_prefix="$(arg tf_prefix)"
+    parent="world"
+    joint_limits_parameters_file="$(arg joint_limit_params)"
+    kinematics_parameters_file="$(arg kinematics_params)"
+    physical_parameters_file="$(arg physical_params)"
+    visual_parameters_file="$(arg visual_params)"
+    safety_limits="$(arg safety_limits)"
+    safety_pos_margin="$(arg safety_pos_margin)"
+    safety_k_position="$(arg safety_k_position)"
+    force_abs_paths="$(arg force_abs_paths)"
+    >
+    <origin xyz="0 0 0" rpy="0 0 0" />          <!-- position robot in the world -->
+  </xacro:ur_robot>
+
+  <!-- gripper -->
+  <!-- we have to force include_ros2_control to be false because the -->
+  <!-- robotiq package violates some jazzy+ specific rules, the fixed control is below-->
+  <xacro:robotiq_gripper
+    name="$(arg name)"
+    prefix="$(arg prefix)"
+    parent="$(arg prefix)gripper_mount_link"
+    sim_ignition="$(arg sim_ignition)"
+    sim_isaac="$(arg sim_isaac)"
+    use_fake_hardware="$(arg use_fake_hardware)"
+    fake_sensor_commands="$(arg fake_sensor_commands)"
+    include_ros2_control="false"
+    com_port="$(arg com_port)"
+    >
+    <origin xyz="0 0 0" rpy="0 0 0" />          <!-- position robot in the world -->
+  </xacro:robotiq_gripper>
+
+  <!-- gripper to arm adapter -->
+  <xacro:ur_to_robotiq
+    prefix="$(arg prefix)"
+    connected_to="$(arg tf_prefix)tool0"
+    rotation="0.0" 
+    />
+
+  <!-- Add fixed control for arm (change mocked hardware to gazebo system)-->
+    <xacro:macro name="ur_ros2_control" params="
+      name
+      tf_prefix
+      mock_sensor_commands:=false
+      initial_positions:=${dict(shoulder_pan_joint=0.0,shoulder_lift_joint=-1.57,elbow_joint=0.0,wrist_1_joint=-1.57,wrist_2_joint=0.0,wrist_3_joint=0.0)}
+      ">
+
+      <ros2_control name="${name}" type="system">
+        <hardware>
+          <!-- <plugin>mock_components/GenericSystem</plugin> -->
+          <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+          <param name="mock_sensor_commands">${mock_sensor_commands}</param>
+          <param name="state_following_offset">0.0</param>
+          <param name="calculate_dynamics">true</param>
+        </hardware>
+        <xacro:ur_joint_control_description
+          tf_prefix="${tf_prefix}"
+          initial_positions="${initial_positions}"
+        />
+
+        <xacro:ur_sensors
+          tf_prefix="${tf_prefix}"
+        />
+      </ros2_control>
+    </xacro:macro>
+
+
+  <!-- Add fixed control for gripper -->
+  <ros2_control name="robotiq_gripper_system" type="system">
+    <hardware>
+      <!-- <plugin>mock_components/GenericSystem</plugin> -->
+      <plugin>gz_ros2_control/GazeboSimSystem</plugin> 
+      <param name="fake_sensor_commands">True</param>
+      <param name="state_following_offset">0.0</param>
+    </hardware>
+
+    <!-- Main joint -->
+    <joint name="robotiq_85_left_knuckle_joint">
+      <command_interface name="position"/>
+      <state_interface name="position">
+        <param name="initial_value">0.7929</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <!-- Mimic joints-->
+    <joint name="robotiq_85_right_knuckle_joint">
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <joint name="robotiq_85_left_inner_knuckle_joint">
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <joint name="robotiq_85_right_inner_knuckle_joint">
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <joint name="robotiq_85_left_finger_tip_joint">
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <joint name="robotiq_85_right_finger_tip_joint">
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
+
+
+
+
+  <!-- ros2 control instance -->
+  <xacro:ur_ros2_control
+    name="$(arg name)"
+    tf_prefix="$(arg tf_prefix)"
+    mock_sensor_commands="$(arg mock_sensor_commands)"
+    initial_positions="${xacro.load_yaml(initial_positions_file)}"
+  />
+
+  <!-- Load in gazebo ontrol -->
+  <gazebo>
+    <plugin filename="libgz_ros2_control-system.so"
+            name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+      <parameters>$(find ros_robotiq_description)/config/ur3e_robotiq_controllers.yaml</parameters>
+    </plugin>
+  </gazebo>
+
+</robot>
