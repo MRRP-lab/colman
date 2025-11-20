@@ -1,3 +1,7 @@
+# pixi
+.pixi/*
+!.pixi/config.toml
+
 install/
 build/
 log/

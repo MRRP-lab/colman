@@ -1,0 +1,25 @@
+[workspace]
+authors = ["Neil Macneale V <neil.macneale.v@gmail.com>", "Pierce Coyle <coylep2@wwu.edu>"]
+channels = ["robostack-jazzy", "conda-forge"]
+name = "ur3e"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[activation]
+scripts = ["install/setup.sh"]
+
+[tasks]
+build = "colcon build --symlink-install"
+
+[dependencies]
+colcon-common-extensions = ">=0.3.0,<0.4"
+filelock = ">=3.20.0,<4"
+setuptools = "<=70.8.0"
+ros-jazzy-desktop = ">=0.11.0,<0.12"
+ros-jazzy-xacro = ">=2.0.11,<3"
+ros-jazzy-ur-description = ">=3.0.1,<4"
+ros-jazzy-robotiq-description = ">=0.0.1,<0.0.2"
+ros-jazzy-gz-sim-vendor = ">=0.0.8,<0.0.9"
+ros-jazzy-ros-gz = ">=1.0.16,<2"
+ros-jazzy-ros2-control = ">=4.33.0,<5"
+ros-jazzy-moveit = ">=2.12.3,<3"
