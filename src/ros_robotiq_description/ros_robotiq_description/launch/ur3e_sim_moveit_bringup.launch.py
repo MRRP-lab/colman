@@ -4,8 +4,8 @@ from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch.actions import TimerAction, OpaqueFunction, LogInfo
 from launch_ros.substitutions import FindPackageShare
-from launch.actions import TimerAction
 from launch_ros.actions import SetParameter
 
 
@@ -54,16 +54,17 @@ def generate_launch_description():
     spawn_entity = TimerAction(
         period=3.0,
         actions=[
-            Node(
-                package="ros_gz_sim",
-                executable="create",
-                output="screen",
-                arguments=[
-                    "-topic", "/robot_description",
-                    "-name", "ur3e_robotiq",
-                    "-z", "0.0"
-                ],
-            )
+            LogInfo(msg="HELLOOOOO"),
+            # Node(
+            #     package="ros_gz_sim",
+            #     executable="create",
+            #     output="screen",
+            #     arguments=[
+            #         "-topic", "/robot_description",
+            #         "-name", "ur3e_robotiq",
+            #         "-z", "0.0"
+            #     ],
+            # )
         ],
     )
 
@@ -110,6 +111,6 @@ def generate_launch_description():
             gazebo,
             spawn_entity,
             clock_bridge,
-            moveit_demo,
+            #moveit_demo,
         ]
     )
