@@ -15,7 +15,6 @@ def generate_launch_description():
     
     rviz = LaunchConfiguration("rviz")
     world = LaunchConfiguration("world")
-    set_sim_time = SetParameter(name='use_sim_time', value=True)
 
     declared_arguments = [
         DeclareLaunchArgument(
@@ -24,8 +23,8 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "world",
             default_value="empty.sdf",
-            description="Gazebo world file",
-        ),
+            description="Gazebo world file"
+        )
     ]
 
     # call the template bringup for common nodes
@@ -37,7 +36,7 @@ def generate_launch_description():
                 "ur3e_robotiq_bringup.launch.py"
             ])
         ),
-        launch_arguments={"start_external_rm": "false"}.items(),
+        launch_arguments={"start_external_rm": "false"}.items()
     )
 
     # launch gazebo harmonic with gui enabled
@@ -47,38 +46,44 @@ def generate_launch_description():
         ),
         launch_arguments={
             "gz_args": ["-r -v 4 ", world]
-        }.items(),
+        }.items()
     )
 
     # spawn the arm in gazebo
     spawn_entity = TimerAction(
         period=3.0,
         actions=[
-            LogInfo(msg="HELLOOOOO"),
-            # Node(
-            #     package="ros_gz_sim",
-            #     executable="create",
-            #     output="screen",
-            #     arguments=[
-            #         "-topic", "/robot_description",
-            #         "-name", "ur3e_robotiq",
-            #         "-z", "0.0"
-            #     ],
-            # )
+             Node(
+                 package="ros_gz_sim",
+                 executable="create",
+                 output="screen",
+                 arguments=[
+                     "-topic", "/robot_description",
+                     "-name", "ur3e_robotiq",
+                     "-z", "0.0"
+                 ],
+             )
         ],
     )
 
-    # bridge gazebo and ros clock
+    # This clock bridge works
+    bridge_config = PathJoinSubstitution([
+        FindPackageShare("ros_robotiq_description"), # Or your package name
+        "config",
+        "bridge_config.yaml"
+    ])
+
     clock_bridge = Node(
         package="ros_gz_bridge",
         executable="parameter_bridge",
-        arguments=["/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock"],
+        parameters=[{'config_file': bridge_config}], # Use param instead of arguments
         output="screen",
     )
 
     moveit_demo = TimerAction(
         period=8.0,
         actions=[
+            SetParameter(name='use_sim_time', value=True),
             # backend
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
@@ -103,14 +108,13 @@ def generate_launch_description():
             ),
         ],
     )
-
     return LaunchDescription(
         declared_arguments + [
             ur3e_bringup,
-            set_sim_time,
             gazebo,
-            spawn_entity,
+            moveit_demo,
             clock_bridge,
-            #moveit_demo,
+            spawn_entity,
+
         ]
     )
