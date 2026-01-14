@@ -10,6 +10,7 @@ scripts = ["install/setup.sh"]
 
 [tasks]
 sim = "ros2 launch ros_robotiq_description ur3e_sim_moveit_bringup.launch.py"
+real = "ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur3e robot_ip:=192.168.56.101"
 build = "colcon build --symlink-install"
 
 [dependencies]
@@ -28,3 +29,6 @@ make = ">=4.4.1,<5"
 compilers = ">=1.11.0,<2"
 ros-jazzy-gz-ros2-control = ">=1.2.14,<2"
 ros-jazzy-ros2-controllers = ">=4.28.0,<5"
+ros-jazzy-ur-robot-driver = ">=3.3.3,<4"
+ros-jazzy-ur-calibration = ">=3.3.3,<4"
+ros-jazzy-ur = ">=3.3.3,<4"

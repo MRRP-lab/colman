@@ -1,0 +1,3 @@
+pixi run ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur3e robot_ip:=192.168.56.101 headless_mode:=true
+pixi run ros2 control switch_controllers --activate scaled_joint_trajectory_controller
+pixi run ros2 launch ur_moveit_config ur_moveit.launch.py ur_type:=ur3e launch_rviz:=true
