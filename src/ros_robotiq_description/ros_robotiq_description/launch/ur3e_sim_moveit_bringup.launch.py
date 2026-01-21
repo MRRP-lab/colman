@@ -36,7 +36,7 @@ def generate_launch_description():
                 "ur3e_robotiq_bringup.launch.py"
             ])
         ),
-        launch_arguments={"start_external_rm": "false"}.items()
+        launch_arguments={"start_external_rm": "false","use_sim_time": "true"}.items()
     )
 
     # launch gazebo harmonic with gui enabled
@@ -51,7 +51,7 @@ def generate_launch_description():
 
     # spawn the arm in gazebo
     spawn_entity = TimerAction(
-        period=3.0,
+        period=0.0,
         actions=[
              Node(
                  package="ros_gz_sim",
@@ -81,7 +81,7 @@ def generate_launch_description():
     )
 
     moveit_demo = TimerAction(
-        period=8.0,
+        period=0.0,
         actions=[
             SetParameter(name='use_sim_time', value=True),
             # backend
@@ -109,7 +109,8 @@ def generate_launch_description():
         ],
     )
     return LaunchDescription(
-        declared_arguments + [
+        declared_arguments +
+        [
             ur3e_bringup,
             gazebo,
             moveit_demo,

@@ -48,7 +48,7 @@ def generate_launch_description():
 
     # spawn the arm in gazebo
     spawn_entity = TimerAction(
-        period=3.0,
+        period=0.0,
         actions=[
             Node(
                 package="ros_gz_sim",
