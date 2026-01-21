@@ -5,7 +5,7 @@
 install/
 build/
 log/
-
+log.txt
 frames_*.gv
 frames_*.pdf
 
