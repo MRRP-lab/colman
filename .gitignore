@@ -1,7 +1,11 @@
+# pixi
+.pixi/*
+!.pixi/config.toml
+
 install/
 build/
 log/
-
+log.txt
 frames_*.gv
 frames_*.pdf
 

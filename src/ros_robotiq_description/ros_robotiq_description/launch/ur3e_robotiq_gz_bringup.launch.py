@@ -48,7 +48,7 @@ def generate_launch_description():
 
     # spawn the arm in gazebo
     spawn_entity = TimerAction(
-        period=3.0,
+        period=0.0,
         actions=[
             Node(
                 package="ros_gz_sim",
@@ -68,7 +68,7 @@ def generate_launch_description():
     clock_bridge = Node(
         package="ros_gz_bridge",
         executable="parameter_bridge",
-        arguments=["/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock"],
+        arguments=["/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock]"],
         output="screen",
     )
 
