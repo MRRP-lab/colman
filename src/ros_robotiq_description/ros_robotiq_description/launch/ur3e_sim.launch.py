@@ -4,7 +4,7 @@ from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
-from launch.actions import TimerAction, OpaqueFunction, LogInfo
+from launch.actions import TimerAction, OpaqueFunction, LogInfo, GroupAction
 from launch_ros.substitutions import FindPackageShare
 from launch_ros.actions import SetParameter
 
@@ -22,9 +22,13 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             "world",
-            default_value="empty.sdf",
-            description="Gazebo world file"
-        )
+            default_value=PathJoinSubstitution([
+                FindPackageShare("ros_robotiq_description"), # Your package name
+                "worlds",
+                "empty_bullet.sdf"
+            ]),
+            description="Gazebo world file",
+        ),
     ]
 
     # call the template bringup for common nodes
