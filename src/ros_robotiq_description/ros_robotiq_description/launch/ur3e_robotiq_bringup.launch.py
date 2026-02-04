@@ -89,21 +89,12 @@ def generate_launch_description():
     )
     """
 
-
-    spawn_controllers = TimerAction(
-        period=0.0,
-        actions=[
-            joint_state_broadcaster_spawner,
-            arm_controller_spawner,
-            gripper_controller_spawner,
-        ],
-        
-    )
-
     # List of nodes to return
     return LaunchDescription([
         declare_rm_arg,
         robot_state_publisher,
         ros2_control_node,
-        spawn_controllers,
+        joint_state_broadcaster_spawner,
+        arm_controller_spawner,
+        gripper_controller_spawner,
     ])
