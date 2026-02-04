@@ -1,18 +1,20 @@
-<sdf version='1.10'>
-  <world name='default'>
-    <gravity>0 0 -9.8000000000000007</gravity>
-    <magnetic_field>5.5644999999999998e-06 2.2875799999999999e-05 -4.2388400000000002e-05</magnetic_field>
-    <atmosphere type='adiabatic'/>
-    <physics type='ode'>
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <world name="empty">
+    <physics name="1ms" type="ignored">
       <max_step_size>0.001</max_step_size>
-      <real_time_factor>1</real_time_factor>
-      <real_time_update_rate>1000</real_time_update_rate>
+      <real_time_factor>1.0</real_time_factor>
     </physics>
 
-    <scene>
-      <ambient>0.400000006 0.400000006 0.400000006 1</ambient>
-      <background>0.699999988 0.699999988 0.699999988 1</background>
-      <shadows>true</shadows>
-    </scene>
+    <include>
+      <uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/Sun</uri>
+    </include>
+    <include>
+      <uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/Ground Plane</uri>
+    </include>
+
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"></plugin>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"></plugin>
+
   </world>
 </sdf>
