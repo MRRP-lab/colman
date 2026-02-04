@@ -11,6 +11,7 @@ scripts = ["install/setup.sh"]
 [tasks]
 sim = "ros2 launch ros_robotiq_description ur3e_sim.launch.py"
 build = "colcon build --symlink-install"
+list = "ros2 node list"
 
 [dependencies]
 colcon-common-extensions = ">=0.3.0,<0.4"
