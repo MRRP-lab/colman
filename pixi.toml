@@ -31,3 +31,8 @@ compilers = ">=1.11.0,<2"
 ros-jazzy-gz-ros2-control = ">=1.2.14,<2"
 ros-jazzy-ros2-controllers = ">=4.28.0,<5"
 ros-jazzy-rqt-graph = ">=1.5.4,<2"
+opencv = ">=4.11.0,<5"
+
+[pypi-dependencies]
+ultralytics = ">=8.4.11, <9"
+depthai = ">=3.3.0, <4"
