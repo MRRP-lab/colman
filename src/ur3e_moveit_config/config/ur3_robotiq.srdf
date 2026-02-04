@@ -15,7 +15,15 @@
     </group>
 
     <group name="gripper">
-        <joint name="robotiq_85_left_knuckle_joint"/>
+        <link name="robotiq_85_base_link"/>
+        <link name="robotiq_85_left_knuckle_link"/>
+        <link name="robotiq_85_left_finger_link"/>
+        <link name="robotiq_85_left_finger_tip_link"/>
+        <link name="robotiq_85_right_knuckle_link"/>
+        <link name="robotiq_85_right_finger_link"/>
+        <link name="robotiq_85_right_finger_tip_link"/>
+        <link name="robotiq_85_left_inner_knuckle_link"/>
+        <link name="robotiq_85_right_inner_knuckle_link"/>
     </group>
 
     <group_state name="zero" group="ur_arm">
