@@ -53,16 +53,16 @@ def generate_launch_description():
     spawn_entity = TimerAction(
         period=0.0,
         actions=[
-             Node(
-                 package="ros_gz_sim",
-                 executable="create",
-                 output="screen",
-                 arguments=[
-                     "-topic", "/robot_description",
-                     "-name", "ur3e_robotiq",
-                     "-z", "0.0"
-                 ],
-             )
+            Node(
+                package="ros_gz_sim",
+                executable="create",
+                output="screen",
+                arguments=[
+                    "-topic", "/robot_description",
+                    "-name", "ur3e_robotiq",
+                    "-z", "0.0"
+                ],
+            )
         ],
     )
 
