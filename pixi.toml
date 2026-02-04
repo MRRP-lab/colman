@@ -10,6 +10,7 @@ scripts = ["install/setup.sh"]
 
 [tasks]
 sim = "ros2 launch ros_robotiq_description ur3e_sim.launch.py"
+pick = "ros2 launch pick_n_place pick_n_place_demo.launch.py"
 build = "colcon build --symlink-install"
 list = "ros2 node list"
 graph = "rqt_graph"

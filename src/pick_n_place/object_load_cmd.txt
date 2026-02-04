@@ -1,0 +1,1 @@
+pixi run ros2 topic pub /detected_object geometry_msgs/msg/PoseStamped "{header: {frame_id: 'world'}, pose: {position: {x: 0.0, y: 0.3, z: 0.025}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}" --once
