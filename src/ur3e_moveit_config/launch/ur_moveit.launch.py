@@ -117,6 +117,9 @@ def generate_launch_description():
                 "use_sim_time": use_sim_time,
                 "publish_robot_description_semantic": publish_robot_description_semantic,
             },
+            {
+                "capabilities": "move_group/ExecuteTaskSolutionCapability"
+            }
         ],
     )
 
