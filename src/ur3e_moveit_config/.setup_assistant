@@ -1,7 +1,7 @@
 moveit_setup_assistant_config:
   urdf:
     package: ros_robotiq_description
-    relative_path: ros_robotiq_description/urdf/moveit_urdf.urdf
+    relative_path: urdf/moveit_urdf.urdf
   srdf:
     relative_path: config/ur3_robotiq.srdf
   package_settings:
