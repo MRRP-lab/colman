@@ -4,8 +4,6 @@ environments:
     channels:
     - url: https://conda.anaconda.org/robostack-jazzy/
     - url: https://conda.anaconda.org/conda-forge/
-    options:
-      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
@@ -694,6 +692,8 @@ environments:
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-setup-framework-2.12.3-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-setup-srdf-plugins-2.12.3-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-simple-controller-manager-2.12.3-np126py312h3bd2861_9.conda
+      - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-task-constructor-core-0.1.3-np126py312h3bd2861_9.conda
+      - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-task-constructor-msgs-0.1.3-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-nav-msgs-5.3.6-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-object-recognition-msgs-2.0.0-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-octomap-msgs-2.0.1-np126py312h3bd2861_9.conda
@@ -715,6 +715,7 @@ environments:
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-point-cloud-transport-4.0.4-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-pose-broadcaster-4.28.0-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-position-controllers-4.28.0-np126py312h3bd2861_9.conda
+      - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-py-binding-tools-2.0.1-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-pybind11-vendor-3.1.3-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-python-cmake-module-0.11.1-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-python-orocos-kdl-vendor-0.5.1-np126py312h3bd2861_9.conda
@@ -851,6 +852,7 @@ environments:
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-rviz-assimp-vendor-14.1.12-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-rviz-common-14.1.12-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-rviz-default-plugins-14.1.12-np126py312h3bd2861_9.conda
+      - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-rviz-marker-tools-0.1.3-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-rviz-ogre-vendor-14.1.12-np126py312h39124df_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-rviz-rendering-14.1.12-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-rviz2-14.1.12-np126py312h3bd2861_9.conda
@@ -12107,6 +12109,55 @@ packages:
   license: BSD-3-Clause
   size: 203986
   timestamp: 1753568845274
+- conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-task-constructor-core-0.1.3-np126py312h3bd2861_9.conda
+  sha256: 690446751ebfc1f35b9421fb9e4ba9d9c69e7b644803c059eb9ff8f82996ec96
+  md5: 4c74fe27848ad551a4a2ce2f819273b6
+  depends:
+  - fmt
+  - python
+  - ros-jazzy-geometry-msgs
+  - ros-jazzy-moveit-core
+  - ros-jazzy-moveit-ros-planning
+  - ros-jazzy-moveit-ros-planning-interface
+  - ros-jazzy-moveit-task-constructor-msgs
+  - ros-jazzy-py-binding-tools
+  - ros-jazzy-rclcpp
+  - ros-jazzy-ros-workspace
+  - ros-jazzy-rviz-marker-tools
+  - ros-jazzy-tf2-eigen
+  - ros-jazzy-visualization-msgs
+  - ros2-distro-mutex 0.10.* jazzy_*
+  - libgcc >=14
+  - libstdcxx >=14
+  - libgcc >=14
+  - __glibc >=2.17,<3.0.a0
+  - fmt >=11.2.0,<11.3.0a0
+  - ros2-distro-mutex >=0.10.0,<0.11.0a0
+  - python_abi 3.12.* *_cp312
+  - numpy >=1.26.4,<2.0a0
+  license: BSD-3-Clause
+  size: 1204604
+  timestamp: 1753615032368
+- conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-task-constructor-msgs-0.1.3-np126py312h3bd2861_9.conda
+  sha256: e6425a1531871bda5594748ddf2d19c37d04c2b3d78900700be2d9a778d75973
+  md5: 828d85990bd1c364c160f40843b0c260
+  depends:
+  - python
+  - ros-jazzy-moveit-msgs
+  - ros-jazzy-ros-workspace
+  - ros-jazzy-rosidl-default-runtime
+  - ros-jazzy-visualization-msgs
+  - ros2-distro-mutex 0.10.* jazzy_*
+  - libgcc >=14
+  - libstdcxx >=14
+  - libgcc >=14
+  - __glibc >=2.17,<3.0.a0
+  - ros2-distro-mutex >=0.10.0,<0.11.0a0
+  - numpy >=1.26.4,<2.0a0
+  - python_abi 3.12.* *_cp312
+  license: BSD-3-Clause
+  size: 486528
+  timestamp: 1753562758288
 - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-nav-msgs-5.3.6-np126py312h3bd2861_9.conda
   sha256: 170c0807900a62ceff1b75493c4fd94dd22023085244a5ae558a7557f38cbbbe
   md5: 4e9efee8a513e9d61eeac8e4cd6ab408
@@ -12588,6 +12639,26 @@ packages:
   license: BSD-3-Clause
   size: 74230
   timestamp: 1753568019105
+- conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-py-binding-tools-2.0.1-np126py312h3bd2861_9.conda
+  sha256: 34adb5f3f6797818cf2a06df9136097e2af7a8677ee880cc0d0adcf37859c884
+  md5: f5367af807095878a0966407e2bf1592
+  depends:
+  - python
+  - ros-jazzy-geometry-msgs
+  - ros-jazzy-pybind11-vendor
+  - ros-jazzy-rclcpp
+  - ros-jazzy-ros-workspace
+  - ros2-distro-mutex 0.10.* jazzy_*
+  - libgcc >=14
+  - __glibc >=2.17,<3.0.a0
+  - libstdcxx >=14
+  - libgcc >=14
+  - python_abi 3.12.* *_cp312
+  - numpy >=1.26.4,<2.0a0
+  - ros2-distro-mutex >=0.10.0,<0.11.0a0
+  license: BSD-3-Clause
+  size: 196052
+  timestamp: 1753563061853
 - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-pybind11-vendor-3.1.3-np126py312h3bd2861_9.conda
   sha256: fb49fc3038108b5c4b9b15641291c744e98cf5b1ce0e55042bf5e3e7094635ee
   md5: d9138497770cf8a865ae3577e0f8ff26
@@ -15811,6 +15882,30 @@ packages:
   license: BSD-3-Clause
   size: 2283536
   timestamp: 1753566427735
+- conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-rviz-marker-tools-0.1.3-np126py312h3bd2861_9.conda
+  sha256: 2654040d45d56db9c38c36312c370636994c645330d13bdc328b3c2599bfdeb1
+  md5: 094542ed3b1a0311561cbce8478e7a7a
+  depends:
+  - eigen
+  - python
+  - ros-jazzy-eigen3-cmake-module
+  - ros-jazzy-geometry-msgs
+  - ros-jazzy-moveit-common
+  - ros-jazzy-rclcpp
+  - ros-jazzy-ros-workspace
+  - ros-jazzy-std-msgs
+  - ros-jazzy-tf2-eigen
+  - ros-jazzy-visualization-msgs
+  - ros2-distro-mutex 0.10.* jazzy_*
+  - libstdcxx >=14
+  - libgcc >=14
+  - __glibc >=2.17,<3.0.a0
+  - numpy >=1.26.4,<2.0a0
+  - python_abi 3.12.* *_cp312
+  - ros2-distro-mutex >=0.10.0,<0.11.0a0
+  license: BSD-3-Clause
+  size: 57056
+  timestamp: 1753566351494
 - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-rviz-ogre-vendor-14.1.12-np126py312h39124df_9.conda
   sha256: 76a8116dc1564ba9a4ea1ae11d39d95bd8a21dcca3f259e973e2f2c34e43d237
   md5: a0c3618c2f42e3fd3709f2a3279a9f58
