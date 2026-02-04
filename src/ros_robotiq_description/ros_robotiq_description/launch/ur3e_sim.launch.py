@@ -33,7 +33,7 @@ def generate_launch_description():
             PathJoinSubstitution([
                 FindPackageShare("ros_robotiq_description"),
                 "launch",
-                "ur3e_robotiq_bringup.launch.py"
+                "ur3e_bringup.launch.py"
             ])
         ),
         launch_arguments={"start_external_rm": "false","use_sim_time": "true"}.items()
