@@ -12,6 +12,7 @@ scripts = ["install/setup.sh"]
 sim = "ros2 launch ros_robotiq_description ur3e_sim.launch.py"
 build = "colcon build --symlink-install"
 list = "ros2 node list"
+graph = "rqt_graph"
 
 [dependencies]
 colcon-common-extensions = ">=0.3.0,<0.4"
@@ -29,3 +30,4 @@ make = ">=4.4.1,<5"
 compilers = ">=1.11.0,<2"
 ros-jazzy-gz-ros2-control = ">=1.2.14,<2"
 ros-jazzy-ros2-controllers = ">=4.28.0,<5"
+ros-jazzy-rqt-graph = ">=1.5.4,<2"
