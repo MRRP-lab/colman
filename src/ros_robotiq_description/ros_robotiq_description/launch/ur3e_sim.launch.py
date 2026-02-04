@@ -54,8 +54,7 @@ def generate_launch_description():
     )
 
     # spawn the arm in gazebo
-    spawn_entity = TimerAction(
-        period=0.0,
+    spawn_entity = GroupAction(
         actions=[
             Node(
                 package="ros_gz_sim",
@@ -70,7 +69,6 @@ def generate_launch_description():
         ],
     )
 
-    # This clock bridge works
     bridge_config = PathJoinSubstitution([
         FindPackageShare("ros_robotiq_description"), # Or your package name
         "config",
@@ -80,12 +78,11 @@ def generate_launch_description():
     clock_bridge = Node(
         package="ros_gz_bridge",
         executable="parameter_bridge",
-        parameters=[{'config_file': bridge_config}], # Use param instead of arguments
+        parameters=[{'config_file': bridge_config}],
         output="screen",
     )
 
-    moveit_demo = TimerAction(
-        period=0.0,
+    moveit_demo = GroupAction(
         actions=[
             SetParameter(name='use_sim_time', value=True),
             # backend
