@@ -9,6 +9,14 @@
       <real_time_update_rate>1000</real_time_update_rate>
     </physics>
 
+    <light name="sun" type="directional">
+        <pose>0 0 10 0 0 0</pose>
+        <diffuse>1 1 1 1</diffuse>
+        <specular>0.1 0.1 0.1 1</specular>
+        <direction>-0.5 0.2 -1</direction>
+        <cast_shadows>true</cast_shadows>
+    </light>
+
     <scene>
       <ambient>0.400000006 0.400000006 0.400000006 1</ambient>
       <background>0.699999988 0.699999988 0.699999988 1</background>
@@ -17,7 +25,7 @@
 
     <include>
         <uri>model://table</uri>
-        <pose>0 0 0 0 0 0</pose>
+        <pose>0 0 0 1.57079632679 0 0</pose>
     </include>
 
   </world>
