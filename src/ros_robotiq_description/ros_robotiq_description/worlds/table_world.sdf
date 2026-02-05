@@ -24,8 +24,28 @@
     </scene>
 
     <include>
-        <uri>model://table</uri>
-        <pose>0 0 0 1.57079632679 0 0</pose>
+      <uri>model://table</uri>
+      <pose>0 0 0 1.57079632679 0 0</pose>
+    </include>
+
+    <include>
+      <uri>model://2inchwoodcube</uri>
+      <pose>-0.39125699 0.29168496 0.9906 0 0 0</pose>
+    </include>
+
+    <include>
+      <uri>model://1.5inchwoodcube</uri>
+      <pose>-0.38368499 0.16112609 0.98424943 0 0 0</pose>
+    </include>
+
+    <include>
+      <uri>model://2inchaprilcube</uri>
+      <pose>-0.37060499 -0.14883173 0.9906 0 0 0</pose>
+    </include>
+
+    <include>
+      <uri>model://1.5inchaprilcube</uri>
+      <pose>-0.37047299 -0.28810200 0.98424899 0 0 0</pose>
     </include>
 
   </world>
