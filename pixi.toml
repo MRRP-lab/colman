@@ -14,6 +14,9 @@ build = "colcon build --symlink-install"
 list = "ros2 node list"
 graph = "rqt_graph"
 
+[activation.env]
+GZ_SIM_RESOURCE_PATH = "$PIXI_PROJECT_ROOT/src/models"
+
 [dependencies]
 colcon-common-extensions = ">=0.3.0,<0.4"
 filelock = ">=3.20.0,<4"
