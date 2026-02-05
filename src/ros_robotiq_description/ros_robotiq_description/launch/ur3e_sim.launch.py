@@ -22,7 +22,11 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             "world",
-            default_value="empty.sdf",
+            default_value=PathJoinSubstitution([
+                FindPackageShare("ros_robotiq_description"),
+                "worlds",
+                "table_world.sdf"
+            ]),
             description="Gazebo world file"
         )
     ]
@@ -60,7 +64,9 @@ def generate_launch_description():
                 arguments=[
                     "-topic", "/robot_description",
                     "-name", "ur3e_robotiq",
-                    "-z", "0.0"
+                    "-x", "0.0",
+                    "-y", "0.0",
+                    "-z", "0.9652"
                 ],
             )
         ],
