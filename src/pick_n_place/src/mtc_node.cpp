@@ -85,7 +85,7 @@ void MTCTaskNode::doTask()
   }
   catch (mtc::InitStageException &e)
   {
-    std::cerr << "[Gavin] Creating task failed" << std::endl;
+    std::cerr << "[mtc_node.cpp] Creating task failed" << std::endl;
     RCLCPP_ERROR_STREAM(LOGGER, e);
     return;
   }
@@ -340,28 +340,22 @@ mtc::Task MTCTaskNode::createTask()
   return task;
 }
 
+// Waits for the /detected_object signal
 geometry_msgs::msg::PoseStamped MTCTaskNode::waitForObject()
 {
-  // 1. Create a promise and a future
-  // The Promise is the "sender" (inside the callback)
-  // The Future is the "receiver" (here in the main thread)
   auto promise = std::make_shared<std::promise<geometry_msgs::msg::PoseStamped>>();
   auto future = promise->get_future();
 
-  // 2. Create a temporary subscriber
-  // We capture 'promise' by value so the callback can write to it
   auto sub = node_->create_subscription<geometry_msgs::msg::PoseStamped>(
       "/detected_object", 10,
       [promise](const geometry_msgs::msg::PoseStamped::SharedPtr msg)
       {
-        // Signal that we got the data!
         promise->set_value(*msg);
       });
 
-  RCLCPP_INFO(LOGGER, "Waiting for object detection...");
+  RCLCPP_INFO(LOGGER, "[mtc_node.cpp] Waiting for object detection...");
   while (rclcpp::ok())
   {
-    // Wait for 1 second
     std::future_status status = future.wait_for(std::chrono::seconds(1));
 
     if (status == std::future_status::ready)
@@ -387,14 +381,15 @@ int main(int argc, char **argv)
                                                    {
     executor.add_node(mtc_task_node->getNodeBaseInterface());
     executor.spin();
-    executor.remove_node(mtc_task_node->getNodeBaseInterface()); });
+    executor.remove_node(mtc_task_node->getNodeBaseInterface()); 
+  });
 
 spawn_loop:
   try
   {
     // Waiting for /detected_object to get the pose
     geometry_msgs::msg::PoseStamped object_pose = mtc_task_node->waitForObject();
-    RCLCPP_INFO(LOGGER, "Object found at X: %f", object_pose.pose.position.x);
+    RCLCPP_INFO(LOGGER, "[mtc_node.cpp] Object spawned");
 
     // Loading into gazebo
     std::string package_share_directory = ament_index_cpp::get_package_share_directory("pick_n_place");
@@ -402,10 +397,9 @@ spawn_loop:
 
     if (!std::filesystem::exists(sdf_path))
     {
-      RCLCPP_ERROR(LOGGER, "SDF file not found at: %s", sdf_path.c_str());
+      RCLCPP_ERROR(LOGGER, "[mtc_node.cpp] SDF file not found at: %s", sdf_path.c_str());
       return 1;
     }
-    std::cout << "[Gavin] Before cmd\n";
     std::stringstream cmd;
     cmd << "ros2 run ros_gz_sim create "
         << "-world empty "
@@ -421,11 +415,8 @@ spawn_loop:
     std::system(delete_cmd.c_str());
     std::system(cmd.str().c_str());
 
-    std::cout << "[Gavin] After cmd\n";
     // Loading into moveit
     mtc_task_node->spawnBox(object_pose.pose.position.x, object_pose.pose.position.y, object_pose.pose.position.z, object_pose.pose.orientation.w);
-
-    std::cout << "[Gavin] After spawn box\n";
     // Running task
     mtc_task_node->doTask();
     goto spawn_loop;
