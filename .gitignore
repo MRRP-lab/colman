@@ -2,6 +2,7 @@
 .pixi/*
 !.pixi/config.toml
 
+# ros2
 install/
 build/
 log/
@@ -15,3 +16,5 @@ frames_*.pdf
 *.pt
 # point clouds
 *.pcd
+# python
+__pycache__/
