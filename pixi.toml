@@ -12,6 +12,8 @@ scripts = ["install/setup.sh"]
 sim = "ros2 launch ros_robotiq_description ur3e_sim.launch.py"
 sim-yolo = "ros2 launch ros_robotiq_description ur3e_YOLO.launch.py spawn_z:=0.9652"
 sim-depth = "ros2 launch ros_robotiq_description ur3e_depth.launch.py spawn_z:=0.9652"
+sim-eyeinhand = "ros2 launch ros_robotiq_description ur3e_depth.launch.py spawn_z:=0.9652 world:=$PIXI_PROJECT_ROOT/src/ros_robotiq_description/ros_robotiq_description/worlds/table_world.sdf"
+
 build = "colcon build --symlink-install"
 node-list = "ros2 node list"
 topic-list = "ros2 topic list"
@@ -20,7 +22,7 @@ image-view = "ros2 run rqt_image_view rqt_image_view"
 graph = "rqt_graph"
 
 [activation.env]
-GZ_SIM_RESOURCE_PATH = "$GZ_SIM_RESOURCE_PATH:$PIXI_PROJECT_ROOT/src/models:$PIXI_PROJECT_ROOT/src/oakd_gazebo/oakd_gazebo/models"
+GZ_SIM_RESOURCE_PATH = "$GZ_SIM_RESOURCE_PATH:$PIXI_PROJECT_ROOT/src/models:$PIXI_PROJECT_ROOT/src/oakd_gazebo/oakd_gazebo/models:$PIXI_PROJECT_ROOT/install/oakd_description/share"
 
 
 [dependencies]
