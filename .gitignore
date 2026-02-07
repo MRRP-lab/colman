@@ -11,4 +11,7 @@ frames_*.pdf
 
 .vscode/
 
+# yolo models
 *.pt
+# point clouds
+*.pcd
