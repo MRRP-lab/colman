@@ -36,6 +36,9 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            "detection = ros_robotiq_description.detection:main",
+            'disparity_to_depth = ros_robotiq_description.disparity_to_depth:main',
+            'stereo_camera_info_republisher = ros_robotiq_description.stereo_camera_info_republisher:main',
         ],
     },
 )
