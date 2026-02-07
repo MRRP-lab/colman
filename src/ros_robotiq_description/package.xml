@@ -28,6 +28,7 @@
   <!-- External xacros -->
   <exec_depend>ur_description</exec_depend>
   <exec_depend>robotiq_description</exec_depend>
+  <exec_depend>oakd_description</exec_depend>
 
   <export>
     <build_type>ament_python</build_type>
