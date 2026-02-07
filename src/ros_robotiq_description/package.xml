@@ -17,6 +17,13 @@
   <exec_depend>robot_state_publisher</exec_depend>
   <exec_depend>joint_state_publisher_gui</exec_depend>
   <exec_depend>rviz2</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>stereo_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>cv_bridge</exec_depend>
+  <exec_depend>image_proc</exec_depend>
+  <exec_depend>stereo_image_proc</exec_depend>
 
   <!-- External xacros -->
   <exec_depend>ur_description</exec_depend>

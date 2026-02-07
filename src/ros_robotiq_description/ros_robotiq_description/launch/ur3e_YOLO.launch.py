@@ -17,8 +17,6 @@ def generate_launch_description():
     world = LaunchConfiguration("world")
     spawn_z = LaunchConfiguration("spawn_z")
 
-    spawn_z = LaunchConfiguration("spawn_z")
-
     declared_arguments = [
         DeclareLaunchArgument(
             "rviz", default_value="true", description="Launch rviz"
@@ -28,7 +26,7 @@ def generate_launch_description():
             default_value=PathJoinSubstitution([
                 FindPackageShare("ros_robotiq_description"),
                 "worlds",
-                "empty_bullet.sdf"
+                "table_camera_world.sdf"
             ]),
             description="Gazebo world file"
         ),
@@ -94,6 +92,13 @@ def generate_launch_description():
         output="screen",
     )
 
+    detection = Node(
+        package="ros_robotiq_description",
+        executable="detection",
+        name="detection",
+        output="screen",
+    )
+
     moveit_demo = TimerAction(
         period=0.0,
         actions=[
@@ -126,6 +131,7 @@ def generate_launch_description():
         declared_arguments +
         [
             ur3e_bringup,
+            detection,
             gazebo,
             moveit_demo,
             clock_bridge,
