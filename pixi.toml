@@ -10,10 +10,12 @@ scripts = ["install/setup.sh"]
 
 [tasks]
 sim = "ros2 launch ros_robotiq_description ur3e_sim.launch.py"
+sim-camera = "ros2 launch ros_robotiq_description ur3e_YOLO.launch.py world:=src/ros_robotiq_description/ros_robotiq_description/worlds/table_camera_world.sdf spawn_z:=0.9652"
 build = "colcon build --symlink-install"
 node-list = "ros2 node list"
 topic-list = "ros2 topic list"
 gz-list = "gz topic -l"
+image-view = "ros2 run rqt_image_view rqt_image_view"
 graph = "rqt_graph"
 
 [activation.env]
@@ -38,3 +40,8 @@ ros-jazzy-gz-ros2-control = ">=1.2.14,<2"
 ros-jazzy-ros2-controllers = ">=4.28.0,<5"
 ros-jazzy-rqt-graph = ">=1.5.4,<2"
 ros-jazzy-rqt-image-view = ">=1.3.0,<2"
+ros-jazzy-image-pipeline = ">=5.0.11,<6"
+ros-jazzy-pcl-ros = ">=2.6.2,<3"
+
+[pypi-dependencies]
+ultralytics = ">=8.4.11, <9"
