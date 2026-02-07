@@ -10,3 +10,5 @@ frames_*.gv
 frames_*.pdf
 
 .vscode/
+
+*.pt
