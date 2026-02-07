@@ -1,0 +1,66 @@
+<sdf version='1.10'>
+  <world name='table'>
+    <gravity>0 0 -9.8000000000000007</gravity>
+    <magnetic_field>5.5644999999999998e-06 2.2875799999999999e-05 -4.2388400000000002e-05</magnetic_field>
+    <atmosphere type='adiabatic'/>
+    <physics type='ode'>
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1</real_time_factor>
+      <real_time_update_rate>1000</real_time_update_rate>
+    </physics>
+
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+
+    <light name="sun" type="directional">
+        <pose>0 0 10 0 0 0</pose>
+        <diffuse>1 1 1 1</diffuse>
+        <specular>0.1 0.1 0.1 1</specular>
+        <direction>-0.5 0.2 -1</direction>
+        <cast_shadows>true</cast_shadows>
+    </light>
+
+    <scene>
+      <ambient>0.400000006 0.400000006 0.400000006 1</ambient>
+      <background>0.699999988 0.699999988 0.699999988 1</background>
+      <shadows>true</shadows>
+    </scene>
+
+    <include>
+      <uri>model://table</uri>
+      <pose>0 0 0 1.57079632679 0 0</pose>
+    </include>
+
+    <include>
+      <uri>model://2inchwoodcube</uri>
+      <pose>-0.39125699 0.29168496 0.9906 0 0 0</pose>
+    </include>
+
+    <include>
+      <uri>model://1.5inchwoodcube</uri>
+      <pose>-0.38368499 0.16112609 0.98424943 0 0 0</pose>
+    </include>
+
+    <include>
+      <uri>model://2inchaprilcube</uri>
+      <pose>-0.37060499 -0.14883173 0.9906 0 0 0</pose>
+    </include>
+
+    <include>
+      <uri>model://1.5inchaprilcube</uri>
+      <pose>-0.37047299 -0.28810200 0.98424899 0 0 0</pose>
+    </include>
+
+    <include>
+      <uri>model://oakd_pro</uri>
+      <static>true</static>
+      <pose>-1 0 2 2.36 0 1.57</pose>
+    </include>
+
+  </world>
+</sdf>
