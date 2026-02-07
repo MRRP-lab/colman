@@ -12,6 +12,8 @@
   <xacro:include filename="$(find robotiq_description)/urdf/robotiq_2f_85_macro.urdf.xacro" />
   <!-- import dapter macro -->
   <xacro:include filename="$(find robotiq_description)/urdf/ur_to_robotiq_adapter.urdf.xacro" />
+  <!-- import oakd_pro camera macros -->
+  <xacro:include filename="$(find oakd_description)/urdf/oakd_pro.urdf.xacro" />
 
   <!-- possible 'ur_type' values: ur3, ur5, ur10, ur3e, ur5e, ur7e, ur10e, ur12e, ur16e, ur8long, ur15, ur20, ur30 -->
   <!-- the default value should raise an error in case this was called without defining the type -->
@@ -43,6 +45,9 @@
   <xacro:arg name="com_port" default="/dev/ttyUSB0" />
   
   <xacro:arg name="force_abs_paths" default="false" />
+  <xacro:arg name="use_oakd_pro" default="true" />
+  <xacro:arg name="oakd_mount_point" default="wrist" />
+  <xacro:arg name="oakd_parent_link" default="$(arg tf_prefix)tool0" />
 
   <xacro:arg name="initial_positions_file" default="$(find ur_description)/config/initial_positions.yaml"/>
 
@@ -92,6 +97,21 @@
     connected_to="$(arg tf_prefix)tool0"
     rotation="0.0" 
     />
+
+  <!-- wrist mounted OAK-D Pro camera -->
+  <xacro:if value="$(arg use_oakd_pro)">
+    <xacro:oakd_pro_link mount_point="$(arg oakd_mount_point)" />
+    <xacro:oakd_pro_joint
+      x="0.0"
+      y="-0.06"
+      z="0.0"
+      roll="0.0"
+      pitch="0.0"
+      yaw="3.14159"
+      mount_point="$(arg oakd_mount_point)"
+      parent_link="$(arg oakd_parent_link)"
+    />
+  </xacro:if>
 
   <!-- Add fixed control for arm (change mocked hardware to gazebo system)-->
     <xacro:macro name="ur_ros2_control" params="
