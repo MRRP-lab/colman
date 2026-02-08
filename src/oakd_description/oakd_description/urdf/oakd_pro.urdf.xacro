@@ -14,7 +14,9 @@
               <geometry>
                       <mesh filename="package://oakd_description/meshes/OAK-D-PRO.stl" />
               </geometry>
-               <material name="black" />
+               <material name="black">
+                 <color rgba="0.08 0.08 0.08 1.0" />
+               </material>
           </visual>
           <collision>
               <origin rpy="0 0 0" xyz="0 0 0" />
