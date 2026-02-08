@@ -3,7 +3,7 @@
   <model name='calibration-tag'>
     <static>false</static>
     <link name='link'>
-    <pose>0 0 0 1.57079632679 0 0</pose>
+    <pose>0 0 0 0 0 0</pose>
         <inertial>
             <mass>0.06</mass>
             <inertia>
@@ -23,6 +23,7 @@
             </geometry>
         </collision>    
       <visual name='visual'>
+        <pose>0 0 0 1.57079632679 0 0</pose>
         <geometry>
           <mesh>
             <uri>model://calibrationtag/meshes/calibrationtag.glb</uri>
