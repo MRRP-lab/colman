@@ -46,6 +46,7 @@ ros-jazzy-rqt-graph = ">=1.5.4,<2"
 ros-jazzy-rqt-image-view = ">=1.3.0,<2"
 ros-jazzy-image-pipeline = ">=5.0.11,<6"
 ros-jazzy-pcl-ros = ">=2.6.2,<3"
+ros-jazzy-apriltag = ">=3.4.3,<4"
 
 [pypi-dependencies]
 ultralytics = ">=8.4.11, <9"

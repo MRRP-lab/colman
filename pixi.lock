@@ -541,6 +541,7 @@ environments:
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-ament-uncrustify-0.17.2-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-ament-xmllint-0.17.2-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-angles-1.16.0-np126py312h3bd2861_9.conda
+      - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-apriltag-3.4.3-np126py312h5cbfcd5_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-backward-ros-1.0.8-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-bicycle-steering-controller-4.28.0-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-builtin-interfaces-2.0.2-np126py312h3bd2861_9.conda
@@ -9332,6 +9333,31 @@ packages:
   license: BSD-3-Clause
   size: 32407
   timestamp: 1753559768824
+- conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-apriltag-3.4.3-np126py312h5cbfcd5_9.conda
+  sha256: 9e95b506c59797c70a56b1d1f14b2e15b33c54da175673771d69c3445bcc9797
+  md5: 75364342a5825c78fff5ad5e9f5449f7
+  depends:
+  - python
+  - ros-jazzy-ros-workspace
+  - ros2-distro-mutex 0.10.* jazzy_*
+  - xorg-libx11
+  - xorg-libxext
+  - libstdcxx >=14
+  - libgcc >=14
+  - __glibc >=2.17,<3.0.a0
+  - libgcc >=14
+  - libgl >=1.7.0,<2.0a0
+  - python_abi 3.12.* *_cp312
+  - xorg-libx11 >=1.8.12,<2.0a0
+  - numpy >=1.26.4,<2.0a0
+  - ros2-distro-mutex >=0.10.0,<0.11.0a0
+  - py-opencv >=4.11.0,<5.0a0
+  - libopengl >=1.7.0,<2.0a0
+  - libopencv >=4.11.0,<4.11.1.0a0
+  - xorg-libxext >=1.3.6,<2.0a0
+  license: BSD-3-Clause
+  size: 1353611
+  timestamp: 1753559138604
 - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-backward-ros-1.0.8-np126py312h3bd2861_9.conda
   sha256: 2aaae48029277e125d9ef6b807c0629a8b451042f8fc887bd63e4c89134a7a31
   md5: d56fe73a7f467e35ddac0f2fc77cb341
