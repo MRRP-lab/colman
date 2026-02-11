@@ -16,15 +16,26 @@ def generate_launch_description():
     rviz = LaunchConfiguration("rviz")
     world = LaunchConfiguration("world")
 
+    spawn_z = LaunchConfiguration("spawn_z")
+
     declared_arguments = [
         DeclareLaunchArgument(
             "rviz", default_value="true", description="Launch rviz"
         ),
         DeclareLaunchArgument(
             "world",
-            default_value="empty.sdf",
+            default_value=PathJoinSubstitution([
+                FindPackageShare("ros_robotiq_description"),
+                "worlds",
+                "empty_bullet.sdf"
+            ]),
             description="Gazebo world file"
-        )
+        ),
+        DeclareLaunchArgument(
+            "spawn_z",
+            default_value="0.0",
+            description="Robot spawn height"
+        ),
     ]
 
     # call the template bringup for common nodes
@@ -60,7 +71,9 @@ def generate_launch_description():
                 arguments=[
                     "-topic", "/robot_description",
                     "-name", "ur3e_robotiq",
-                    "-z", "0.0"
+                    "-x", "0.0",
+                    "-y", "0.0",
+                    "-z", spawn_z # 0.9652 for table world
                 ],
             )
         ],

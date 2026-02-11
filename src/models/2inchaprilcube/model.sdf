@@ -1,0 +1,23 @@
+<?xml version='1.0' ?>
+<sdf version='1.6'>
+  <model name='2-inch-april-tagged-cube'>
+    <static>false</static>
+    <link name='link'>
+    <pose>0 0 0 0 0 0</pose>
+        <collision name="collision">
+            <geometry>
+                <box>
+                    <size>0.0508 0.0508 0.0508</size>
+                </box>
+            </geometry>
+        </collision>
+      <visual name='visual'>
+        <geometry>
+          <mesh>
+            <uri>model://2inchaprilcube/meshes/2inchaprilcube.glb</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+  </model>
+</sdf>
