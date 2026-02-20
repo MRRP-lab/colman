@@ -150,6 +150,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/gfortran_impl_linux-64-14.3.0-h7db7018_7.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/gfortran_linux-64-14.3.0-h1e4d427_14.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/giflib-5.2.2-hd590300_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/git-lfs-3.7.1-ha8f183a_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/gl2ps-1.4.2-hae5d5c5_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/glew-2.1.0-h9c3ff4c_2.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/glfw-3.4-hb03c661_1.conda
@@ -542,6 +543,8 @@ environments:
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-ament-xmllint-0.17.2-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-angles-1.16.0-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-apriltag-3.4.3-np126py312h5cbfcd5_9.conda
+      - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-apriltag-msgs-2.0.1-np126py312h3bd2861_9.conda
+      - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-apriltag-ros-3.2.2-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-backward-ros-1.0.8-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-bicycle-steering-controller-4.28.0-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-builtin-interfaces-2.0.2-np126py312h3bd2861_9.conda
@@ -688,6 +691,7 @@ environments:
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-planners-ompl-2.12.3-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-planners-stomp-2.12.3-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-plugins-2.12.3-np126py312h3bd2861_9.conda
+      - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-py-2.12.3-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-ros-2.12.3-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-ros-benchmarks-2.12.3-np126py312h3bd2861_9.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-ros-move-group-2.12.3-np126py312h3bd2861_9.conda
@@ -3164,6 +3168,13 @@ packages:
   purls: []
   size: 77248
   timestamp: 1712692454246
+- conda: https://conda.anaconda.org/conda-forge/linux-64/git-lfs-3.7.1-ha8f183a_1.conda
+  sha256: 9d7fdd2128cfad8c770f54358f11fcba6a3e3f5ac82637f2388a8c010d3df050
+  md5: 185f332b1a60ed24701358bb3c21aee2
+  license: MIT
+  purls: []
+  size: 4433856
+  timestamp: 1770406490396
 - conda: https://conda.anaconda.org/conda-forge/linux-64/gl2ps-1.4.2-hae5d5c5_1.conda
   sha256: 68f071ea25e79ee427c0d6c35ccc137d66f093a37660a4e41bafe0c49d64f2d6
   md5: 00e642ec191a19bf806a3915800e9524
@@ -9358,6 +9369,50 @@ packages:
   license: BSD-3-Clause
   size: 1353611
   timestamp: 1753559138604
+- conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-apriltag-msgs-2.0.1-np126py312h3bd2861_9.conda
+  sha256: c14c377febe4dc084fa784ad846bef8e6fb49c1d21427798c4a70d0b0dbb0417
+  md5: bf166491ed3da26b8c74d8b78e76ed49
+  depends:
+  - python
+  - ros-jazzy-ros-workspace
+  - ros-jazzy-rosidl-default-runtime
+  - ros-jazzy-std-msgs
+  - ros2-distro-mutex 0.10.* jazzy_*
+  - libgcc >=14
+  - libstdcxx >=14
+  - libgcc >=14
+  - __glibc >=2.17,<3.0.a0
+  - numpy >=1.26.4,<2.0a0
+  - ros2-distro-mutex >=0.10.0,<0.11.0a0
+  - python_abi 3.12.* *_cp312
+  license: BSD-3-Clause
+  size: 115326
+  timestamp: 1753561834940
+- conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-apriltag-ros-3.2.2-np126py312h3bd2861_9.conda
+  sha256: 13fac533f3a3b03287e8c4e00487d63aa03cffb085ab47a30e2186c755762cf6
+  md5: 18b81f60ce624c6fe9f6cdf75294b714
+  depends:
+  - python
+  - ros-jazzy-apriltag
+  - ros-jazzy-apriltag-msgs
+  - ros-jazzy-cv-bridge
+  - ros-jazzy-image-transport
+  - ros-jazzy-rclcpp
+  - ros-jazzy-rclcpp-components
+  - ros-jazzy-ros-workspace
+  - ros-jazzy-sensor-msgs
+  - ros-jazzy-tf2-ros
+  - ros2-distro-mutex 0.10.* jazzy_*
+  - libgcc >=14
+  - __glibc >=2.17,<3.0.a0
+  - libstdcxx >=14
+  - libgcc >=14
+  - ros2-distro-mutex >=0.10.0,<0.11.0a0
+  - python_abi 3.12.* *_cp312
+  - numpy >=1.26.4,<2.0a0
+  license: BSD-3-Clause
+  size: 213279
+  timestamp: 1753564014787
 - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-backward-ros-1.0.8-np126py312h3bd2861_9.conda
   sha256: 2aaae48029277e125d9ef6b807c0629a8b451042f8fc887bd63e4c89134a7a31
   md5: d56fe73a7f467e35ddac0f2fc77cb341
@@ -12890,6 +12945,31 @@ packages:
   license: BSD-3-Clause
   size: 22237
   timestamp: 1753569254376
+- conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-py-2.12.3-np126py312h3bd2861_9.conda
+  sha256: 698136d7cf4ceb9ef4607a0f80e0aaee822cff32e84853bc1c072c6b69c7b2c2
+  md5: 47e75ead9c71513a0c73e2d14488c3e9
+  depends:
+  - python
+  - ros-jazzy-ament-index-python
+  - ros-jazzy-geometry-msgs
+  - ros-jazzy-moveit-core
+  - ros-jazzy-moveit-ros-planning
+  - ros-jazzy-moveit-ros-planning-interface
+  - ros-jazzy-octomap-msgs
+  - ros-jazzy-rclcpp
+  - ros-jazzy-rclpy
+  - ros-jazzy-ros-workspace
+  - ros2-distro-mutex 0.10.* jazzy_*
+  - libgcc >=14
+  - __glibc >=2.17,<3.0.a0
+  - libstdcxx >=14
+  - libgcc >=14
+  - python_abi 3.12.* *_cp312
+  - ros2-distro-mutex >=0.10.0,<0.11.0a0
+  - numpy >=1.26.4,<2.0a0
+  license: BSD-3-Clause
+  size: 541253
+  timestamp: 1753570112536
 - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-ros-2.12.3-np126py312h3bd2861_9.conda
   sha256: 9017edc8193324b5707b146c58b0fcd02d074b99896300391bd9c809d4a19050
   md5: 4bf9f04a53cb525476cff77d112df7d1
