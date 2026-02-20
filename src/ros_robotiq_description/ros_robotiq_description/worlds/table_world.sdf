@@ -17,7 +17,7 @@
       <render_engine>ogre2</render_engine>
     </plugin>
 
-    <light name="sun" type="directional">`
+    <light name="sun" type="directional">
         <pose>0 0 10 0 0 0</pose>
         <diffuse>1 1 1 1</diffuse>
         <specular>0.1 0.1 0.1 1</specular>
