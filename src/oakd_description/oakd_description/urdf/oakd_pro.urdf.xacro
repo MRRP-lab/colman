@@ -33,8 +33,7 @@
       
       <!-- Add dummy joint for camera_optical_frame to link back to base_link -->
       <joint name="oakd_pro_camera_optical_joint_${mount_point}" type="fixed">
-      <!-- Point cloud frustrum is 90 degrees off from visual frame --> 
-           <origin rpy="-1.57079632769 0 -1.570796332769" xyz="0 0 0" />
+           <origin rpy="0 0 3.14159265359" xyz="0 0 0" />
 	   <parent link="oakd_pro_${mount_point}" />
 	   <child link="oakd_pro_camera_optical_frame_${mount_point}" />
 	</joint> 
@@ -47,6 +46,13 @@
 	  <inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001" />
           </inertial>
   </link>
+
+  <joint name="oakd_pro_left_optical_joint_${mount_point}" type="fixed">
+    <origin xyz="-0.0375 0 0" rpy="0 0 0" />
+    <parent link="oakd_pro_camera_optical_frame_${mount_point}" />
+    <child link="oakd_pro_left_optical_frame_${mount_point}" />
+  </joint>
+  <link name="oakd_pro_left_optical_frame_${mount_point}" />
 
   <!-- Dummy joints for rgb camera to link back to base_link --> 
         <joint name="oakd_pro_camera_rgb_optical_joint_${mount_point}" type="fixed">
