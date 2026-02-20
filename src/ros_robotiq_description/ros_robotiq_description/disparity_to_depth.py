@@ -19,9 +19,12 @@ class DisparityToDepth(Node):
         self.declare_parameter("depth_topic", "/oakd_pro/depth/image")
         self.declare_parameter("left_camera_info_topic", "/oakd_pro/left/camera_info")
         self.declare_parameter("depth_camera_info_topic", "/oakd_pro/depth/camera_info")
+        self.declare_parameter("depth_frame_id", "oakd_pro_left_optical_frame_wrist")
 
         disparity_topic = self.get_parameter("disparity_topic").value
         depth_topic = self.get_parameter("depth_topic").value
+
+        self.depth_frame_id = self.get_parameter("depth_frame_id").value
         left_camera_info_topic = self.get_parameter("left_camera_info_topic").value
         depth_camera_info_topic = self.get_parameter("depth_camera_info_topic").value
 
@@ -104,6 +107,7 @@ class DisparityToDepth(Node):
         # convert numpy format back to ros2 format and publish
         out = self.bridge.cv2_to_imgmsg(depth.astype(np.float32), encoding="32FC1")
         out.header = msg.image.header
+        out.header.frame_id = self.depth_frame_id
         self.pub.publish(out)
 
         # prepare camera info for republish under depth frame topic
@@ -131,5 +135,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
