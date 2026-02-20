@@ -2,8 +2,9 @@ from launch import LaunchDescription
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import Command, PathJoinSubstitution
+from launch.substitutions import Command, FindExecutable, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 from launch.actions import TimerAction
 
@@ -33,7 +34,10 @@ def generate_launch_description():
     ])
 
     # convert xacro to urdf
-    robot_description = Command(["xacro ", description_file])
+    robot_description = ParameterValue(
+        Command([FindExecutable(name="xacro"), " ", description_file]),
+        value_type=str,
+    )
 
     # publish tf
     robot_state_publisher = Node(
