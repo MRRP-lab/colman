@@ -21,9 +21,17 @@
   <exec_depend>stereo_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
   <exec_depend>cv_bridge</exec_depend>
   <exec_depend>image_proc</exec_depend>
   <exec_depend>stereo_image_proc</exec_depend>
+  <exec_depend>apriltag_ros</exec_depend>
+  <exec_depend>moveit_msgs</exec_depend>
+  <exec_depend>moveit_py</exec_depend>
+  <exec_depend>moveit_configs_utils</exec_depend>
+  <exec_depend>shape_msgs</exec_depend>
 
   <!-- External xacros -->
   <exec_depend>ur_description</exec_depend>

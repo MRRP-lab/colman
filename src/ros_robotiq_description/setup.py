@@ -39,6 +39,7 @@ setup(
             "detection = ros_robotiq_description.detection:main",
             'disparity_to_depth = ros_robotiq_description.disparity_to_depth:main',
             'stereo_camera_info_republisher = ros_robotiq_description.stereo_camera_info_republisher:main',
+            'moveit2_basic_test = ros_robotiq_description.moveit2_basic_test:main',
         ],
     },
 )
