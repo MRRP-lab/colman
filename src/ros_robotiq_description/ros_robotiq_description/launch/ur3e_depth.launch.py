@@ -86,6 +86,20 @@ def generate_launch_description():
         ),
     ]
 
+    # This clock bridge works
+    bridge_config = PathJoinSubstitution([
+        FindPackageShare("ros_robotiq_description"), # Or your package name
+        "config",
+        "bridge_config.yaml"
+    ])
+
+    gz_bridge = Node(
+        package="ros_gz_bridge",
+        executable="parameter_bridge",
+        parameters=[{'config_file': bridge_config}], # Use param instead of arguments
+        output="screen",
+    )
+
     # call the template bringup for common nodes
     ur3e_bringup = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -125,20 +139,6 @@ def generate_launch_description():
                 ],
             )
         ],
-    )
-
-    # This clock bridge works
-    bridge_config = PathJoinSubstitution([
-        FindPackageShare("ros_robotiq_description"), # Or your package name
-        "config",
-        "bridge_config.yaml"
-    ])
-
-    gz_bridge = Node(
-        package="ros_gz_bridge",
-        executable="parameter_bridge",
-        parameters=[{'config_file': bridge_config}], # Use param instead of arguments
-        output="screen",
     )
 
     # format camera info as expected by depth computation
@@ -187,7 +187,6 @@ def generate_launch_description():
             ("image_rect", "/oakd_pro/right/image_rect"),
         ],
     )
-
 
     disparity = Node(
         package="stereo_image_proc",
