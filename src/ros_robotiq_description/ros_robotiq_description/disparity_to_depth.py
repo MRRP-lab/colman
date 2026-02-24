@@ -23,7 +23,6 @@ class DisparityToDepth(Node):
 
         disparity_topic = self.get_parameter("disparity_topic").value
         depth_topic = self.get_parameter("depth_topic").value
-
         self.depth_frame_id = self.get_parameter("depth_frame_id").value
         left_camera_info_topic = self.get_parameter("left_camera_info_topic").value
         depth_camera_info_topic = self.get_parameter("depth_camera_info_topic").value
@@ -65,8 +64,9 @@ class DisparityToDepth(Node):
         # logs
         self.get_logger().info(f"Subscribing: {disparity_topic}")
         self.get_logger().info(f"Using camera info: {left_camera_info_topic}")
-        self.get_logger().info(f"Publishing : {depth_topic}")
-        self.get_logger().info(f"Publishing : {depth_camera_info_topic}")
+        self.get_logger().info(f"Publishing: {depth_topic}")
+        self.get_logger().info(f"Publishing: {depth_camera_info_topic}")
+        self.get_logger().info(f"Disparity Node Started.")
 
     def camera_info_cb(self, msg: CameraInfo):
         """
