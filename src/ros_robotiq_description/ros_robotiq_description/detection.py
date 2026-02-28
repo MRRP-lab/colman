@@ -29,7 +29,7 @@ class DetectionNode(Node):
 
         # 20hz
         self.create_timer(0.05, self.detect_timer_callback)
-        self.get_logger().debug("Detection Node Started.")
+        self.get_logger().info("Detection Node Started.")
 
     def image_callback(self, msg: Image):
         """
@@ -40,7 +40,7 @@ class DetectionNode(Node):
 
     def detect_timer_callback(self):
         if self.latest_image is None:
-            self.get_logger().warn(f"No image found.")
+            self.get_logger().warn("No image found.", throttled_duration_sec=5.0)
             return
 
         frame = self.latest_image.copy()
