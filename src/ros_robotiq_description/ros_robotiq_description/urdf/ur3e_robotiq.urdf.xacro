@@ -10,7 +10,7 @@
 
   <!-- import end effector -->
   <xacro:include filename="$(find robotiq_description)/urdf/robotiq_2f_85_macro.urdf.xacro" />
-  <!-- import dapter macro -->
+  <!-- import adapter macro -->
   <xacro:include filename="$(find robotiq_description)/urdf/ur_to_robotiq_adapter.urdf.xacro" />
   <!-- import oakd_pro camera macros -->
   <xacro:include filename="$(find oakd_description)/urdf/oakd_pro.urdf.xacro" />
@@ -33,6 +33,7 @@
   <xacro:arg name="safety_pos_margin" default="0.15"/>
   <xacro:arg name="safety_k_position" default="20"/>
   <xacro:arg name="mock_sensor_commands" default="false" />
+  <xacro:arg name="gripper_type" default="robotiq" />
 
   <!-- robotiq parameters -->
   <xacro:arg name="prefix" default="" />
@@ -77,26 +78,11 @@
   <!-- gripper -->
   <!-- we have to force include_ros2_control to be false because the -->
   <!-- robotiq package violates some jazzy+ specific rules, the fixed control is below-->
-  <xacro:robotiq_gripper
-    name="$(arg name)"
-    prefix="$(arg prefix)"
-    parent="$(arg prefix)gripper_mount_link"
-    sim_ignition="$(arg sim_ignition)"
-    sim_isaac="$(arg sim_isaac)"
-    use_fake_hardware="$(arg use_fake_hardware)"
-    fake_sensor_commands="$(arg fake_sensor_commands)"
-    include_ros2_control="false"
-    com_port="$(arg com_port)"
-    >
-    <origin xyz="0 0 0" rpy="0 0 0" />          <!-- position robot in the world -->
-  </xacro:robotiq_gripper>
 
-  <!-- gripper to arm adapter -->
-  <xacro:ur_to_robotiq
-    prefix="$(arg prefix)"
-    connected_to="$(arg tf_prefix)tool0"
-    rotation="0.0" 
-    />
+
+  <xacro:if value="${'$(arg gripper_type)' == 'custom'}">
+    <!-- We'll put the gripper stuff here once I export it -->
+  </xacro:if>
 
   <!-- wrist mounted OAK-D Pro camera -->
   <xacro:if value="$(arg use_oakd_pro)">
@@ -141,53 +127,73 @@
     </xacro:macro>
 
 
-  <!-- Add fixed control for gripper -->
-  <ros2_control name="robotiq_gripper_system" type="system">
-    <hardware>
-      <!-- <plugin>mock_components/GenericSystem</plugin> -->
-      <plugin>gz_ros2_control/GazeboSimSystem</plugin> 
-      <param name="fake_sensor_commands">True</param>
-      <param name="state_following_offset">0.0</param>
-    </hardware>
+  <xacro:if value="${'$(arg gripper_type)' == 'robotiq'}">
+    <xacro:robotiq_gripper
+      name="$(arg name)"
+      prefix="$(arg prefix)"
+      parent="$(arg prefix)gripper_mount_link"
+      sim_ignition="$(arg sim_ignition)"
+      sim_isaac="$(arg sim_isaac)"
+      use_fake_hardware="$(arg use_fake_hardware)"
+      fake_sensor_commands="$(arg fake_sensor_commands)"
+      include_ros2_control="false"
+      com_port="$(arg com_port)"
+      >
+      <origin xyz="0 0 0" rpy="0 0 0" />          <!-- position robot in the world -->
+    </xacro:robotiq_gripper>
 
-    <!-- Main joint -->
-    <joint name="robotiq_85_left_knuckle_joint">
-      <command_interface name="position"/>
-      <state_interface name="position">
-        <param name="initial_value">0.7929</param>
-      </state_interface>
-      <state_interface name="velocity"/>
-    </joint>
+    <!-- gripper to arm adapter -->
+    <xacro:ur_to_robotiq
+      prefix="$(arg prefix)"
+      connected_to="$(arg tf_prefix)tool0"
+      rotation="0.0" 
+      />
 
-    <!-- Mimic joints-->
-    <joint name="robotiq_85_right_knuckle_joint">
-      <state_interface name="position"/>
-      <state_interface name="velocity"/>
-    </joint>
+    <!-- Add fixed control for gripper -->
+    <ros2_control name="robotiq_gripper_system" type="system">
+      <hardware>
+        <!-- <plugin>mock_components/GenericSystem</plugin> -->
+        <plugin>gz_ros2_control/GazeboSimSystem</plugin> 
+        <param name="fake_sensor_commands">True</param>
+        <param name="state_following_offset">0.0</param>
+      </hardware>
 
-    <joint name="robotiq_85_left_inner_knuckle_joint">
-      <state_interface name="position"/>
-      <state_interface name="velocity"/>
-    </joint>
+      <!-- Main joint -->
+      <joint name="robotiq_85_left_knuckle_joint">
+        <command_interface name="position"/>
+        <state_interface name="position">
+          <param name="initial_value">0.7929</param>
+        </state_interface>
+        <state_interface name="velocity"/>
+      </joint>
 
-    <joint name="robotiq_85_right_inner_knuckle_joint">
-      <state_interface name="position"/>
-      <state_interface name="velocity"/>
-    </joint>
+      <!-- Mimic joints-->
+      <joint name="robotiq_85_right_knuckle_joint">
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
 
-    <joint name="robotiq_85_left_finger_tip_joint">
-      <state_interface name="position"/>
-      <state_interface name="velocity"/>
-    </joint>
+      <joint name="robotiq_85_left_inner_knuckle_joint">
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
 
-    <joint name="robotiq_85_right_finger_tip_joint">
-      <state_interface name="position"/>
-      <state_interface name="velocity"/>
-    </joint>
-  </ros2_control>
+      <joint name="robotiq_85_right_inner_knuckle_joint">
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
 
+      <joint name="robotiq_85_left_finger_tip_joint">
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
 
-
+      <joint name="robotiq_85_right_finger_tip_joint">
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+    </ros2_control>
+  </xacro:if>
 
   <!-- ros2 control instance -->
   <xacro:ur_ros2_control
@@ -200,8 +206,13 @@
   <!-- Load in gazebo ontrol -->
   <gazebo>
     <plugin filename="libgz_ros2_control-system.so"
-            name="gz_ros2_control::GazeboSimROS2ControlPlugin">
-      <parameters>$(find ros_robotiq_description)/config/ur3e_robotiq_controllers.yaml</parameters>
+      name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+      <xacro:if value="${'$(arg gripper_type)' == 'robotiq'}">
+        <parameters>$(find ros_robotiq_description)/config/ur3e_robotiq_controllers.yaml</parameters>
+      </xacro:if>
+      <xacro:if value="${'$(arg gripper_type)' == 'custom'}">
+        <!-- We'll put the gripper control stuff here once I export it -->
+      </xacro:if>
     </plugin>
   </gazebo>
 
