@@ -1,9 +1,13 @@
 [workspace]
 authors = ["Neil Macneale V <neil.macneale.v@gmail.com>", "Pierce Coyle <coylep2@wwu.edu>"]
-channels = ["robostack-jazzy", "conda-forge"]
+channels = ["https://prefix.dev/pierce-colman", "robostack-jazzy", "conda-forge"]
 name = "ur3e"
 platforms = ["linux-64"]
 version = "0.1.0"
+
+[system-requirements]
+linux = "6.8.0"
+libc = { family = "glibc", version = "2.39" }
 
 [activation]
 scripts = ["install/setup.sh"]
@@ -27,7 +31,6 @@ graph = "rqt_graph"
 [activation.env]
 GZ_SIM_RESOURCE_PATH = "$GZ_SIM_RESOURCE_PATH:$PIXI_PROJECT_ROOT/src/models:$PIXI_PROJECT_ROOT/src/oakd_gazebo/oakd_gazebo/models:$PIXI_PROJECT_ROOT/install/oakd_description/share"
 
-
 [dependencies]
 colcon-common-extensions = ">=0.3.0,<0.4"
 filelock = ">=3.20.0,<4"
@@ -36,7 +39,7 @@ ros-jazzy-desktop = ">=0.11.0,<0.12"
 ros-jazzy-xacro = ">=2.0.11,<3"
 ros-jazzy-ur-description = ">=3.0.1,<4"
 ros-jazzy-robotiq-description = ">=0.0.1,<0.0.2"
-ros-jazzy-gz-sim-vendor = ">=0.0.8,<0.0.9"
+ros-jazzy-gz-sim-vendor = ">=0.0.9,<0.0.10"
 ros-jazzy-ros-gz = ">=1.0.16,<2"
 ros-jazzy-ros2-control = ">=4.33.0,<5"
 ros-jazzy-moveit = ">=2.12.3,<3"
@@ -52,6 +55,8 @@ ros-jazzy-apriltag = ">=3.4.3,<4"
 ros-jazzy-apriltag-ros = ">=3.2.2,<4"
 ros-jazzy-moveit-py = ">=2.12.3,<3"
 git-lfs = ">=3.7.1,<4"
+ros-jazzy-trac-ik-lib = "*"
+ros-jazzy-trac-ik-kinematics-plugin = "*"
 
 [pypi-dependencies]
 ultralytics = ">=8.4.11, <9"
