@@ -1,4 +1,3 @@
-# This config file is used by ros2_control
 controller_manager:
   ros__parameters:
     update_rate: 100  # Hz
@@ -29,4 +28,4 @@ ur_arm_controller:
     allow_nonzero_velocity_at_trajectory_end: true
 gripper_controller:
   ros__parameters:
-    joint: robotiq_85_left_knuckle_joint
+    joint: servotodrivegear
