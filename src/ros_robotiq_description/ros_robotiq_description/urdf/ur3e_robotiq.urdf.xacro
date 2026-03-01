@@ -8,10 +8,14 @@
   <xacro:include filename="$(find ur_description)/urdf/inc/ur_sensors.xacro" />
   <!--<xacro:include filename="$(find ur_description)/urdf/ros2_control_mock_hardware.xacro" />  This doesnt work with gazebo -->
 
-  <!-- import end effector -->
-  <xacro:include filename="$(find robotiq_description)/urdf/robotiq_2f_85_macro.urdf.xacro" />
-  <!-- import adapter macro -->
-  <xacro:include filename="$(find robotiq_description)/urdf/ur_to_robotiq_adapter.urdf.xacro" />
+  <xacro:arg name="gripper_type" default="custom" />
+
+  <xacro:if value="${'$(arg gripper_type)' == 'robotiq'}">
+    <!-- import end effector -->
+    <xacro:include filename="$(find robotiq_description)/urdf/robotiq_2f_85_macro.urdf.xacro" />
+    <!-- import adapter macro -->
+    <xacro:include filename="$(find robotiq_description)/urdf/ur_to_robotiq_adapter.urdf.xacro" />
+   </xacro:if>
   <!-- import oakd_pro camera macros -->
   <xacro:include filename="$(find oakd_description)/urdf/oakd_pro.urdf.xacro" />
 
@@ -23,7 +27,6 @@
   <xacro:arg name="tf_prefix" default="" />
   
   <xacro:arg name="joint_limit_params" default="$(find ur3e_moveit_config)/config/joint_limits.yaml"/>
-  <!--<xacro:arg name="joint_limit_params" default="$(find ur_description)/config/$(arg ur_type)/joint_limits.yaml"/> -->
 
   <xacro:arg name="kinematics_params" default="$(find ur_description)/config/$(arg ur_type)/default_kinematics.yaml"/>
   <xacro:arg name="physical_params" default="$(find ur_description)/config/$(arg ur_type)/physical_parameters.yaml"/>
@@ -33,7 +36,6 @@
   <xacro:arg name="safety_pos_margin" default="0.15"/>
   <xacro:arg name="safety_k_position" default="20"/>
   <xacro:arg name="mock_sensor_commands" default="false" />
-  <xacro:arg name="gripper_type" default="robotiq" />
 
   <!-- robotiq parameters -->
   <xacro:arg name="prefix" default="" />
@@ -79,9 +81,15 @@
   <!-- we have to force include_ros2_control to be false because the -->
   <!-- robotiq package violates some jazzy+ specific rules, the fixed control is below-->
 
-
   <xacro:if value="${'$(arg gripper_type)' == 'custom'}">
-    <!-- We'll put the gripper stuff here once I export it -->
+    <xacro:include filename="$(find gripper_description)/urdf/colman-gripper.xacro"/>
+    <xacro:colman-gripper prefix="$(arg prefix)" include_gazebo_plugin="false"/>
+
+    <joint name="$(arg prefix)gripper_mount_joint" type="fixed">
+      <parent link="$(arg tf_prefix)tool0"/>
+      <child link="$(arg prefix)gripper_base"/>
+      <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+    </joint>
   </xacro:if>
 
   <!-- wrist mounted OAK-D Pro camera -->
@@ -126,7 +134,6 @@
       </ros2_control>
     </xacro:macro>
 
-
   <xacro:if value="${'$(arg gripper_type)' == 'robotiq'}">
     <xacro:robotiq_gripper
       name="$(arg name)"
@@ -154,7 +161,7 @@
       <hardware>
         <!-- <plugin>mock_components/GenericSystem</plugin> -->
         <plugin>gz_ros2_control/GazeboSimSystem</plugin> 
-        <param name="fake_sensor_commands">True</param>
+        <param name="fake_sensor_commands">true</param>
         <param name="state_following_offset">0.0</param>
       </hardware>
 
@@ -211,7 +218,7 @@
         <parameters>$(find ros_robotiq_description)/config/ur3e_robotiq_controllers.yaml</parameters>
       </xacro:if>
       <xacro:if value="${'$(arg gripper_type)' == 'custom'}">
-        <!-- We'll put the gripper control stuff here once I export it -->
+        <parameters>$(find ros_robotiq_description)/config/ur3e_gripper_controllers.yaml</parameters>
       </xacro:if>
     </plugin>
   </gazebo>
