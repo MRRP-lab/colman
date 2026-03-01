@@ -1,0 +1,121 @@
+inertials:
+  base:
+    inertia:
+      ixx: 0.001
+      ixy: 0
+      ixz: 0
+      iyy: 0.001
+      iyz: 0
+      izz: 0.001
+    mass: 0.2
+    origin:
+      rpy: 0 0 0
+      xyz: 0 0 0
+  bottom_stick_left:
+    inertia:
+      ixx: 0.0001
+      ixy: 0
+      ixz: 0
+      iyy: 0.0001
+      iyz: 0
+      izz: 0.0001
+    mass: 0.015
+    origin:
+      rpy: 0 0 0
+      xyz: 0 0 0
+  bottom_stick_right:
+    inertia:
+      ixx: 0.0001
+      ixy: 0
+      ixz: 0
+      iyy: 0.0001
+      iyz: 0
+      izz: 0.0001
+    mass: 0.015
+    origin:
+      rpy: 0 0 0
+      xyz: 0 0 0
+  drive_gear:
+    inertia:
+      ixx: 0.0005
+      ixy: 0
+      ixz: 0
+      iyy: 0.0005
+      iyz: 0
+      izz: 0.0005
+    mass: 0.05
+    origin:
+      rpy: 0 0 0
+      xyz: 0 0 0
+  left_arm_bottom:
+    inertia:
+      ixx: 0.0001
+      ixy: 0
+      ixz: 0
+      iyy: 0.0001
+      iyz: 0
+      izz: 0.0001
+    mass: 0.015
+    origin:
+      rpy: 0 0 0
+      xyz: 0 0 0
+  left_gear:
+    inertia:
+      ixx: 0.0001
+      ixy: 0
+      ixz: 0
+      iyy: 0.0001
+      iyz: 0
+      izz: 0.0001
+    mass: 0.02
+    origin:
+      rpy: 0 0 0
+      xyz: 0 0 0
+  right_arm_bottom:
+    inertia:
+      ixx: 0.0001
+      ixy: 0
+      ixz: 0
+      iyy: 0.0001
+      iyz: 0
+      izz: 0.0001
+    mass: 0.015
+    origin:
+      rpy: 0 0 0
+      xyz: 0 0 0
+  right_gear:
+    inertia:
+      ixx: 0.0001
+      ixy: 0
+      ixz: 0
+      iyy: 0.0001
+      iyz: 0
+      izz: 0.0001
+    mass: 0.02
+    origin:
+      rpy: 0 0 0
+      xyz: 0 0 0
+  top_stick_left:
+    inertia:
+      ixx: 0.0001
+      ixy: 0
+      ixz: 0
+      iyy: 0.0001
+      iyz: 0
+      izz: 0.0001
+    mass: 0.015
+    origin:
+      rpy: 0 0 0
+      xyz: 0 0 0
+  top_stick_right:
+    inertia:
+      ixx: 0.0001
+      ixy: 0
+      ixz: 0
+      iyy: 0.0001
+      iyz: 0
+      izz: 0.0001
+    mass: 0.015
+    origin:
+      rpy: 0 0 0
+      xyz: 0 0 0
