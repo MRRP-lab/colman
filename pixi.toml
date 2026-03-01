@@ -1,6 +1,6 @@
 [workspace]
 authors = ["Neil Macneale V <neil.macneale.v@gmail.com>", "Pierce Coyle <coylep2@wwu.edu>"]
-channels = ["https://prefix.dev/pierce-colman", "robostack-jazzy", "conda-forge"]
+channels = ["robostack-jazzy", "https://prefix.dev/pierce-colman", "conda-forge"]
 name = "ur3e"
 platforms = ["linux-64"]
 version = "0.1.0"
@@ -29,7 +29,7 @@ image-view = "ros2 run rqt_image_view rqt_image_view"
 graph = "rqt_graph"
 
 [activation.env]
-GZ_SIM_RESOURCE_PATH = "$GZ_SIM_RESOURCE_PATH:$PIXI_PROJECT_ROOT/src/models:$PIXI_PROJECT_ROOT/src/oakd_gazebo/oakd_gazebo/models:$PIXI_PROJECT_ROOT/install/oakd_description/share"
+GZ_SIM_RESOURCE_PATH = "$GZ_SIM_RESOURCE_PATH:$PIXI_PROJECT_ROOT/src/models:$PIXI_PROJECT_ROOT/src/oakd_gazebo/oakd_gazebo/models:$PIXI_PROJECT_ROOT/install/oakd_description/share:$PIXI_PROJECT_ROOT/install/gripper_description/share"
 
 [dependencies]
 colcon-common-extensions = ">=0.3.0,<0.4"

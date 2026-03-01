@@ -2,8 +2,8 @@ version: 6
 environments:
   default:
     channels:
-    - url: https://prefix.dev/pierce-colman/
     - url: https://conda.anaconda.org/robostack-jazzy/
+    - url: https://prefix.dev/pierce-colman/
     - url: https://conda.anaconda.org/conda-forge/
     indexes:
     - https://pypi.org/simple
@@ -712,7 +712,7 @@ environments:
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-ros-benchmarks-2.12.4-np2py312h2ed9cc7_16.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-ros-move-group-2.12.4-np2py312h2c89a96_16.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-ros-occupancy-map-monitor-2.12.4-np2py312h2ed9cc7_16.conda
-      - conda: https://prefix.dev/pierce-colman/linux-64/ros-jazzy-moveit-ros-planning-2.14.1-hb0f4dca_0.conda
+      - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-ros-planning-2.12.4-np2py312h2c89a96_16.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-ros-planning-interface-2.12.4-np2py312h2ed9cc7_16.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-ros-robot-interaction-2.12.4-np2py312h2ed9cc7_16.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-ros-visualization-2.12.4-np2py312h2ed9cc7_16.conda
@@ -13403,42 +13403,46 @@ packages:
   license: BSD-3-Clause
   size: 393286
   timestamp: 1771235631972
-- conda: https://prefix.dev/pierce-colman/linux-64/ros-jazzy-moveit-ros-planning-2.14.1-hb0f4dca_0.conda
-  sha256: 556c095daf0f2ca0194a7d06f256095103060e3fb13ddb74d05d85181f974f5c
-  md5: 6aaf614459d486bf6a5bc9b9282dd1d9
+- conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-ros-planning-2.12.4-np2py312h2c89a96_16.conda
+  sha256: 3df1f46feffaa7298131c1f92e93e75240a96e34401f56ffbb14b655b4bfbd77
+  md5: 01e21038e1c2d124b2e52cc6abee2520
   depends:
-  - ros-jazzy-moveit-common
-  - ros-jazzy-pluginlib >=1.11.2
-  - ros-jazzy-ament-index-cpp
   - eigen
   - fmt
-  - fmt >=12.1.0,<12.2.0a0
+  - python
+  - ros-jazzy-ament-index-cpp
+  - ros-jazzy-eigen3-cmake-module
   - ros-jazzy-generate-parameter-library
   - ros-jazzy-message-filters
+  - ros-jazzy-moveit-common
   - ros-jazzy-moveit-core
   - ros-jazzy-moveit-msgs
   - ros-jazzy-moveit-ros-occupancy-map-monitor
+  - ros-jazzy-pluginlib
+  - ros-jazzy-rclcpp
   - ros-jazzy-rclcpp-action
   - ros-jazzy-rclcpp-components
-  - ros-jazzy-rclcpp
+  - ros-jazzy-ros-workspace
   - ros-jazzy-srdfdom
   - ros-jazzy-std-msgs
+  - ros-jazzy-tf2
   - ros-jazzy-tf2-eigen
   - ros-jazzy-tf2-geometry-msgs
   - ros-jazzy-tf2-msgs
   - ros-jazzy-tf2-ros
-  - ros-jazzy-tf2
   - ros-jazzy-urdf
-  - ros-jazzy-eigen3-cmake-module
-  - ros2-distro-mutex
+  - ros2-distro-mutex 0.14.* jazzy_*
+  - libgcc >=14
+  - __glibc >=2.17,<3.0.a0
+  - libstdcxx >=14
+  - libgcc >=14
   - ros2-distro-mutex >=0.14.0,<0.15.0a0
-  - libgcc >=15
-  - libstdcxx >=15
+  - fmt >=12.1.0,<12.2.0a0
   - python_abi 3.12.* *_cp312
   - numpy >=1.23,<3
-  license: LicenseRef-BSD-3-Clause
-  size: 1640669
-  timestamp: 1772290139785
+  license: BSD-3-Clause
+  size: 1700236
+  timestamp: 1771235929008
 - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-moveit-ros-planning-interface-2.12.4-np2py312h2ed9cc7_16.conda
   sha256: 95030b3a7b7d21d84122e82889dc8f3ac7d2991c3559da40c91a1749c3479623
   md5: d1bb184897e623f4446b5ef94572751f
