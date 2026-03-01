@@ -1,13 +1,14 @@
 moveit_setup_assistant_config:
   urdf:
-    package: ros_robotiq_description
-    relative_path: ros_robotiq_description/urdf/moveit_urdf.urdf
+    package: ur3e_moveit_config
+    relative_path: config/ur3_robotiq.urdf.xacro
+    xacro_args: gripper_type:=custom
   srdf:
     relative_path: config/ur3_robotiq.srdf
   package_settings:
     author_name: pierce
-    author_email: coylep2@wwu.edu
-    generated_timestamp: 1762911024
+    author_email: dev@piercecoyle.com
+    generated_timestamp: 1772346413
   control_xacro:
     command:
       - position
