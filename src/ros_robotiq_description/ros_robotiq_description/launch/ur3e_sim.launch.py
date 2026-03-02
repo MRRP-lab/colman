@@ -14,6 +14,7 @@ def generate_launch_description():
     rviz = LaunchConfiguration("rviz")
     world = LaunchConfiguration("world")
     spawn_z = LaunchConfiguration("spawn_z")
+    gripper_type = LaunchConfiguration("gripper_type")
 
     declared_arguments = [
         DeclareLaunchArgument(
@@ -33,7 +34,11 @@ def generate_launch_description():
             default_value="0.0",
             description="Robot spawn height"
         ),
-
+        DeclareLaunchArgument(
+            "gripper_type",
+            default_value="custom",
+            description="Which gripper to load'custom' or 'robotiq'"
+        ),
     ]
 
     # call the template bringup for common nodes
@@ -45,7 +50,11 @@ def generate_launch_description():
                 "ur3e_bringup.launch.py"
             ])
         ),
-        launch_arguments={"start_external_rm": "false","use_sim_time": "true"}.items()
+        launch_arguments={
+            "start_external_rm": "false",
+            "use_sim_time": "true",
+            "gripper_type": gripper_type,
+        }.items()
     )
 
     # launch gazebo harmonic with gui enabled
