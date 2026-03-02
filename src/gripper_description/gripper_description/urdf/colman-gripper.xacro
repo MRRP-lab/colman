@@ -5,6 +5,10 @@
     <xacro:property name="inertials_file" value="${xacro.load_yaml('$(find gripper_description)/config/inertials.yaml')}"/>
     <xacro:property name="inertials" value="${inertials_file['inertials']}"/>
 
+    <material name="gripper_dark_grey">
+      <color rgba="0.2 0.2 0.2 1.0"/>
+    </material>
+
     <link name="${prefix}gripper_base">
       <inertial>
         <mass value="${inertials['base']['mass']}"/>
@@ -16,6 +20,7 @@
         <geometry>
           <mesh filename="package://gripper_description/meshes/visual/base.${visual_mesh_ext}" scale="0.001 0.001 0.001"/>
         </geometry>
+        <material name="gripper_dark_grey"/>
       </visual>
       <collision>
         <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -35,6 +40,7 @@
         <geometry>
           <mesh filename="package://gripper_description/meshes/visual/left_gear.${visual_mesh_ext}" scale="0.001 0.001 0.001"/>
         </geometry>
+        <material name="gripper_dark_grey"/>
       </visual>
       <collision>
         <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -54,6 +60,7 @@
         <geometry>
           <mesh filename="package://gripper_description/meshes/visual/right_gear.${visual_mesh_ext}" scale="0.001 0.001 0.001"/>
         </geometry>
+        <material name="gripper_dark_grey"/>
       </visual>
       <collision>
         <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -73,6 +80,7 @@
         <geometry>
           <mesh filename="package://gripper_description/meshes/visual/left_arm_bottom.${visual_mesh_ext}" scale="0.001 0.001 0.001"/>
         </geometry>
+        <material name="gripper_dark_grey"/>
       </visual>
       <collision>
         <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -92,6 +100,7 @@
         <geometry>
           <mesh filename="package://gripper_description/meshes/visual/right_arm_bottom.${visual_mesh_ext}" scale="0.001 0.001 0.001"/>
         </geometry>
+        <material name="gripper_dark_grey"/>
       </visual>
       <collision>
         <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -111,6 +120,7 @@
         <geometry>
           <mesh filename="package://gripper_description/meshes/visual/bottom_stick_left.${visual_mesh_ext}" scale="0.001 0.001 0.001"/>
         </geometry>
+        <material name="gripper_dark_grey"/>
       </visual>
       <collision>
         <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -130,6 +140,7 @@
         <geometry>
           <mesh filename="package://gripper_description/meshes/visual/bottom_stick_right.${visual_mesh_ext}" scale="0.001 0.001 0.001"/>
         </geometry>
+        <material name="gripper_dark_grey"/>
       </visual>
       <collision>
         <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -149,6 +160,7 @@
         <geometry>
           <mesh filename="package://gripper_description/meshes/visual/top_stick_left.${visual_mesh_ext}" scale="0.001 0.001 0.001"/>
         </geometry>
+        <material name="gripper_dark_grey"/>
       </visual>
       <collision>
         <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -168,6 +180,7 @@
         <geometry>
           <mesh filename="package://gripper_description/meshes/visual/top_stick_right.${visual_mesh_ext}" scale="0.001 0.001 0.001"/>
         </geometry>
+        <material name="gripper_dark_grey"/>
       </visual>
       <collision>
         <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -187,6 +200,7 @@
         <geometry>
           <mesh filename="package://gripper_description/meshes/visual/drive_gear.${visual_mesh_ext}" scale="0.001 0.001 0.001"/>
         </geometry>
+        <material name="gripper_dark_grey"/>
       </visual>
       <collision>
         <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -275,6 +289,39 @@
       <dynamics damping="${joint_limits['bottomrightstick']['damping']}" friction="${joint_limits['bottomrightstick']['friction']}"/>
       <mimic joint="${prefix}rightgear" multiplier="-1" offset="0"/>
     </joint>
+    
+    <!-- Gazebo colors -->
+    <gazebo reference="${prefix}gripper_base">
+      <material>Gazebo/DarkGrey</material>
+    </gazebo>
+    <gazebo reference="${prefix}left_gear">
+      <material>Gazebo/DarkGrey</material>
+    </gazebo>
+    <gazebo reference="${prefix}right_gear">
+      <material>Gazebo/DarkGrey</material>
+    </gazebo>
+    <gazebo reference="${prefix}left_arm_bottom">
+      <material>Gazebo/DarkGrey</material>
+    </gazebo>
+    <gazebo reference="${prefix}right_arm_bottom">
+      <material>Gazebo/DarkGrey</material>
+    </gazebo>
+    <gazebo reference="${prefix}bottom_stick_left">
+      <material>Gazebo/DarkGrey</material>
+    </gazebo>
+    <gazebo reference="${prefix}bottom_stick_right">
+      <material>Gazebo/DarkGrey</material>
+    </gazebo>
+    <gazebo reference="${prefix}top_stick_left">
+      <material>Gazebo/DarkGrey</material>
+    </gazebo>
+    <gazebo reference="${prefix}top_stick_right">
+      <material>Gazebo/DarkGrey</material>
+    </gazebo>
+    <gazebo reference="${prefix}drive_gear">
+      <material>Gazebo/DarkGrey</material>
+    </gazebo>
+
     <!-- ros2_control -->
     <ros2_control name="${prefix}colman_gripper_system" type="system">
       <hardware>
