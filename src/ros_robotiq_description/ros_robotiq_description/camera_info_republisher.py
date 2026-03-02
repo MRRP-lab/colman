@@ -1,14 +1,15 @@
 import rclpy
+import copy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import CameraInfo
 
-class StereoCameraInfoRepublisher(Node):
+class CameraInfoRepublisher(Node):
     """
     Reads a camera info message and adds the baseline distance between left and right sensors.
     """
     def __init__(self):
-        super().__init__("stereo_camera_info_republisher")
+        super().__init__("camera_info_republisher")
 
         self.declare_parameter("baseline_m", 0.075)
         self.declare_parameter("left_camera_info_in", "/oakd_pro/left/camera_info")
@@ -37,18 +38,7 @@ class StereoCameraInfoRepublisher(Node):
 
         Copy a camera info message to edit and send as a stereo camera info message.
         """
-        out = CameraInfo()
-        out.header = msg.header
-        out.height = msg.height
-        out.width = msg.width
-        out.distortion_model = msg.distortion_model
-        out.d = list(msg.d)
-        out.k = list(msg.k)
-        out.r = list(msg.r)
-        out.p = list(msg.p)
-        out.binning_x = msg.binning_x
-        out.binning_y = msg.binning_y
-        out.roi = msg.roi
+        out = copy.deepcopy(msg)
         if out.roi.width == 0:
             out.roi.width = out.width
         if out.roi.height == 0:
@@ -88,7 +78,7 @@ class StereoCameraInfoRepublisher(Node):
 
 def main():
     rclpy.init()
-    node = StereoCameraInfoRepublisher()
+    node = CameraInfoRepublisher()
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()

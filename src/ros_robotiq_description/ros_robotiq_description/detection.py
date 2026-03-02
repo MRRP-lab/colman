@@ -40,7 +40,7 @@ class DetectionNode(Node):
 
     def detect_timer_callback(self):
         if self.latest_image is None:
-            self.get_logger().warn("No image found.", throttled_duration_sec=5.0)
+            self.get_logger().warn("No image found.", throttle_duration_sec=5.0)
             return
 
         frame = self.latest_image.copy()

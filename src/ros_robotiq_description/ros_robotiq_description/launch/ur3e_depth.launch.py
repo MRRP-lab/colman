@@ -11,14 +11,7 @@ from launch_ros.actions import SetParameter
 def generate_launch_description():
     world = LaunchConfiguration("world")
     baseline_m = LaunchConfiguration("baseline_m")
-    enable_depth_pointcloud = LaunchConfiguration("enable_depth_pointcloud")
-    disparity_range = LaunchConfiguration("disparity_range")
-    correlation_window_size = LaunchConfiguration("correlation_window_size")
-    texture_threshold = LaunchConfiguration("texture_threshold")
-    speckle_size = LaunchConfiguration("speckle_size")
-    speckle_range = LaunchConfiguration("speckle_range")
-    disp12_max_diff = LaunchConfiguration("disp12_max_diff")
-    uniqueness_ratio = LaunchConfiguration("uniqueness_ratio")
+    enable_pointcloud = LaunchConfiguration("enable_pointcloud")
 
     spawn_z = LaunchConfiguration("spawn_z")
 
@@ -43,46 +36,9 @@ def generate_launch_description():
             description="Stereo camera baseline in meters",
         ),
         DeclareLaunchArgument(
-            "enable_depth_pointcloud",
+            "enable_pointcloud",
             default_value="true",
             description="Publish point cloud from depth image",
-        ),
-
-        # depth parameter tuning
-        DeclareLaunchArgument(
-            "disparity_range",
-            default_value="160",
-            description="Stereo disparity search range, higher sees closer objects",
-        ),
-        DeclareLaunchArgument(
-            "correlation_window_size",
-            default_value="17",
-            description="Stereo block size, larger = smoother, smaller = sharper/noisier",
-        ),
-        DeclareLaunchArgument(
-            "texture_threshold",
-            default_value="2",
-            description="Minimum texture to accept disparity match",
-        ),
-        DeclareLaunchArgument(
-            "speckle_size",
-            default_value="50",
-            description="Remove small isolated disparity regions",
-        ),
-        DeclareLaunchArgument(
-            "speckle_range",
-            default_value="2",
-            description="Disparity variation allowed within speckles",
-        ),
-        DeclareLaunchArgument(
-            "disp12_max_diff",
-            default_value="2",
-            description="Left-right disparity consistency threshold",
-        ),
-        DeclareLaunchArgument(
-            "uniqueness_ratio",
-            default_value="3.0",
-            description="Match uniqueness ratio, lower fills more, higher cleaner",
         ),
     ]
 
@@ -142,10 +98,10 @@ def generate_launch_description():
     )
 
     # format camera info as expected by depth computation
-    stereo_camera_info_republisher = Node(
+    camera_info_republisher = Node(
         package="ros_robotiq_description",
-        executable="stereo_camera_info_republisher",
-        name="stereo_camera_info_republisher",
+        executable="camera_info_republisher",
+        name="camera_info_republisher",
         parameters=[
             {"baseline_m": baseline_m},
             {"left_camera_info_in": "/oakd_pro/left/camera_info_raw"},
@@ -188,58 +144,21 @@ def generate_launch_description():
         ],
     )
 
-    disparity = Node(
+    point_cloud = Node(
         package="stereo_image_proc",
-        executable="disparity_node",
-        name="stereo_disparity",
-        parameters=[
-            {"approximate_sync": True},
-            {"queue_size": 50},
-            {"min_disparity": 0},
-            {"disparity_range": disparity_range},
-            {"correlation_window_size": correlation_window_size},
-            {"texture_threshold": texture_threshold},
-            {"speckle_size": speckle_size},
-            {"speckle_range": speckle_range},
-            {"disp12_max_diff": disp12_max_diff},
-            {"uniqueness_ratio": uniqueness_ratio},
-        ],
+        executable="point_cloud_node",
+        name="point_cloud",
+        condition=IfCondition(enable_pointcloud),
         remappings=[
-            ("left/image_rect", "/oakd_pro/left/image_rect"),
-            ("right/image_rect", "/oakd_pro/right/image_rect"),
+            ("left/image_rect_color", "/oakd_pro/left/image_rect"),
             ("left/camera_info", "/oakd_pro/left/camera_info"),
+            ("right/image_rect", "/oakd_pro/right/image_rect"),
             ("right/camera_info", "/oakd_pro/right/camera_info"),
-            ("disparity", "/oakd_pro/disparity"),
+            ("points2", "/oakd_pro/depth/points2"),
         ],
-        output="screen",
-    )
-
-    # built in ros2 depth to point cloud node
-    depth_point_cloud = Node(
-        package="depth_image_proc",
-        executable="point_cloud_xyz_node",
-        name="depth_point_cloud",
-        condition=IfCondition(enable_depth_pointcloud),
-        remappings=[
-            ("image_rect", "/oakd_pro/depth/image"),
-            ("camera_info", "/oakd_pro/depth/camera_info"),
-            ("depth/image_rect", "/oakd_pro/depth/image"),
-            ("depth/camera_info", "/oakd_pro/depth/camera_info"),
-            ("points", "/oakd_pro/depth/points2"),
-        ],
-        output="screen",
-    )
-
-    disparity_to_depth = Node(
-        package="ros_robotiq_description",
-        executable="disparity_to_depth",
-        name="disparity_to_depth",
-        parameters=[
-            {"disparity_topic": "/oakd_pro/disparity"},
-            {"depth_topic": "/oakd_pro/depth/image"},
-            {"left_camera_info_topic": "/oakd_pro/left/camera_info"},
-            {"depth_camera_info_topic": "/oakd_pro/depth/camera_info"},
-        ],
+        parameters=[{
+            "approximate_sync": True,
+        }],
         output="screen",
     )
 
@@ -277,16 +196,13 @@ def generate_launch_description():
         declared_arguments +
         [
             ur3e_bringup,
-            stereo_camera_info_republisher,
+            camera_info_republisher,
             left_rectify,
             right_rectify,
-            disparity,
-            depth_point_cloud,
-            disparity_to_depth,
+            point_cloud,
             gazebo,
             moveit_demo,
             gz_bridge,
             spawn_entity,
-
         ]
     )
