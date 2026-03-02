@@ -1,13 +1,11 @@
 from launch import LaunchDescription
 from launch.conditions import IfCondition
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import Command, FindExecutable, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
-from launch.actions import TimerAction
-
 
 def generate_launch_description():
 
@@ -19,11 +17,27 @@ def generate_launch_description():
         description="Start external controller_manager/ros2_control_node"
     )
 
-    # path to controller YAML
-    controllers_file = PathJoinSubstitution([
-        FindPackageShare("ros_robotiq_description"),
-        "config",
-        "ur3e_robotiq_controllers.yaml",
+    declare_gripper_type_arg = DeclareLaunchArgument(
+        "gripper_type",
+        default_value="custom",
+        description="Which gripper to load 'custom' or 'robotiq'"
+    )
+
+    declare_use_sim_time_arg = DeclareLaunchArgument(
+        "use_sim_time",
+        default_value="false",
+        description="Use simulation (Gazebo) clock"
+    )
+
+    gripper_type = LaunchConfiguration("gripper_type")
+    use_sim_time = LaunchConfiguration("use_sim_time")
+
+    robotiq_controllers_file = PathJoinSubstitution([
+        FindPackageShare("ros_robotiq_description"), "config", "ur3e_robotiq_controllers.yaml",
+    ])
+
+    custom_controllers_file = PathJoinSubstitution([
+        FindPackageShare("ros_robotiq_description"), "config", "ur3e_gripper_controllers.yaml",
     ])
 
     # path to xacro for urdf
@@ -35,7 +49,8 @@ def generate_launch_description():
 
     # convert xacro to urdf
     robot_description = ParameterValue(
-        Command([FindExecutable(name="xacro"), " ", description_file]),
+        Command([FindExecutable(name="xacro"), " ", description_file,
+                 " gripper_type:=", gripper_type]),
         value_type=str,
     )
 
@@ -47,20 +62,31 @@ def generate_launch_description():
         output="screen",
         parameters=[{
             "robot_description": robot_description,
+            "use_sim_time": use_sim_time,
         }],
     )
 
-    ros2_control_node = Node(
+    ros2_control_node_robotiq = Node(
         package="controller_manager",
         executable="ros2_control_node",
         name="controller_manager",
         output="screen",
-        parameters=[
-            controllers_file,
-        ],
-        condition=IfCondition(LaunchConfiguration("start_external_rm")),
+        parameters=[robotiq_controllers_file],
+        condition=IfCondition(PythonExpression([
+            "'", LaunchConfiguration("start_external_rm"), "' == 'true' and '", gripper_type, "' == 'robotiq'"
+        ])),
     )
-    
+
+    ros2_control_node_custom = Node(
+        package="controller_manager",
+        executable="ros2_control_node",
+        name="controller_manager",
+        output="screen",
+        parameters=[custom_controllers_file],
+        condition=IfCondition(PythonExpression([
+            "'", LaunchConfiguration("start_external_rm"), "' == 'true' and '", gripper_type, "' == 'custom'"
+        ])),
+    )
 
     joint_state_broadcaster_spawner = Node(
         package="controller_manager",
@@ -76,29 +102,32 @@ def generate_launch_description():
         output="screen",
     )
 
-    gripper_controller_spawner = Node(
+    robotiq_gripper_controller_spawner = Node(
         package="controller_manager",
         executable="spawner",
         arguments=["robotiq_gripper_controller"],
         output="screen",
+        condition=IfCondition(PythonExpression(["'", gripper_type, "' == 'robotiq'"]))
     )
 
-
-    # Might need this when we try to implement with hardware?
-    """
-    safety_limits_arg = DeclareLaunchArgument(
-         "safety_limits",
-         default_value="true",
-         description="Enable UR safety-limits controller (only with UR driver stack).",
+    custom_gripper_controller_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["gripper_controller"],
+        output="screen",
+        condition=IfCondition(PythonExpression(["'", gripper_type, "' == 'custom'"]))
     )
-    """
 
     # List of nodes to return
     return LaunchDescription([
         declare_rm_arg,
+        declare_gripper_type_arg,
+        declare_use_sim_time_arg,
         robot_state_publisher,
-        ros2_control_node,
+        ros2_control_node_robotiq,
+        ros2_control_node_custom,
         joint_state_broadcaster_spawner,
         arm_controller_spawner,
-        gripper_controller_spawner,
+        robotiq_gripper_controller_spawner,
+        custom_gripper_controller_spawner,
     ])
