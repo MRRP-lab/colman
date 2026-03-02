@@ -1,18 +1,16 @@
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
-from launch.conditions import IfCondition
+from launch.actions import (
+    IncludeLaunchDescription, DeclareLaunchArgument,
+    RegisterEventHandler, LogInfo,
+)
+from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch_ros.actions import Node
-from launch.actions import TimerAction, OpaqueFunction, LogInfo
+from launch_ros.actions import Node, SetParameter
 from launch_ros.substitutions import FindPackageShare
-from launch_ros.actions import SetParameter
-
-
-
 
 def generate_launch_description():
-    
+
     rviz = LaunchConfiguration("rviz")
     world = LaunchConfiguration("world")
     spawn_z = LaunchConfiguration("spawn_z")
@@ -35,6 +33,7 @@ def generate_launch_description():
             default_value="0.0",
             description="Robot spawn height"
         ),
+
     ]
 
     # call the template bringup for common nodes
@@ -60,21 +59,16 @@ def generate_launch_description():
     )
 
     # spawn the arm in gazebo
-    spawn_entity = TimerAction(
-        period=0.0,
-        actions=[
-            Node(
-                package="ros_gz_sim",
-                executable="create",
-                output="screen",
-                arguments=[
-                    "-topic", "/robot_description",
-                    "-name", "ur3e_robotiq",
-                    "-x", "0.0",
-                    "-y", "0.0",
-                    "-z", spawn_z # 0.9652 for table world
-                ],
-            )
+    spawn_entity = Node(
+        package="ros_gz_sim",
+        executable="create",
+        output="screen",
+        arguments=[
+            "-topic", "/robot_description",
+            "-name", "ur3e_robotiq",
+            "-x", "0.0",
+            "-y", "0.0",
+            "-z", spawn_z # 0.9652 for table world
         ],
     )
 
@@ -90,44 +84,48 @@ def generate_launch_description():
         executable="parameter_bridge",
         parameters=[{'config_file': bridge_config}], # Use param instead of arguments
         output="screen",
+        respawn=True,
+        respawn_delay=2.0,
     )
 
-    moveit_demo = TimerAction(
-        period=0.0,
-        actions=[
-            SetParameter(name='use_sim_time', value=True),
-            # backend
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                    PathJoinSubstitution([
-                        FindPackageShare("ur3e_moveit_config"),
-                        "launch",
-                        "move_group.launch.py",
-                    ])
+    moveit = RegisterEventHandler(
+        OnProcessExit(
+            target_action=spawn_entity,
+            on_exit=[
+                LogInfo(msg="Robot spawned, launching MoveIt..."),
+                SetParameter(name='use_sim_time', value=True),
+                # backend
+                IncludeLaunchDescription(
+                    PythonLaunchDescriptionSource(
+                        PathJoinSubstitution([
+                            FindPackageShare("ur3e_moveit_config"),
+                            "launch",
+                            "move_group.launch.py",
+                        ])
+                    ),
+                    launch_arguments={"use_sim_time": "true"}.items(),
                 ),
-                launch_arguments={"use_sim_time": "true"}.items(),
-            ),
-            # gui
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                    PathJoinSubstitution([
-                        FindPackageShare("ur3e_moveit_config"),
-                        "launch",
-                        "moveit_rviz.launch.py",
-                    ])
+                # gui
+                IncludeLaunchDescription(
+                    PythonLaunchDescriptionSource(
+                        PathJoinSubstitution([
+                            FindPackageShare("ur3e_moveit_config"),
+                            "launch",
+                            "moveit_rviz.launch.py",
+                        ])
+                    ),
+                    launch_arguments={"use_sim_time": "true"}.items(),
                 ),
-                launch_arguments={"use_sim_time": "true"}.items(),
-            ),
-        ],
+            ],
+        )
     )
     return LaunchDescription(
         declared_arguments +
         [
             ur3e_bringup,
             gazebo,
-            moveit_demo,
             clock_bridge,
             spawn_entity,
-
+            moveit
         ]
     )

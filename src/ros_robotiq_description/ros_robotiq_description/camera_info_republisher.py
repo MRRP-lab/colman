@@ -16,15 +16,19 @@ class CameraInfoRepublisher(Node):
         self.declare_parameter("right_camera_info_in", "/oakd_pro/right/camera_info")
         self.declare_parameter("left_camera_info_out", "/oakd_pro/left/camera_info_calibrated")
         self.declare_parameter("right_camera_info_out", "/oakd_pro/right/camera_info_calibrated")
+        self.declare_parameter("left_frame_id", "")
+        self.declare_parameter("right_frame_id", "")
 
         self.baseline_m = float(self.get_parameter("baseline_m").value)
         left_in = str(self.get_parameter("left_camera_info_in").value)
         right_in = str(self.get_parameter("right_camera_info_in").value)
         left_out = str(self.get_parameter("left_camera_info_out").value)
         right_out = str(self.get_parameter("right_camera_info_out").value)
+        self.left_frame_id = str(self.get_parameter("left_frame_id").value)
+        self.right_frame_id = str(self.get_parameter("right_frame_id").value)
 
-        self.left_pub = self.create_publisher(CameraInfo, left_out, qos_profile_sensor_data)
-        self.right_pub = self.create_publisher(CameraInfo, right_out, qos_profile_sensor_data)
+        self.left_pub = self.create_publisher(CameraInfo, left_out, 10)
+        self.right_pub = self.create_publisher(CameraInfo, right_out, 10)
 
         self.create_subscription(CameraInfo, left_in, self.left_cb, qos_profile_sensor_data)
         self.create_subscription(CameraInfo, right_in, self.right_cb, qos_profile_sensor_data)
@@ -55,6 +59,8 @@ class CameraInfoRepublisher(Node):
         Validates left camera info and publishes.
         """
         out = self.copy_msg(msg)
+        if self.left_frame_id:
+            out.header.frame_id = self.left_frame_id
         # left offset should be 0
         if len(out.p) >= 4:
             out.p[3] = 0.0
@@ -68,6 +74,8 @@ class CameraInfoRepublisher(Node):
         Validates right camera info and publishes.
         """
         out = self.copy_msg(msg)
+        if self.right_frame_id:
+            out.header.frame_id = self.right_frame_id
         # get focal length
         fx = out.k[0] if len(out.k) > 0 and out.k[0] > 0.0 else (out.p[0] if len(out.p) > 0 else 0.0)
         # validate projection matrix and fx
