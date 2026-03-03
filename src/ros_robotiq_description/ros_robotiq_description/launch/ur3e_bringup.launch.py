@@ -27,7 +27,7 @@ def generate_launch_description():
     declare_use_sim_time_arg = DeclareLaunchArgument(
         "use_sim_time",
         default_value="false",
-        description="Use simulation (Gazebo) clock"
+        description="Use simulation clock"
     )
 
     gripper_type = LaunchConfiguration("gripper_type")

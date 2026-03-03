@@ -14,10 +14,16 @@ def generate_launch_description():
     world = LaunchConfiguration("world")
     baseline_m = LaunchConfiguration("baseline_m")
     enable_pointcloud = LaunchConfiguration("enable_pointcloud")
+    gripper_type = LaunchConfiguration("gripper_type")
 
     spawn_z = LaunchConfiguration("spawn_z")
 
     declared_arguments = [
+        DeclareLaunchArgument(
+            "gripper_type",
+            default_value="custom",
+            description="Which gripper to load 'custom' or 'robotiq'"
+        ),
         DeclareLaunchArgument(
             "world",
             default_value=PathJoinSubstitution([
@@ -69,7 +75,7 @@ def generate_launch_description():
                 "ur3e_bringup.launch.py"
             ])
         ),
-        launch_arguments={"start_external_rm": "false","use_sim_time": "true"}.items()
+        launch_arguments={"start_external_rm": "false", "use_sim_time": "true", "gripper_type": gripper_type}.items()
     )
 
     # launch gazebo harmonic with gui enabled
