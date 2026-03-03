@@ -1,5 +1,5 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="colman-gripper">
-  <xacro:macro name="colman-gripper" params="prefix:='' visual_mesh_ext:='obj' include_gazebo_plugin:='true'">
+  <xacro:macro name="colman-gripper" params="prefix:='' visual_mesh_ext:='dae' include_gazebo_plugin:='true'">
     <xacro:property name="joint_limits_file" value="${xacro.load_yaml('$(find gripper_description)/config/joint_limits.yaml')}"/>
     <xacro:property name="joint_limits" value="${joint_limits_file['joint_limits']}"/>
     <xacro:property name="inertials_file" value="${xacro.load_yaml('$(find gripper_description)/config/inertials.yaml')}"/>
@@ -291,36 +291,27 @@
     </joint>
     
     <!-- Gazebo colors -->
-    <gazebo reference="${prefix}gripper_base">
-      <material>Gazebo/DarkGrey</material>
-    </gazebo>
-    <gazebo reference="${prefix}left_gear">
-      <material>Gazebo/DarkGrey</material>
-    </gazebo>
-    <gazebo reference="${prefix}right_gear">
-      <material>Gazebo/DarkGrey</material>
-    </gazebo>
-    <gazebo reference="${prefix}left_arm_bottom">
-      <material>Gazebo/DarkGrey</material>
-    </gazebo>
-    <gazebo reference="${prefix}right_arm_bottom">
-      <material>Gazebo/DarkGrey</material>
-    </gazebo>
-    <gazebo reference="${prefix}bottom_stick_left">
-      <material>Gazebo/DarkGrey</material>
-    </gazebo>
-    <gazebo reference="${prefix}bottom_stick_right">
-      <material>Gazebo/DarkGrey</material>
-    </gazebo>
-    <gazebo reference="${prefix}top_stick_left">
-      <material>Gazebo/DarkGrey</material>
-    </gazebo>
-    <gazebo reference="${prefix}top_stick_right">
-      <material>Gazebo/DarkGrey</material>
-    </gazebo>
-    <gazebo reference="${prefix}drive_gear">
-      <material>Gazebo/DarkGrey</material>
-    </gazebo>
+    <xacro:macro name="gripper_material" params="link_name">
+      <gazebo reference="${link_name}">
+        <visual>
+          <material>
+            <ambient>0.2 0.2 0.2 1.0</ambient>
+            <diffuse>0.2 0.2 0.2 1.0</diffuse>
+            <specular>0.1 0.1 0.1 1.0</specular>
+          </material>
+        </visual>
+      </gazebo>
+    </xacro:macro>
+    <xacro:gripper_material link_name="${prefix}gripper_base"/>
+    <xacro:gripper_material link_name="${prefix}left_gear"/>
+    <xacro:gripper_material link_name="${prefix}right_gear"/>
+    <xacro:gripper_material link_name="${prefix}left_arm_bottom"/>
+    <xacro:gripper_material link_name="${prefix}right_arm_bottom"/>
+    <xacro:gripper_material link_name="${prefix}bottom_stick_left"/>
+    <xacro:gripper_material link_name="${prefix}bottom_stick_right"/>
+    <xacro:gripper_material link_name="${prefix}top_stick_left"/>
+    <xacro:gripper_material link_name="${prefix}top_stick_right"/>
+    <xacro:gripper_material link_name="${prefix}drive_gear"/>
 
     <!-- ros2_control -->
     <ros2_control name="${prefix}colman_gripper_system" type="system">
@@ -339,40 +330,6 @@
         <state_interface name="position">
           <param name="initial_value">${joint_limits['servotodrivegear']['lower']}</param>
         </state_interface>
-        <state_interface name="velocity"/>
-      </joint>
-
-      <!-- Mimic joints -->
-      <joint name="${prefix}leftgear">
-        <state_interface name="position"/>
-        <state_interface name="velocity"/>
-      </joint>
-      <joint name="${prefix}rightgear">
-        <state_interface name="position"/>
-        <state_interface name="velocity"/>
-      </joint>
-      <joint name="${prefix}leftarm">
-        <state_interface name="position"/>
-        <state_interface name="velocity"/>
-      </joint>
-      <joint name="${prefix}rightarm">
-        <state_interface name="position"/>
-        <state_interface name="velocity"/>
-      </joint>
-      <joint name="${prefix}topleftstick">
-        <state_interface name="position"/>
-        <state_interface name="velocity"/>
-      </joint>
-      <joint name="${prefix}bottomleftstick">
-        <state_interface name="position"/>
-        <state_interface name="velocity"/>
-      </joint>
-      <joint name="${prefix}toprightstick">
-        <state_interface name="position"/>
-        <state_interface name="velocity"/>
-      </joint>
-      <joint name="${prefix}bottomrightstick">
-        <state_interface name="position"/>
         <state_interface name="velocity"/>
       </joint>
     </ros2_control>

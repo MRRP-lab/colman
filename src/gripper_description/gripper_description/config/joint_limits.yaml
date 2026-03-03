@@ -47,7 +47,7 @@ joint_limits:
     friction: 0.0
     lower: -2.735
     upper: 0.06
-    velocity: 1.0
+    velocity: 5.0
   topleftstick:
     damping: 0.0
     effort: 100.0
