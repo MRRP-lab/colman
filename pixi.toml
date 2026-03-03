@@ -19,6 +19,9 @@ sim-yolo = "ros2 launch ros_robotiq_description ur3e_YOLO.launch.py spawn_z:=0.9
 sim-depth = "ros2 launch ros_robotiq_description ur3e_depth.launch.py spawn_z:=0.9652"
 sim-eyeinhand = "ros2 launch ros_robotiq_description ur3e_depth.launch.py spawn_z:=0.9652 world:=$PIXI_PROJECT_ROOT/src/ros_robotiq_description/ros_robotiq_description/worlds/table_world.sdf"
 sim-calibration = "ros2 launch ros_robotiq_description ur3e_depth.launch.py spawn_z:=0.9652 world:=$PIXI_PROJECT_ROOT/src/ros_robotiq_description/ros_robotiq_description/worlds/calibration_world.sdf"
+mock = "ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur3e robot_ip:=0.0.0.0 use_mock_hardware:=true launch_dashboard_client:=false kinematics_params_file:=$PIXI_PROJECT_ROOT/myconfig.yaml"
+driver = "ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur3e robot_ip:=192.168.56.101 headless_mode:=true kinematics_params_file:=$PIXI_PROJECT_ROOT/myconfig.yaml"
+moveit = "ros2 launch ur_moveit_config ur_moveit.launch.py ur_type:=ur3e"
 
 build = "colcon build --symlink-install"
 node-list = "ros2 node list"
@@ -57,6 +60,7 @@ ros-jazzy-moveit-py = ">=2.12.3,<3"
 git-lfs = ">=3.7.1,<4"
 ros-jazzy-trac-ik-lib = "*"
 ros-jazzy-trac-ik-kinematics-plugin = "*"
+ros-jazzy-ur-robot-driver = ">=3.7.0,<4"
 
 [pypi-dependencies]
 ultralytics = ">=8.4.11, <9"

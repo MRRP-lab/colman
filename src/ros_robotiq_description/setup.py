@@ -38,6 +38,7 @@ setup(
         'console_scripts': [
             "detection = ros_robotiq_description.detection:main",
             'camera_info_republisher = ros_robotiq_description.camera_info_republisher:main',
+            'pick_and_place = ros_robotiq_description.pick_and_place:main',
         ],
     },
 )
