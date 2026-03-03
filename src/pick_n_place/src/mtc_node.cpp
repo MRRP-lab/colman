@@ -31,7 +31,7 @@ public:
   void setupPlanningScene();
   void spawnBox(double x, double y, double z, double w);
   geometry_msgs::msg::PoseStamped waitForObject();
-
+  void cleanupScene();
 private:
   // Compose an MTC task from a series of stages.
   mtc::Task createTask();
@@ -59,6 +59,7 @@ void MTCTaskNode::spawnBox(double x, double y, double z, double w)
   object.primitives[0].type = shape_msgs::msg::SolidPrimitive::BOX;
   object.primitives[0].dimensions = {0.05, 0.05, 0.05};
 
+
   // 2. Define the Pose (CORRECTED)
   geometry_msgs::msg::Pose pose;
   pose.position.x = x;
@@ -75,6 +76,32 @@ void MTCTaskNode::spawnBox(double x, double y, double z, double w)
   moveit::planning_interface::PlanningSceneInterface psi;
   psi.applyCollisionObject(object);
 }
+void addGroundPlane() {
+    moveit::planning_interface::PlanningSceneInterface psi;
+    moveit_msgs::msg::CollisionObject collision_object;
+    collision_object.header.frame_id = "world"; // Adapt to your base frame
+    collision_object.id = "ground_plane";
+
+    shape_msgs::msg::SolidPrimitive primitive;
+    primitive.type = primitive.BOX;
+    primitive.dimensions.resize(3);
+    primitive.dimensions[primitive.BOX_X] = 2.0;
+    primitive.dimensions[primitive.BOX_Y] = 2.0;
+    primitive.dimensions[primitive.BOX_Z] = 0.01; // 1cm thick
+
+    geometry_msgs::msg::Pose box_pose;
+    box_pose.orientation.w = 1.0;
+    box_pose.position.x = 0.0;
+    box_pose.position.y = 0.0;
+    box_pose.position.z = -0.01; // Slightly below z=0 to avoid "Initial State in Collision"
+
+    collision_object.primitives.push_back(primitive);
+    collision_object.primitive_poses.push_back(box_pose);
+    collision_object.operation = collision_object.ADD;
+
+    // Apply the object
+    psi.applyCollisionObject(collision_object);
+}
 
 void MTCTaskNode::doTask()
 {
@@ -86,24 +113,34 @@ void MTCTaskNode::doTask()
   catch (mtc::InitStageException &e)
   {
     std::cerr << "[mtc_node.cpp] Creating task failed" << std::endl;
-    RCLCPP_ERROR_STREAM(LOGGER, e);
     return;
   }
 
-  if (!task_.plan(5))
+  if (!task_.plan(10))
   {
-    RCLCPP_ERROR_STREAM(LOGGER, "Task planning failed");
+    RCLCPP_ERROR(LOGGER, "[mtc_node.cpp] Task planning failed");
+    task_.printState();
     return;
   }
 
-  task_.introspection().publishSolution(*task_.solutions().front());
+  if (task_.solutions().empty())
+  {
+    RCLCPP_ERROR(LOGGER, "Task solved, but no solutions found!");
+    return;
+  }
 
+  if (task_.solutions().empty())
+  {
+    RCLCPP_ERROR(LOGGER, "Task solved, but no solutions found!");
+    return;
+  }
   auto result = task_.execute(*task_.solutions().front());
   if (result.val != moveit_msgs::msg::MoveItErrorCodes::SUCCESS)
   {
-    RCLCPP_ERROR_STREAM(LOGGER, "Task execution failed");
+    RCLCPP_ERROR(LOGGER, "[mtc_node.cpp] Task execution failed");
     return;
   }
+  RCLCPP_ERROR(LOGGER, "[mtc_node.cpp] Task execution succeeded");
 
   return;
 }
@@ -160,6 +197,7 @@ mtc::Task MTCTaskNode::createTask()
   mtc::Stage *attach_object_stage =
       nullptr; // Forward attach_object_stage to place pose generator
 
+      
   {
     auto grasp = std::make_unique<mtc::SerialContainer>("pick object");
     task.properties().exposeTo(grasp->properties(), {"eef", "group", "ik_frame"});
@@ -171,7 +209,7 @@ mtc::Task MTCTaskNode::createTask()
       stage->properties().set("marker_ns", "approach_object");
       stage->properties().set("link", hand_frame);
       stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
-      stage->setMinMaxDistance(0.1, 0.15);
+      stage->setMinMaxDistance(0.03, 0.1);
 
       // Set hand forward direction
       geometry_msgs::msg::Vector3Stamped vec;
@@ -194,7 +232,7 @@ mtc::Task MTCTaskNode::createTask()
       Eigen::Isometry3d grasp_frame_transform = Eigen::Isometry3d::Identity();
       Eigen::Quaterniond q(Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitY()));
       grasp_frame_transform.linear() = q.matrix();
-      grasp_frame_transform.translation().z() = 0.15;
+      grasp_frame_transform.translation().z() = 0.145;
 
       // Compute IK
       auto wrapper =
@@ -206,7 +244,6 @@ mtc::Task MTCTaskNode::createTask()
       wrapper->properties().configureInitFrom(mtc::Stage::INTERFACE, {"target_pose"});
       grasp->insert(std::move(wrapper));
     }
-
     {
       auto stage =
           std::make_unique<mtc::stages::ModifyPlanningScene>("allow collision (hand,object)");
@@ -231,12 +268,16 @@ mtc::Task MTCTaskNode::createTask()
       attach_object_stage = stage.get();
       grasp->insert(std::move(stage));
     }
-
+    {
+      auto allow_collision = std::make_unique<mtc::stages::ModifyPlanningScene>("allow collision (object,support)");
+      allow_collision->allowCollisions("object", "ground_plane", true); // Ensure 'ground_plane' matches your collision object ID
+      grasp->insert(std::move(allow_collision));
+    }
     {
       auto stage =
           std::make_unique<mtc::stages::MoveRelative>("lift object", cartesian_planner);
       stage->properties().configureInitFrom(mtc::Stage::PARENT, {"group"});
-      stage->setMinMaxDistance(0.1, 0.3);
+      stage->setMinMaxDistance(0.05, 0.3);
       stage->setIKFrame(hand_frame);
       stage->properties().set("marker_ns", "lift_object");
 
@@ -246,17 +287,20 @@ mtc::Task MTCTaskNode::createTask()
       vec.vector.z = 1.0;
       stage->setDirection(vec);
       grasp->insert(std::move(stage));
+
+
     }
 
     task.add(std::move(grasp));
   }
-
+  task.printState();
+  
   // Intermediate step to connect pick and place
   {
     auto stage_move_to_place = std::make_unique<mtc::stages::Connect>(
         "move to place",
         mtc::stages::Connect::GroupPlannerVector{{arm_group_name, sampling_planner}, {hand_group_name, interpolation_planner}});
-        
+
     stage_move_to_place->setTimeout(5.0);
     stage_move_to_place->properties().configureInitFrom(mtc::Stage::PARENT);
     task.add(std::move(stage_move_to_place));
@@ -343,7 +387,7 @@ mtc::Task MTCTaskNode::createTask()
 // Waits for the /detected_object signal
 geometry_msgs::msg::PoseStamped MTCTaskNode::waitForObject()
 {
-  auto promise = std::make_shared<std::promise<geometry_msgs::msg::PoseStamped>>();
+  auto promise = std::make_shared<std::promise<geometry_msgs::msg::PoseStamped> >();
   auto future = promise->get_future();
 
   auto sub = node_->create_subscription<geometry_msgs::msg::PoseStamped>(
@@ -366,7 +410,50 @@ geometry_msgs::msg::PoseStamped MTCTaskNode::waitForObject()
 
   throw std::runtime_error("ROS Shutdown triggered while waiting");
 }
+void MTCTaskNode::cleanupScene()
+{
+  moveit::planning_interface::PlanningSceneInterface psi;
+    
+  // 2. Remove the object from the world completely
+  // (Wait a small moment to ensure the detach processed)
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  
+  std::vector<std::string> object_ids = {"object"};
+  psi.removeCollisionObjects(object_ids);
+  
+  // Wait for the update to apply
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+}
+int spawnBox(geometry_msgs::msg::PoseStamped object_pose, std::shared_ptr<MTCTaskNode> mtc_task_node)
+{
+  // Loading into gazebo
+  std::string package_share_directory = ament_index_cpp::get_package_share_directory("pick_n_place");
+  std::filesystem::path sdf_path = std::filesystem::path(package_share_directory) / "models" / "box.sdf";
 
+  if (!std::filesystem::exists(sdf_path))
+  {
+    RCLCPP_ERROR(LOGGER, "[mtc_node.cpp] SDF file not found at: %s", sdf_path.c_str());
+    return 1;
+  }
+  std::stringstream cmd;
+  cmd << "ros2 run ros_gz_sim create "
+      << "-world empty "
+      << "-name object "
+      << "-x " << object_pose.pose.position.x << " "
+      << "-y " << object_pose.pose.position.y << " "
+      << "-z " << object_pose.pose.position.z << " "
+      << "-file " << sdf_path.string();
+
+  std::string delete_cmd = R"(gz service -s /world/empty/remove --reqtype gz.msgs.Entity --reptype gz.msgs.Boolean --req 'name: "object", type: 2' --timeout 2000)";
+
+  // Execute
+  std::system(delete_cmd.c_str());
+  std::system(cmd.str().c_str());
+
+  // Loading into moveit
+  mtc_task_node->spawnBox(object_pose.pose.position.x, object_pose.pose.position.y, object_pose.pose.position.z, object_pose.pose.orientation.w);
+  return 0;
+}
 int main(int argc, char **argv)
 {
   rclcpp::init(argc, argv);
@@ -381,52 +468,32 @@ int main(int argc, char **argv)
                                                    {
     executor.add_node(mtc_task_node->getNodeBaseInterface());
     executor.spin();
-    executor.remove_node(mtc_task_node->getNodeBaseInterface()); 
-  });
+    executor.remove_node(mtc_task_node->getNodeBaseInterface()); });
 
-spawn_loop:
-  try
+  addGroundPlane();
+  while (rclcpp::ok())
   {
-    // Waiting for /detected_object to get the pose
-    geometry_msgs::msg::PoseStamped object_pose = mtc_task_node->waitForObject();
-    RCLCPP_INFO(LOGGER, "[mtc_node.cpp] Object spawned");
-
-    // Loading into gazebo
-    std::string package_share_directory = ament_index_cpp::get_package_share_directory("pick_n_place");
-    std::filesystem::path sdf_path = std::filesystem::path(package_share_directory) / "models" / "box.sdf";
-
-    if (!std::filesystem::exists(sdf_path))
+    try
     {
-      RCLCPP_ERROR(LOGGER, "[mtc_node.cpp] SDF file not found at: %s", sdf_path.c_str());
-      return 1;
+      mtc_task_node->cleanupScene();
+      // Waiting for /detected_object to get the pose
+      geometry_msgs::msg::PoseStamped object_pose = mtc_task_node->waitForObject();
+      RCLCPP_INFO(LOGGER, "[mtc_node.cpp] Object spawned");
+      if (spawnBox(object_pose, mtc_task_node))
+      {
+        return 1;
+      }
+
+      // Running task
+      mtc_task_node->doTask();
     }
-    std::stringstream cmd;
-    cmd << "ros2 run ros_gz_sim create "
-        << "-world empty "
-        << "-name object "
-        << "-x " << object_pose.pose.position.x << " "
-        << "-y " << object_pose.pose.position.y << " "
-        << "-z " << object_pose.pose.position.z << " "
-        << "-file " << sdf_path.string();
+    catch (const std::exception &e)
+    {
+      std::cerr << e.what() << std::endl;
+    }
 
-    std::string delete_cmd = R"(gz service -s /world/empty/remove --reqtype gz.msgs.Entity --reptype gz.msgs.Boolean --req 'name: "object", type: 2' --timeout 2000)";
-
-    // Execute
-    std::system(delete_cmd.c_str());
-    std::system(cmd.str().c_str());
-
-    // Loading into moveit
-    mtc_task_node->spawnBox(object_pose.pose.position.x, object_pose.pose.position.y, object_pose.pose.position.z, object_pose.pose.orientation.w);
-    // Running task
-    mtc_task_node->doTask();
-    goto spawn_loop;
+    spin_thread->join();
+    rclcpp::shutdown();
+    return 0;
   }
-  catch (const std::exception &e)
-  {
-    std::cerr << e.what() << std::endl;
-  }
-
-  spin_thread->join();
-  rclcpp::shutdown();
-  return 0;
 }
