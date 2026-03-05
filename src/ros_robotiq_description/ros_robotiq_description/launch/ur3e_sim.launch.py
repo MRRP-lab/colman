@@ -77,7 +77,7 @@ def generate_launch_description():
             "-name", "ur3e_robotiq",
             "-x", "0.0",
             "-y", "0.0",
-            "-z", spawn_z # 0.9652 for table world
+            "-z", spawn_z # 0.76619 for table world
         ],
     )
 
