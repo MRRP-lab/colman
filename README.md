@@ -13,11 +13,18 @@ pixi run build
 
 ## Run
 
-Once you've compiled everything, open up gazebo with the following:
+Once you've compiled everything, open up gazebo with any of the following:
 
 ```
 pixi run sim
 ```
+
+You can see a full list of pixi tasks by running:
+
+```
+pixi task list
+```
+
 
 ## Coval LEM Series Vacuum Pump
 

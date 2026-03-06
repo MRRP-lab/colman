@@ -1,6 +1,0 @@
-<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="colman-gripper">
-  <xacro:arg name="visual_mesh_ext" default="obj"/>
-  <xacro:arg name="include_gazebo_plugin" default="true"/>
-  <xacro:include filename="colman-gripper.xacro"/>
-  <xacro:colman-gripper prefix="" visual_mesh_ext="$(arg visual_mesh_ext)" include_gazebo_plugin="$(arg include_gazebo_plugin)"/>
-</robot>

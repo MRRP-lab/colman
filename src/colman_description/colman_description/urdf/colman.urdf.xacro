@@ -1,0 +1,97 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="colman">
+  <!-- robot name parameter -->
+  <xacro:arg name="name" default="ur"/>
+  <!-- import arm macros -->
+  <xacro:include filename="$(find ur_description)/urdf/ur_macro.xacro"/>
+  <xacro:arg name="gripper_type" default="custom"/>
+  <xacro:if value="${'$(arg gripper_type)' == 'robotiq'}">
+    <xacro:include filename="$(find robotiq_description)/urdf/robotiq_2f_85_macro.urdf.xacro"/>
+    <xacro:include filename="$(find robotiq_description)/urdf/ur_to_robotiq_adapter.urdf.xacro"/>
+  </xacro:if>
+  <!-- import oakd_pro camera macros -->
+  <xacro:include filename="$(find oakd_description)/urdf/oakd_pro.urdf.xacro"/>
+  <!-- possible 'ur_type' values: ur3, ur5, ur10, ur3e, ur5e, ur7e, ur10e, ur12e, ur16e, ur8long, ur15, ur20, ur30 -->
+  <xacro:arg name="ur_type" default="ur3e"/>
+  <!-- ur parameters -->
+  <xacro:arg name="tf_prefix" default=""/>
+  <xacro:arg name="joint_limit_params" default="$(find colman_moveit_config)/config/joint_limits.yaml"/>
+  <xacro:arg name="kinematics_params" default="$(find ur_description)/config/$(arg ur_type)/default_kinematics.yaml"/>
+  <xacro:arg name="physical_params" default="$(find ur_description)/config/$(arg ur_type)/physical_parameters.yaml"/>
+  <xacro:arg name="visual_params" default="$(find ur_description)/config/$(arg ur_type)/visual_parameters.yaml"/>
+  <xacro:arg name="transmission_hw_interface" default=""/>
+  <xacro:arg name="safety_limits" default="false"/>
+  <xacro:arg name="safety_pos_margin" default="0.15"/>
+  <xacro:arg name="safety_k_position" default="20"/>
+  <!-- gripper parameters -->
+  <xacro:arg name="prefix" default=""/>
+  <xacro:arg name="force_abs_paths" default="false"/>
+  <xacro:arg name="use_camera" default="true"/>
+  <xacro:arg name="oakd_mount_point" default="wrist"/>
+  <xacro:arg name="oakd_parent_link" default="$(arg tf_prefix)tool0"/>
+
+  <!-- decide which link to attach the gripper to -->
+  <xacro:property name="gripper_parent" value="${'camera_adapter_link' if '$(arg use_camera)' == 'true' else '$(arg tf_prefix)tool0'}"/>
+
+  <!-- create link fixed to the "world" -->
+  <link name="world"/>
+  <!-- arm -->
+  <xacro:ur_robot name="$(arg name)" tf_prefix="$(arg tf_prefix)" parent="world" joint_limits_parameters_file="$(arg joint_limit_params)" kinematics_parameters_file="$(arg kinematics_params)" physical_parameters_file="$(arg physical_params)" visual_parameters_file="$(arg visual_params)" safety_limits="$(arg safety_limits)" safety_pos_margin="$(arg safety_pos_margin)" safety_k_position="$(arg safety_k_position)" force_abs_paths="$(arg force_abs_paths)">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </xacro:ur_robot>
+  <!-- gripper -->
+  <xacro:if value="${'$(arg gripper_type)' == 'custom'}">
+    <xacro:include filename="$(find gripper_description)/urdf/gripper.xacro"/>
+    <xacro:gripper prefix="$(arg prefix)"/>
+    <joint name="$(arg prefix)gripper_mount_joint" type="fixed">
+      <parent link="${gripper_parent}"/>
+      <child link="$(arg prefix)gripper_base"/>
+      <origin xyz="0 0 ${'0.02' if '$(arg use_camera)' == 'true' else '0'}" rpy="${pi/2} 0 0"/>
+    </joint>
+  </xacro:if>
+  <xacro:if value="${'$(arg gripper_type)' == 'robotiq'}">
+    <xacro:robotiq_gripper name="$(arg name)" prefix="$(arg prefix)" parent="$(arg prefix)gripper_mount_link" include_ros2_control="false">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </xacro:robotiq_gripper>
+    <xacro:if value="$(arg use_camera)">
+      <link name="robotiq_adapter_offset_link"/>
+      <joint name="robotiq_adapter_offset_joint" type="fixed">
+        <parent link="camera_adapter_link"/>
+        <child link="robotiq_adapter_offset_link"/>
+        <origin xyz="0 0 0.02" rpy="0 0 0"/>
+      </joint>
+      <xacro:ur_to_robotiq prefix="$(arg prefix)" connected_to="robotiq_adapter_offset_link" rotation="0.0"/>
+    </xacro:if>
+    <xacro:unless value="$(arg use_camera)">
+      <xacro:ur_to_robotiq prefix="$(arg prefix)" connected_to="$(arg tf_prefix)tool0" rotation="0.0"/>
+    </xacro:unless>
+  </xacro:if>
+
+  <!-- camera adapter and OAK-D Pro camera -->
+  <xacro:if value="$(arg use_camera)">
+    <link name="camera_adapter_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 ${pi}"/>
+        <geometry>
+          <mesh filename="package://colman_description/meshes/ur_oakd_adapter.obj"/>
+        </geometry>
+        <material name="black">
+          <color rgba="0.08 0.08 0.08 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 ${pi}"/>
+        <geometry>
+          <mesh filename="package://colman_description/meshes/ur_oakd_adapter.obj"/>
+        </geometry>
+      </collision>
+    </link>
+    <joint name="camera_adapter_joint" type="fixed">
+      <parent link="$(arg tf_prefix)tool0"/>
+      <child link="camera_adapter_link"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+    <xacro:oakd_pro_link mount_point="$(arg oakd_mount_point)"/>
+    <xacro:oakd_pro_joint x="0.0" y="-0.100934" z="0.035" roll="0.0" pitch="0.0" yaw="${pi}" mount_point="$(arg oakd_mount_point)" parent_link="camera_adapter_link"/>
+  </xacro:if>
+</robot>

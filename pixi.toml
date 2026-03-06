@@ -1,7 +1,7 @@
 [workspace]
-authors = ["Neil Macneale V <neil.macneale.v@gmail.com>", "Pierce Coyle <coylep2@wwu.edu>"]
+authors = ["Neil Macneale V <neil.macneale.v@gmail.com>", "Pierce Coyle <dev@piercecoyle.com>"]
 channels = ["robostack-jazzy", "https://prefix.dev/pierce-colman", "conda-forge"]
-name = "ur3e"
+name = "colman"
 platforms = ["linux-64"]
 version = "0.1.0"
 
@@ -12,24 +12,29 @@ libc = { family = "glibc", version = "2.39" }
 [activation]
 scripts = ["install/setup.sh"]
 
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
 [tasks]
-sim = "ros2 launch ros_robotiq_description ur3e_sim.launch.py world:=src/ros_robotiq_description/ros_robotiq_description/worlds/empty_bullet.sdf"
-sim-table = "ros2 launch ros_robotiq_description ur3e_sim.launch.py world:=src/ros_robotiq_description/ros_robotiq_description/worlds/table_world.sdf spawn_z:=0.76619"
-sim-yolo = "ros2 launch ros_robotiq_description ur3e_YOLO.launch.py spawn_z:=0.76619 world:=$PIXI_PROJECT_ROOT/src/ros_robotiq_description/ros_robotiq_description/worlds/table_world.sdf"
-sim-depth = "ros2 launch ros_robotiq_description ur3e_depth.launch.py spawn_z:=0.76619"
-sim-eyeinhand = "ros2 launch ros_robotiq_description ur3e_depth.launch.py spawn_z:=0.76619 world:=$PIXI_PROJECT_ROOT/src/ros_robotiq_description/ros_robotiq_description/worlds/table_world.sdf"
-sim-calibration = "ros2 launch ros_robotiq_description ur3e_depth.launch.py spawn_z:=0.76619 world:=$PIXI_PROJECT_ROOT/src/ros_robotiq_description/ros_robotiq_description/worlds/calibration_world.sdf"
+sim = "ros2 launch colman_bringup colman.launch.py sim:=true"
+sim-depth = "ros2 launch colman_bringup colman.launch.py sim:=true depth:=true"
+sim-yolo = "ros2 launch colman_bringup colman.launch.py sim:=true yolo:=true"
+sim-calibration = "ros2 launch colman_bringup colman.launch.py sim:=true depth:=true world:=$PIXI_PROJECT_ROOT/src/colman_gazebo/colman_gazebo/worlds/calibration_world.sdf"
 
 build = "colcon build --symlink-install"
 node-list = "ros2 node list"
 topic-list = "ros2 topic list"
 gz-list = "gz topic -l"
-params-list = "ros2 param list"
 image-view = "ros2 run rqt_image_view rqt_image_view"
 graph = "rqt_graph"
 
+fmt  = "ruff format src/"
+lint = "ruff check --fix src/"
+clean = "rm -rf build install log"
+
 [activation.env]
-GZ_SIM_RESOURCE_PATH = "$GZ_SIM_RESOURCE_PATH:$PIXI_PROJECT_ROOT/src/models:$PIXI_PROJECT_ROOT/src/oakd_gazebo/oakd_gazebo/models:$PIXI_PROJECT_ROOT/install/oakd_description/share:$PIXI_PROJECT_ROOT/install/gripper_description/share"
+# Tells gazebo to look in these directories for models.
+GZ_SIM_RESOURCE_PATH = "$GZ_SIM_RESOURCE_PATH:$PIXI_PROJECT_ROOT/src/colman_gazebo/colman_gazebo/models:$PIXI_PROJECT_ROOT/src/oakd_gazebo/oakd_gazebo/models:$PIXI_PROJECT_ROOT/install/oakd_description/share:$PIXI_PROJECT_ROOT/install/gripper_description/share:$PIXI_PROJECT_ROOT/install/colman_description/share"
 
 [dependencies]
 colcon-common-extensions = ">=0.3.0,<0.4"
@@ -57,6 +62,7 @@ ros-jazzy-moveit-py = ">=2.12.3,<3"
 git-lfs = ">=3.7.1,<4"
 ros-jazzy-trac-ik-lib = "*"
 ros-jazzy-trac-ik-kinematics-plugin = "*"
+ruff = ">=0.15.4,<0.16"
 
 [pypi-dependencies]
 ultralytics = ">=8.4.11, <9"
