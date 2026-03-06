@@ -11,12 +11,22 @@ scripts = ["install/setup.sh"]
 [tasks]
 sim = "ros2 launch ros_robotiq_description ur3e_sim.launch.py world:=src/ros_robotiq_description/ros_robotiq_description/worlds/empty_bullet.sdf"
 sim-table = "ros2 launch ros_robotiq_description ur3e_sim.launch.py world:=src/ros_robotiq_description/ros_robotiq_description/worlds/table_world.sdf spawn_z:=0.9652"
+sim-yolo = "ros2 launch ros_robotiq_description ur3e_YOLO.launch.py spawn_z:=0.9652 world:=$PIXI_PROJECT_ROOT/src/ros_robotiq_description/ros_robotiq_description/worlds/table_world.sdf"
+sim-depth = "ros2 launch ros_robotiq_description ur3e_depth.launch.py spawn_z:=0.9652"
+sim-eyeinhand = "ros2 launch ros_robotiq_description ur3e_depth.launch.py spawn_z:=0.9652 world:=$PIXI_PROJECT_ROOT/src/ros_robotiq_description/ros_robotiq_description/worlds/table_world.sdf"
+sim-calibration = "ros2 launch ros_robotiq_description ur3e_depth.launch.py spawn_z:=0.9652 world:=$PIXI_PROJECT_ROOT/src/ros_robotiq_description/ros_robotiq_description/worlds/calibration_world.sdf"
+
 build = "colcon build --symlink-install"
-list = "ros2 node list"
+node-list = "ros2 node list"
+topic-list = "ros2 topic list"
+gz-list = "gz topic -l"
+params-list = "ros2 param list"
+image-view = "ros2 run rqt_image_view rqt_image_view"
 graph = "rqt_graph"
 
 [activation.env]
-GZ_SIM_RESOURCE_PATH = "$GZ_SIM_RESOURCE_PATH:$PIXI_PROJECT_ROOT/src/models"
+GZ_SIM_RESOURCE_PATH = "$GZ_SIM_RESOURCE_PATH:$PIXI_PROJECT_ROOT/src/models:$PIXI_PROJECT_ROOT/src/oakd_gazebo/oakd_gazebo/models:$PIXI_PROJECT_ROOT/install/oakd_description/share"
+
 
 [dependencies]
 colcon-common-extensions = ">=0.3.0,<0.4"
@@ -35,3 +45,13 @@ compilers = ">=1.11.0,<2"
 ros-jazzy-gz-ros2-control = ">=1.2.14,<2"
 ros-jazzy-ros2-controllers = ">=4.28.0,<5"
 ros-jazzy-rqt-graph = ">=1.5.4,<2"
+ros-jazzy-rqt-image-view = ">=1.3.0,<2"
+ros-jazzy-image-pipeline = ">=5.0.11,<6"
+ros-jazzy-pcl-ros = ">=2.6.2,<3"
+ros-jazzy-apriltag = ">=3.4.3,<4"
+ros-jazzy-apriltag-ros = ">=3.2.2,<4"
+ros-jazzy-moveit-py = ">=2.12.3,<3"
+git-lfs = ">=3.7.1,<4"
+
+[pypi-dependencies]
+ultralytics = ">=8.4.11, <9"

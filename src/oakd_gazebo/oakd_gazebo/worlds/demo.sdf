@@ -3,6 +3,7 @@
     <gravity>0 0 -9.8000000000000007</gravity>
     <magnetic_field>5.5644999999999998e-06 2.2875799999999999e-05 -4.2388400000000002e-05</magnetic_field>
     <atmosphere type='adiabatic'/>
+
     <physics type='ode'>
       <max_step_size>0.001</max_step_size>
       <real_time_factor>1</real_time_factor>
@@ -31,29 +32,46 @@
       <shadows>true</shadows>
     </scene>
 
-    <include>
-      <uri>model://table</uri>
-      <pose>0 0 0 1.57079632679 0 0</pose>
-    </include>
+    <model name="cube">
+      <static>true</static>
+      <pose>0 0 0.5 0.61548 0.61548 0.785398</pose>
+      <link name="link">
+        <inertial>
+          <mass>1.0</mass>
+          <inertia>
+            <ixx>0.01</ixx>
+            <iyy>0.01</iyy>
+            <izz>0.01</izz>
+          </inertia>
+        </inertial>
+
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>0.1 0.1 0.1</size>
+            </box>
+          </geometry>
+        </collision>
+
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>0.1 0.1 0.1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.1 0.2 0.8 1</ambient>
+            <diffuse>0.1 0.2 0.8 1</diffuse>
+            <specular>0.05 0.05 0.05 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
 
     <include>
-      <uri>model://2inchwoodcube</uri>
-      <pose>-0.39125699 0.29168496 0.9906 0 0 0</pose>
-    </include>
-
-    <include>
-      <uri>model://1.5inchwoodcube</uri>
-      <pose>-0.38368499 0.16112609 0.98424943 0 0 0</pose>
-    </include>
-
-    <include>
-      <uri>model://2inchaprilcube</uri>
-      <pose>-0.37060499 -0.14883173 0.9906 0 0 0</pose>
-    </include>
-
-    <include>
-      <uri>model://1.5inchaprilcube</uri>
-      <pose>-0.37047299 -0.28810200 0.98424899 0 0 0</pose>
+      <uri>model://oakd_pro</uri>
+      <static>true</static>
+      <pose>0 0 1 3.14 0 0</pose>
     </include>
 
   </world>

@@ -36,6 +36,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            "detection = ros_robotiq_description.detection:main",
+            'camera_info_republisher = ros_robotiq_description.camera_info_republisher:main',
         ],
     },
 )

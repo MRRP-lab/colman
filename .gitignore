@@ -2,6 +2,7 @@
 .pixi/*
 !.pixi/config.toml
 
+# ros2
 install/
 build/
 log/
@@ -10,3 +11,10 @@ frames_*.gv
 frames_*.pdf
 
 .vscode/
+
+# yolo models
+*.pt
+# point clouds
+*.pcd
+# python
+__pycache__/
