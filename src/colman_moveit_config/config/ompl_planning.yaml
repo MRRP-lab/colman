@@ -142,12 +142,19 @@ planner_configs:
     max_failures: 5000  # maximum consecutive failure limit. default: 5000
   TrajOptDefault:
     type: geometric::TrajOpt
+plan_request_params:
+  planning_attempts: 10
+  planning_pipeline: ompl
+  planning_time: 5.0
+  planner_id: "RRTConnectkConfigDefault"
+  max_velocity_scaling_factor: 0.1
+  max_acceleration_scaling_factor: 0.1
 trajectory_execution:
   allowed_execution_duration_scaling: 1.2
   allowed_goal_duration_margin: 0.5
   allowed_start_tolerance: 0.01
   execution_duration_monitoring: true
-arm:
+ur_arm:
   default_planner_config: RRTConnectkConfigDefault
   planner_configs:
     - APSConfigDefault

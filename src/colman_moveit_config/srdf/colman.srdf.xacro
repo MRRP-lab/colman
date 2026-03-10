@@ -11,6 +11,9 @@
     <xacro:if value="${'$(arg gripper_type)' == 'robotiq'}">
         <xacro:include filename="robotiq.srdf.xacro"/>
     </xacro:if>
+    <xacro:if value="${'$(arg gripper_type)' == 'vacuum'}">
+        <xacro:include filename="vacuum_gripper.xacro"/>
+    </xacro:if>
 
     <xacro:if value="$(arg use_camera)">
         <xacro:include filename="camera.srdf.xacro"/>

@@ -4,6 +4,8 @@
   <xacro:arg name="name" default="ur"/>
   <!-- import arm macros -->
   <xacro:include filename="$(find ur_description)/urdf/ur_macro.xacro"/>
+  <!-- ros2 control include -->
+  <xacro:include filename="$(find ur_robot_driver)/urdf/ur.ros2_control.xacro"/>
   <xacro:arg name="gripper_type" default="custom"/>
   <xacro:if value="${'$(arg gripper_type)' == 'robotiq'}">
     <xacro:include filename="$(find robotiq_description)/urdf/robotiq_2f_85_macro.urdf.xacro"/>
@@ -29,6 +31,32 @@
   <xacro:arg name="use_camera" default="true"/>
   <xacro:arg name="oakd_mount_point" default="wrist"/>
   <xacro:arg name="oakd_parent_link" default="$(arg tf_prefix)tool0"/>
+  <!-- ros2_control related parameters -->
+  <xacro:arg name="headless_mode" default="false"/>
+  <xacro:arg name="robot_ip" default="0.0.0.0"/>
+  <xacro:arg name="script_filename" default=""/>
+  <xacro:arg name="output_recipe_filename" default=""/>
+  <xacro:arg name="input_recipe_filename" default=""/>
+  <xacro:arg name="reverse_ip" default="0.0.0.0"/>
+  <xacro:arg name="script_command_port" default="50004"/>
+  <xacro:arg name="reverse_port" default="50001"/>
+  <xacro:arg name="script_sender_port" default="50002"/>
+  <xacro:arg name="trajectory_port" default="50003"/>
+  <!-- tool parameters -->
+  <xacro:arg name="use_tool_communication" default="false"/>
+  <xacro:arg name="tool_voltage" default="0"/>
+  <xacro:arg name="tool_parity" default="0"/>
+  <xacro:arg name="tool_baud_rate" default="115200"/>
+  <xacro:arg name="tool_stop_bits" default="1"/>
+  <xacro:arg name="tool_rx_idle_chars" default="1.5"/>
+  <xacro:arg name="tool_tx_idle_chars" default="3.5"/>
+  <xacro:arg name="tool_device_name" default="/tmp/ttyUR"/>
+  <xacro:arg name="tool_tcp_port" default="54321"/>
+  <!-- simulation parameters -->
+  <xacro:arg name="use_mock_hardware" default="false"/>
+  <xacro:arg name="mock_sensor_commands" default="false"/>
+  <xacro:arg name="initial_positions_file" default="$(find ur_description)/config/initial_positions.yaml"/>
+  <xacro:property name="initial_positions_file" value="$(arg initial_positions_file)"/>
 
   <!-- decide which link to attach the gripper to -->
   <xacro:property name="gripper_parent" value="${'camera_adapter_link' if '$(arg use_camera)' == 'true' else '$(arg tf_prefix)tool0'}"/>
@@ -94,4 +122,84 @@
     <xacro:oakd_pro_link mount_point="$(arg oakd_mount_point)"/>
     <xacro:oakd_pro_joint x="0.0" y="-0.100934" z="0.035" roll="0.0" pitch="0.0" yaw="${pi}" mount_point="$(arg oakd_mount_point)" parent_link="camera_adapter_link"/>
   </xacro:if>
+
+  <!-- vacuum gripper -->
+  <xacro:if value="${'$(arg gripper_type)' == 'vacuum'}">
+    <link name="vacuum_mount_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://colman_description/meshes/vacuum-mount.obj"/>
+        </geometry>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://colman_description/meshes/vacuum-mount.obj"/>
+        </geometry>
+      </collision>
+    </link>
+    <joint name="vacuum_mount_joint" type="fixed">
+      <parent link="$(arg tf_prefix)tool0"/>
+      <child link="vacuum_mount_link"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+
+    <link name="vacuum_nozzle_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://colman_description/meshes/vacuum-nozzle.obj"/>
+        </geometry>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://colman_description/meshes/vacuum-nozzle.obj"/>
+        </geometry>
+      </collision>
+    </link>
+    <joint name="vacuum_nozzle_joint" type="fixed">
+      <parent link="vacuum_mount_link"/>
+      <child link="vacuum_nozzle_link"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+
+    <link name="vacuum_tip_link"/>
+    <joint name="vacuum_tip_joint" type="fixed">
+      <parent link="vacuum_nozzle_link"/>
+      <child link="vacuum_tip_link"/>
+      <origin xyz="0 0.04552 0.068" rpy="0 0 0"/>
+    </joint>
+  </xacro:if>
+
+  <!-- ros2 control instance -->
+  <xacro:ur_ros2_control
+    name="$(arg name)"
+    tf_prefix="$(arg tf_prefix)"
+    kinematics_parameters_file="$(arg kinematics_params)"
+    transmission_hw_interface="$(arg transmission_hw_interface)"
+    use_mock_hardware="$(arg use_mock_hardware)"
+    mock_sensor_commands="$(arg mock_sensor_commands)"
+    headless_mode="$(arg headless_mode)"
+    initial_positions="${xacro.load_yaml(initial_positions_file)}"
+    use_tool_communication="$(arg use_tool_communication)"
+    tool_voltage="$(arg tool_voltage)"
+    tool_parity="$(arg tool_parity)"
+    tool_baud_rate="$(arg tool_baud_rate)"
+    tool_stop_bits="$(arg tool_stop_bits)"
+    tool_rx_idle_chars="$(arg tool_rx_idle_chars)"
+    tool_tx_idle_chars="$(arg tool_tx_idle_chars)"
+    tool_device_name="$(arg tool_device_name)"
+    tool_tcp_port="$(arg tool_tcp_port)"
+    robot_ip="$(arg robot_ip)"
+    script_filename="$(arg script_filename)"
+    output_recipe_filename="$(arg output_recipe_filename)"
+    input_recipe_filename="$(arg input_recipe_filename)"
+    reverse_ip="$(arg reverse_ip)"
+    script_command_port="$(arg script_command_port)"
+    reverse_port="$(arg reverse_port)"
+    script_sender_port="$(arg script_sender_port)"
+    trajectory_port="$(arg trajectory_port)"
+  />
 </robot>
