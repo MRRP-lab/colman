@@ -23,6 +23,12 @@ sim-calibration = "ros2 launch colman_bringup colman.launch.py sim:=true depth:=
 mock = "ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur3e robot_ip:=0.0.0.0 use_mock_hardware:=true launch_dashboard_client:=false kinematics_params_file:=$PIXI_PROJECT_ROOT/src/colman_description/colman_description/config/ur_config.yaml description_launchfile:=$(ros2 pkg prefix colman_bringup)/share/colman_bringup/launch/rsp.launch.py"
 driver = "ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur3e robot_ip:=192.168.56.101 headless_mode:=true kinematics_params_file:=$PIXI_PROJECT_ROOT/src/colman_description/colman_description/config/ur_config.yaml description_launchfile:=$(ros2 pkg prefix colman_bringup)/share/colman_bringup/launch/rsp.launch.py"
 
+detect = "ros2 run colman_perception camera_publisher & ros2 launch colman_bringup apriltag.launch.py"
+calibrate = "ros2 run colman_motion eye_in_hand"
+solve = "python src/colman_motion/colman_motion/hand_eye_solve.py"
+demo-vacuum = "ros2 launch colman_motion pick_and_place.launch.py gripper_type:=vacuum"
+demo-gripper = "ros2 launch colman_motion pick_and_place.launch.py gripper_type:=custom"
+
 stop = "ros2 service call /stop std_srvs/srv/Trigger"
 build = "colcon build --symlink-install"
 node-list = "ros2 node list"
@@ -70,3 +76,4 @@ ros-jazzy-ur-robot-driver = ">=3.7.0,<4"
 
 [pypi-dependencies]
 ultralytics = ">=8.4.11, <9"
+depthai = ">=2.24"

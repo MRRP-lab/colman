@@ -28,6 +28,7 @@ setup(
     entry_points={
         "console_scripts": [
             "pick_and_place = colman_motion.pick_and_place:main",
+            "eye_in_hand = colman_motion.eye_in_hand:main",
         ],
     },
 )
