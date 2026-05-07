@@ -1,4 +1,5 @@
 import threading
+import time
 
 import rclpy
 from geometry_msgs.msg import Pose, PoseStamped
@@ -7,13 +8,22 @@ from moveit.core.robot_state import RobotState
 from moveit.planning import MoveItPy, PlanRequestParameters
 from moveit_msgs.msg import CollisionObject
 from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
+from rclpy.time import Time
 from shape_msgs.msg import SolidPrimitive
 from std_srvs.srv import Trigger
+from tf2_ros import Buffer, ExtrapolationException, LookupException, TransformListener
 from ur_msgs.srv import SetIO
 
 HOME = "Up"
+
+APPROACH_OFFSET = 0.05
+
+EE_DOWN = (1.0, 0.0, 0.0, 0.0)
+
+DROP_OFF = (0.2, -0.2, 0.0381)
 
 UP = {
     "elbow_joint": 0,
@@ -131,7 +141,55 @@ class VacuumControl(Node):
         req.pin = pin
         req.state = float(state)
         future = self.vacuum.call_async(req)
+        while not future.done():
+            time.sleep(0.001)
         return future.result().success
+
+
+class TagLookup(Node):
+    def __init__(self):
+        super().__init__("tag_lookup")
+        self.buffer = Buffer()
+        self.listener = TransformListener(self.buffer, self)
+
+    def lookup(self, tag_frame, base_frame):
+        try:
+            return self.buffer.lookup_transform(
+                base_frame,
+                tag_frame,
+                Time(),
+                Duration(seconds=2.0),
+            )
+        except (LookupException, ExtrapolationException):
+            return None
+
+    def get_tag_pose(self, tag_frame="tag_1", base_frame="base_link"):
+        first = self.lookup(tag_frame, base_frame)
+
+        error_m = 0.003  # 3mm
+        wait_s = 1.0
+
+        time.sleep(wait_s)
+
+        second = self.lookup(tag_frame, base_frame)
+
+        if first is None or second is None:
+            return None
+
+        if first.header.stamp == second.header.stamp:
+            return None
+
+        first_pos = first.transform.translation
+        second_pos = second.transform.translation
+
+        dx = abs(second_pos.x - first_pos.x)
+        dy = abs(second_pos.y - first_pos.y)
+        dz = abs(second_pos.z - first_pos.z)
+
+        if max(dx, dy, dz) >= error_m:
+            return None
+
+        return second.transform
 
 
 def plan_and_execute(
@@ -168,7 +226,20 @@ def plan_and_execute(
     return False
 
 
-def go_to_pose(ur, arm, logger, x, y, z, qx=0.0, qy=0.0, qz=0.0, qw=1.0, params=None, stop_event=None):
+def go_to_pose(
+    ur,
+    arm,
+    logger,
+    x,
+    y,
+    z,
+    qx=0.0,
+    qy=0.0,
+    qz=0.0,
+    qw=1.0,
+    params=None,
+    stop_event=None,
+):
     arm.set_start_state_to_current_state()
     pose_goal = PoseStamped()
     pose_goal.header.frame_id = "base_link"
@@ -180,7 +251,9 @@ def go_to_pose(ur, arm, logger, x, y, z, qx=0.0, qy=0.0, qz=0.0, qw=1.0, params=
     pose_goal.pose.position.y = y
     pose_goal.pose.position.z = z
     arm.set_goal_state(pose_stamped_msg=pose_goal, pose_link="vacuum_tip_link")
-    return plan_and_execute(ur, arm, logger, single_plan_parameters=params, stop_event=stop_event)
+    return plan_and_execute(
+        ur, arm, logger, single_plan_parameters=params, stop_event=stop_event
+    )
 
 
 def go_to_configured_pose(ur, arm, logger, pose_name):
@@ -199,7 +272,9 @@ def go_to_joint_pose(ur, arm, logger, joint_values, params=None, stop_event=None
         joint_model_group=robot_model.get_joint_model_group("ur_arm"),
     )
     arm.set_goal_state(motion_plan_constraints=[joint_constraint])
-    return plan_and_execute(ur, arm, logger, single_plan_parameters=params, stop_event=stop_event)
+    return plan_and_execute(
+        ur, arm, logger, single_plan_parameters=params, stop_event=stop_event
+    )
 
 
 def main():
@@ -212,11 +287,13 @@ def main():
     stop = StopControl(ur)
     scene = SceneManager(ur)
     vacuum = VacuumControl()
+    tag = TagLookup()
 
     executor = MultiThreadedExecutor()
     executor.add_node(stop)
     executor.add_node(scene)
     executor.add_node(vacuum)
+    executor.add_node(tag)
 
     spin_thread = threading.Thread(target=executor.spin, daemon=True)
     spin_thread.start()
@@ -241,45 +318,107 @@ def main():
 
         # tool0 up Translation: [0.086, 0.129, 0.701]
 
-        poses = [
-            (0.2, 0.2, 0.07, 1.0, 0.0, 0.0, 0.0, fast),
-            (0.2, 0.2, 0.0381, 1.0, 0.0, 0.0, 0.0, slow),
-            (0.2, 0.2, 0.07, 1.0, 0.0, 0.0, 0.0, fast),
-            (0.2, -0.2, 0.07, 1.0, 0.0, 0.0, 0.0, fast),
-            (0.2, -0.2, 0.0381, 1.0, 0.0, 0.0, 0.0, slow),
-            (0.2, -0.2, 0.07, 1.0, 0.0, 0.0, 0.0, fast),
-        ]
-
         stop_event = stop.stop_event
 
         vacuum.set_digital_out(0, OFF)
-        if not go_to_joint_pose(ur, arm, logger, UP, fast, stop_event=stop_event):
-            logger.warn("Stopping")
-            return
-        if not go_to_pose(ur, arm, logger, *poses[0], stop_event=stop_event):
-            logger.warn("Stopping")
-            return
-        if not go_to_pose(ur, arm, logger, *poses[1], stop_event=stop_event):
-            logger.warn("Stopping")
-            return
-        vacuum.set_digital_out(0, ON)
-        if not go_to_pose(ur, arm, logger, *poses[2], stop_event=stop_event):
-            logger.warn("Stopping")
-            return
-        if not go_to_pose(ur, arm, logger, *poses[3], stop_event=stop_event):
-            logger.warn("Stopping")
-            return
-        if not go_to_pose(ur, arm, logger, *poses[4], stop_event=stop_event):
-            logger.warn("Stopping")
-            return
-        vacuum.set_digital_out(0, OFF)
-        if not go_to_pose(ur, arm, logger, *poses[5], stop_event=stop_event):
-            logger.warn("Stopping")
-            return
-        if not go_to_joint_pose(ur, arm, logger, UP, fast, stop_event=stop_event):
-            logger.warn("Stopping")
-            return
+
+        while not stop_event.is_set():
+            if not go_to_joint_pose(
+                ur, arm, logger, LOOK_ONE, slow, stop_event=stop_event
+            ):
+                logger.warn("Stopping")
+                return
+            tag_pose = tag.get_tag_pose()
+
+            if tag_pose is None:
+                continue
+
+            tag_translation = tag_pose.translation
+            pick_translation = (tag_translation.x, tag_translation.y, tag_translation.z)
+            approach_translation = (
+                tag_translation.x,
+                tag_translation.y,
+                tag_translation.z + APPROACH_OFFSET,
+            )
+
+            if not go_to_pose(
+                ur,
+                arm,
+                logger,
+                *approach_translation,
+                *EE_DOWN,
+                slow,
+                stop_event=stop_event,
+            ):
+                logger.warn("Stopping")
+                return
+
+            if not go_to_pose(
+                ur,
+                arm,
+                logger,
+                *pick_translation,
+                *EE_DOWN,
+                slow,
+                stop_event=stop_event,
+            ):
+                logger.warn("Stopping")
+                return
+
+            vacuum.set_digital_out(0, ON)
+
+            if not go_to_pose(
+                ur,
+                arm,
+                logger,
+                *approach_translation,
+                *EE_DOWN,
+                slow,
+                stop_event=stop_event,
+            ):
+                logger.warn("Stopping")
+                return
+
+            drop_off_approach = (
+                DROP_OFF[0],
+                DROP_OFF[1],
+                DROP_OFF[2] + APPROACH_OFFSET,
+            )
+
+            if not go_to_pose(
+                ur,
+                arm,
+                logger,
+                *drop_off_approach,
+                *EE_DOWN,
+                slow,
+                stop_event=stop_event,
+            ):
+                logger.warn("Stopping")
+                return
+
+            if not go_to_pose(
+                ur, arm, logger, *DROP_OFF, *EE_DOWN, slow, stop_event=stop_event
+            ):
+                logger.warn("Stopping")
+                return
+
+            vacuum.set_digital_out(0, OFF)
+
+            if not go_to_pose(
+                ur,
+                arm,
+                logger,
+                *drop_off_approach,
+                *EE_DOWN,
+                slow,
+                stop_event=stop_event,
+            ):
+                logger.warn("Stopping")
+                return
+
     finally:
+        vacuum.set_digital_out(0, OFF)
         scene.clear_scene()
         executor.shutdown()
         rclpy.shutdown()
