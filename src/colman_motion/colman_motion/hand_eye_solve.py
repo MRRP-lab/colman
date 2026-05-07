@@ -13,6 +13,7 @@ METHODS = {
 
 PATH = "calib_samples.npz"
 
+
 def solve(path):
     data = np.load(path, allow_pickle=True)
     arm_rotations = list(data["arm_rotations"])
@@ -29,16 +30,14 @@ def solve(path):
             method=method,
         )
 
-        # invert transform for urdf
-        gripper_cam_rotation = cam_gripper_rotation.T
-        gripper_cam_translation = -gripper_cam_rotation @ cam_gripper_translation
-
         # remove the fixed optical frame rotation
-        optical_rotation = Rotation.from_euler("xyz", [-np.pi/2, 0, -np.pi/2]).as_matrix()
-        gripper_cam_rotation = gripper_cam_rotation @ optical_rotation.T
+        optical_rotation = Rotation.from_euler(
+            "xyz", [-np.pi / 2, 0, -np.pi / 2]
+        ).as_matrix()
+        body_rotation = cam_gripper_rotation @ optical_rotation.T
 
-        xyz = gripper_cam_translation.flatten()
-        rpy = Rotation.from_matrix(gripper_cam_rotation).as_euler("xyz")
+        xyz = cam_gripper_translation.flatten()
+        rpy = Rotation.from_matrix(body_rotation).as_euler("xyz")
 
         print(name)
         print(
