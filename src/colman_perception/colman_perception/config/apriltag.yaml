@@ -13,6 +13,6 @@ apriltag:
       debug: false
     pose_estimation_method: "pnp"
     tag:
-      ids:    [20]
-      frames: ["tag_20"]
+      ids:    [1]
+      frames: ["tag_1"]
       sizes:  [0.10]
