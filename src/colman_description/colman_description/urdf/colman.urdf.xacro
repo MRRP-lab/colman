@@ -18,7 +18,7 @@
   <!-- ur parameters -->
   <xacro:arg name="tf_prefix" default=""/>
   <xacro:arg name="joint_limit_params" default="$(find colman_moveit_config)/config/joint_limits.yaml"/>
-  <xacro:arg name="kinematics_params" default="$(find ur_description)/config/$(arg ur_type)/default_kinematics.yaml"/>
+  <xacro:arg name="kinematics_params" default="$(find colman_description)/config/ur_config.yaml"/>
   <xacro:arg name="physical_params" default="$(find ur_description)/config/$(arg ur_type)/physical_parameters.yaml"/>
   <xacro:arg name="visual_params" default="$(find ur_description)/config/$(arg ur_type)/visual_parameters.yaml"/>
   <xacro:arg name="transmission_hw_interface" default=""/>
@@ -120,7 +120,8 @@
       <origin xyz="0 0 0" rpy="0 0 0"/>
     </joint>
     <xacro:oakd_pro_link mount_point="$(arg oakd_mount_point)"/>
-    <xacro:oakd_pro_joint x="0.0" y="-0.100934" z="0.035" roll="0.0" pitch="0.0" yaw="${pi}" mount_point="$(arg oakd_mount_point)" parent_link="camera_adapter_link"/>
+    <!-- <xacro:oakd_pro_joint x="0.0" y="-0.100934" z="0.035" roll="0.0" pitch="0.0" yaw="${pi}" mount_point="$(arg oakd_mount_point)" parent_link="camera_adapter_link"/> -->
+    <xacro:oakd_pro_joint x="0.000597" y="-0.101099" z="0.012424" roll="0.418400" pitch="-1.560500" yaw="1.153600" mount_point="$(arg oakd_mount_point)" parent_link="camera_adapter_link"/>
   </xacro:if>
 
   <!-- vacuum gripper -->
