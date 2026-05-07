@@ -25,4 +25,8 @@
         <disable_collisions link1="oakd_pro_wrist" link2="top_stick_left" reason="Never"/>
         <disable_collisions link1="oakd_pro_wrist" link2="top_stick_right" reason="Never"/>
     </xacro:if>
+    <xacro:if value="${'$(arg gripper_type)' == 'vacuum'}">
+        <disable_collisions link1="camera_adapter_link" link2="vacuum_mount_link" reason="Adjacent"/>
+        <disable_collisions link1="camera_adapter_link" link2="vacuum_nozzle_link" reason="Never"/>
+    </xacro:if>
 </robot>
