@@ -324,7 +324,7 @@ def main():
 
         while not stop_event.is_set():
             if not go_to_joint_pose(
-                ur, arm, logger, LOOK_ONE, slow, stop_event=stop_event
+                ur, arm, logger, LOOK_FOUR, slow, stop_event=stop_event
             ):
                 logger.warn("Stopping")
                 return
