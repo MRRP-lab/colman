@@ -2,7 +2,7 @@ apriltag:
   ros__parameters:
     image_transport: raw
     family: 36h11
-    size: 0.10
+    size: 0.098
     max_hamming: 0
     detector:
       threads: 2
@@ -13,6 +13,6 @@ apriltag:
       debug: false
     pose_estimation_method: "pnp"
     tag:
-      ids:    [1]
-      frames: ["tag_1"]
-      sizes:  [0.10]
+      ids:    [20, 1]
+      frames: ["tag_20", "tag_1"]
+      sizes:  [0.098, 0.049]
