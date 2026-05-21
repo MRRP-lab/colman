@@ -30,10 +30,8 @@ def solve(path):
             method=method,
         )
 
-        # remove the fixed optical frame rotation
-        optical_rotation = Rotation.from_euler(
-            "xyz", [-np.pi / 2, 0, -np.pi / 2]
-        ).as_matrix()
+        # remove the fixed body optical rotation for the oakd pro
+        optical_rotation = Rotation.from_euler("xyz", [0, 0, np.pi]).as_matrix()
         body_rotation = cam_gripper_rotation @ optical_rotation.T
 
         xyz = cam_gripper_translation.flatten()
