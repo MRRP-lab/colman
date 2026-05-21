@@ -141,9 +141,9 @@
       </collision>
     </link>
     <joint name="vacuum_mount_joint" type="fixed">
-      <parent link="$(arg tf_prefix)tool0"/>
+      <parent link="${gripper_parent}"/>
       <child link="vacuum_mount_link"/>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0 0 ${'0.02' if '$(arg use_camera)' == 'true' else '0'}" rpy="0 0 0"/>
     </joint>
 
     <link name="vacuum_nozzle_link">
