@@ -73,6 +73,7 @@ ros-jazzy-trac-ik-lib = "*"
 ros-jazzy-trac-ik-kinematics-plugin = "*"
 ruff = ">=0.15.4,<0.16"
 ros-jazzy-ur-robot-driver = ">=3.7.0,<4"
+semver = ">=3.0.4,<4"
 
 [pypi-dependencies]
 ultralytics = ">=8.4.11, <9"
