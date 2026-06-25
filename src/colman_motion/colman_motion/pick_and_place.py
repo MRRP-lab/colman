@@ -23,7 +23,7 @@ APPROACH_OFFSET = 0.05
 
 EE_DOWN = (1.0, 0.0, 0.0, 0.0)
 
-DROP_OFF = (0.2, -0.2, 0.0381)
+DROP_OFF = (0.2, -0.2, 0.044)
 
 UP = {
     "elbow_joint": 0,
