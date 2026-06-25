@@ -31,9 +31,13 @@ class CameraPublisher(Node):
         self.queue = out.createOutputQueue(maxSize=4, blocking=False)
 
         calib = self.device.getCalibration()
-        k = np.array(
-            calib.getCameraIntrinsics(dai.CameraBoardSocket.CAM_A, WIDTH, HEIGHT)
-        )
+
+        # manual intrinsic calibration values using the ros2 cameracalibrator
+        k = np.array([
+            [990.414774, 0.0, 652.254524],
+            [0.0, 990.076409, 376.972351],
+            [0.0, 0.0, 1.0],
+        ])
 
         # Frame metadata for downstream nodes
         self.info_msg = CameraInfo()
