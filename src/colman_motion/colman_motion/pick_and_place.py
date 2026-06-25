@@ -7,7 +7,6 @@ from moveit.core.kinematic_constraints import construct_joint_constraint
 from moveit.core.robot_state import RobotState
 from moveit.planning import MoveItPy, PlanRequestParameters
 from moveit_msgs.msg import CollisionObject
-from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
@@ -15,7 +14,8 @@ from rclpy.time import Time
 from shape_msgs.msg import SolidPrimitive
 from std_srvs.srv import Trigger
 from tf2_ros import Buffer, ExtrapolationException, LookupException, TransformListener
-from ur_msgs.srv import SetIO
+
+from colman_motion.vacuum_control import VacuumControl
 
 HOME = "Up"
 
@@ -60,9 +60,6 @@ COMPACT = {
     "wrist_2_joint": 0,
     "wrist_3_joint": 0,
 }
-
-ON = True
-OFF = False
 
 
 class StopControl(Node):
@@ -124,26 +121,6 @@ class SceneManager(Node):
             scene.remove_all_collision_objects()
             scene.current_state.update()
         self.get_logger().info("Cleared all objects")
-
-
-class VacuumControl(Node):
-    def __init__(self):
-        super().__init__("vacuum_control")
-        self.vacuum = self.create_client(
-            SetIO,
-            "/io_and_status_controller/set_io",
-            callback_group=ReentrantCallbackGroup(),
-        )
-
-    def set_digital_out(self, pin, state):
-        req = SetIO.Request()
-        req.fun = SetIO.Request.FUN_SET_DIGITAL_OUT
-        req.pin = pin
-        req.state = float(state)
-        future = self.vacuum.call_async(req)
-        while not future.done():
-            time.sleep(0.001)
-        return future.result().success
 
 
 class TagLookup(Node):
@@ -298,8 +275,6 @@ def main():
     spin_thread = threading.Thread(target=executor.spin, daemon=True)
     spin_thread.start()
 
-    vacuum.vacuum.wait_for_service()
-
     try:
         scene.add_box(
             "table",
@@ -320,7 +295,7 @@ def main():
 
         stop_event = stop.stop_event
 
-        vacuum.set_digital_out(0, OFF)
+        vacuum.release()
 
         while not stop_event.is_set():
             if not go_to_joint_pose(
@@ -365,7 +340,7 @@ def main():
                 logger.warn("Stopping")
                 return
 
-            vacuum.set_digital_out(0, ON)
+            vacuum.grasp()
 
             if not go_to_pose(
                 ur,
@@ -403,7 +378,7 @@ def main():
                 logger.warn("Stopping")
                 return
 
-            vacuum.set_digital_out(0, OFF)
+            vacuum.release()
 
             if not go_to_pose(
                 ur,
@@ -418,7 +393,7 @@ def main():
                 return
 
     finally:
-        vacuum.set_digital_out(0, OFF)
+        vacuum.release()
         scene.clear_scene()
         executor.shutdown()
         rclpy.shutdown()
