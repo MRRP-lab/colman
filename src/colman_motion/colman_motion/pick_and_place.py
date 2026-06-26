@@ -1,5 +1,4 @@
 import threading
-import time
 
 import rclpy
 from geometry_msgs.msg import Pose, PoseStamped
@@ -7,14 +6,12 @@ from moveit.core.kinematic_constraints import construct_joint_constraint
 from moveit.core.robot_state import RobotState
 from moveit.planning import MoveItPy, PlanRequestParameters
 from moveit_msgs.msg import CollisionObject
-from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from rclpy.time import Time
 from shape_msgs.msg import SolidPrimitive
 from std_srvs.srv import Trigger
-from tf2_ros import Buffer, ExtrapolationException, LookupException, TransformListener
 
+from colman_motion.tag_lookup import TagLookup
 from colman_motion.vacuum_control import VacuumControl
 
 HOME = "Up"
@@ -123,52 +120,6 @@ class SceneManager(Node):
         self.get_logger().info("Cleared all objects")
 
 
-class TagLookup(Node):
-    def __init__(self):
-        super().__init__("tag_lookup")
-        self.buffer = Buffer()
-        self.listener = TransformListener(self.buffer, self)
-
-    def lookup(self, tag_frame, base_frame):
-        try:
-            return self.buffer.lookup_transform(
-                base_frame,
-                tag_frame,
-                Time(),
-                Duration(seconds=2.0),
-            )
-        except (LookupException, ExtrapolationException):
-            return None
-
-    def get_tag_pose(self, tag_frame="tag_1", base_frame="base_link"):
-        first = self.lookup(tag_frame, base_frame)
-
-        error_m = 0.003  # 3mm
-        wait_s = 1.0
-
-        time.sleep(wait_s)
-
-        second = self.lookup(tag_frame, base_frame)
-
-        if first is None or second is None:
-            return None
-
-        if first.header.stamp == second.header.stamp:
-            return None
-
-        first_pos = first.transform.translation
-        second_pos = second.transform.translation
-
-        dx = abs(second_pos.x - first_pos.x)
-        dy = abs(second_pos.y - first_pos.y)
-        dz = abs(second_pos.z - first_pos.z)
-
-        if max(dx, dy, dz) >= error_m:
-            return None
-
-        return second.transform
-
-
 def plan_and_execute(
     robot,
     planning_component,
@@ -179,7 +130,7 @@ def plan_and_execute(
     stop_event=None,
 ):
 
-    for attempt in range(retries):
+    for _ in range(retries):
         if stop_event and stop_event.is_set():
             return False
         if multi_plan_parameters is not None:
