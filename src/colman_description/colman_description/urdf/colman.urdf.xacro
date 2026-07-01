@@ -120,8 +120,8 @@
       <origin xyz="0 0 0" rpy="0 0 0"/>
     </joint>
     <xacro:oakd_pro_link mount_point="$(arg oakd_mount_point)"/>
-    <xacro:oakd_pro_joint x="0.0" y="-0.100934" z="0.040" roll="0.0" pitch="0.0" yaw="${pi}" mount_point="$(arg oakd_mount_point)" parent_link="camera_adapter_link"/>
-    <!-- <xacro:oakd_pro_joint x="0.000597" y="-0.101099" z="0.012424" roll="0.009408" pitch="-0.004183" yaw="-3.140409" mount_point="$(arg oakd_mount_point)" parent_link="camera_adapter_link"/> -->
+    <!-- <xacro:oakd_pro_joint x="0.0" y="-0.100934" z="0.040" roll="0.0" pitch="0.0" yaw="${pi}" mount_point="$(arg oakd_mount_point)" parent_link="camera_adapter_link"/>-->
+    <xacro:oakd_pro_joint x="-0.000771" y="-0.100789" z="0.043343" roll="0.010697" pitch="-0.005742" yaw="3.136561" mount_point="$(arg oakd_mount_point)" parent_link="camera_adapter_link"/> 
   </xacro:if>
 
   <!-- vacuum gripper -->
