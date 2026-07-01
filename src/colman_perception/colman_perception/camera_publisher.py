@@ -10,7 +10,6 @@ FRAME_ID = "oakd_pro_camera_rgb_optical_frame_wrist"
 WIDTH = 1280
 HEIGHT = 720
 
-
 class CameraPublisher(Node):
     def __init__(self):
         super().__init__("camera_publisher")
@@ -30,14 +29,7 @@ class CameraPublisher(Node):
         out = cam.requestOutput((WIDTH, HEIGHT), enableUndistortion=True, fps=15.0)
         self.queue = out.createOutputQueue(maxSize=4, blocking=False)
 
-        # manual intrinsic calibration values using the ros2 cameracalibrator
-        k = np.array(
-            [
-                [990.414774, 0.0, 652.254524],
-                [0.0, 990.076409, 376.972351],
-                [0.0, 0.0, 1.0],
-            ]
-        )
+        self._info_ready = False
 
         # Frame metadata for downstream nodes
         self.info_msg = CameraInfo()
@@ -46,9 +38,7 @@ class CameraPublisher(Node):
         self.info_msg.height = HEIGHT
         self.info_msg.distortion_model = "plumb_bob"
         self.info_msg.d = [0.0, 0.0, 0.0, 0.0, 0.0]
-        self.info_msg.k = k.flatten().tolist()
         self.info_msg.r = np.eye(3).flatten().tolist()
-        self.info_msg.p = np.hstack([k, np.zeros((3, 1))]).flatten().tolist()
 
         pipeline.start()
         self.create_timer(1.0 / 30.0, self.timer_callback)
@@ -60,6 +50,12 @@ class CameraPublisher(Node):
             return
         frame = packet.getCvFrame()
         stamp = self.get_clock().now().to_msg()
+
+        if not self._info_ready:
+            k = np.array(packet.getTransformation().getIntrinsicMatrix())
+            self.info_msg.k = k.flatten().tolist()
+            self.info_msg.p = np.hstack([k, np.zeros((3, 1))]).flatten().tolist()
+            self._info_ready = True
 
         msg = self.bridge.cv2_to_imgmsg(frame, encoding="bgr8")
         msg.header.stamp = stamp
