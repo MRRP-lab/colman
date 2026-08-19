@@ -28,6 +28,8 @@ calibrate = "ros2 run colman_motion eye_in_hand"
 solve = "python src/colman_motion/colman_motion/hand_eye_solve.py"
 demo-vacuum = "ros2 launch colman_motion pick_and_place.launch.py gripper_type:=vacuum"
 demo-gripper = "ros2 launch colman_motion pick_and_place.launch.py gripper_type:=custom"
+demo-turns = "ros2 launch colman_motion pick_and_place.launch.py demo:=demo_turns"
+demo-choose = "ros2 launch colman_motion pick_and_place.launch.py demo:=demo_choose"
 
 stop = "ros2 service call /stop std_srvs/srv/Trigger"
 build = "colcon build --symlink-install"

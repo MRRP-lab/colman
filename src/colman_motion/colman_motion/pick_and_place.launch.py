@@ -10,6 +10,7 @@ from moveit_configs_utils import MoveItConfigsBuilder
 
 def generate_launch_description():
     gripper_type = LaunchConfiguration("gripper_type")
+    demo = LaunchConfiguration("demo")
 
     moveit_py_yaml = os.path.join(
         get_package_share_directory("colman_moveit_config"),
@@ -36,7 +37,7 @@ def generate_launch_description():
     pick_and_place_node = Node(
         name="moveit_py",
         package="colman_motion",
-        executable="pick_and_place",
+        executable=demo,
         output="both",
         parameters=[
             moveit_config.to_dict(),
@@ -47,6 +48,7 @@ def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument("gripper_type", default_value="vacuum"),
+            DeclareLaunchArgument("demo", default_value="pick_and_place"),
             pick_and_place_node,
         ]
     )
