@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<sdf version="1.6">
+  <model name="vention-workstation">
+    <static>true</static>
+    <link name="link">
+      <pose>0 0 0 0 0 0</pose>
+      <!-- workspace top -->
+      <collision name="workspace_top">
+        <geometry>
+          <box>
+            <size>1.125 0.00635 0.540</size>
+          </box>
+        </geometry>
+        <pose>-0.025591 0.75812 0.45986 0 0 0</pose>
+      </collision>
+      <!-- workspace frame -->
+      <collision name="workspace_frame">
+        <geometry>
+          <box>
+            <size>1.137 0.720 0.822</size>
+          </box>
+        </geometry>
+        <pose>-0.020591 0.39494 0.31987 0 0 0</pose>
+      </collision>
+      <!-- mounting plate -->
+      <collision name="mounting_plate">
+        <geometry>
+          <box>
+            <size>0.178 0.0113 0.178</size>
+          </box>
+        </geometry>
+        <pose>-0.00076 0.76057 0.00489 0 0 0</pose>
+      </collision>
+      <visual name="visual">
+        <geometry>
+          <mesh>
+            <uri>model://vention-workstation/meshes/vention-workstation.glb</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+  </model>
+</sdf>

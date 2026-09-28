@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="colman">
+    <disable_collisions link1="camera_adapter_link" link2="wrist_3_link" reason="Adjacent"/>
+    <disable_collisions link1="camera_adapter_link" link2="wrist_2_link" reason="Never"/>
+    <disable_collisions link1="camera_adapter_link" link2="wrist_1_link" reason="Never"/>
+    <disable_collisions link1="camera_adapter_link" link2="oakd_pro_wrist" reason="Adjacent"/>
+    <disable_collisions link1="oakd_pro_wrist" link2="wrist_1_link" reason="Never"/>
+    <disable_collisions link1="oakd_pro_wrist" link2="wrist_2_link" reason="Never"/>
+    <disable_collisions link1="oakd_pro_wrist" link2="wrist_3_link" reason="Never"/>
+    <xacro:if value="${'$(arg gripper_type)' == 'robotiq'}">
+        <disable_collisions link1="camera_adapter_link" link2="robotiq_adapter_offset_link" reason="Adjacent"/>
+        <disable_collisions link1="camera_adapter_link" link2="ur_to_robotiq_link" reason="Adjacent"/>
+        <disable_collisions link1="camera_adapter_link" link2="gripper_mount_link" reason="Adjacent"/>
+    </xacro:if>
+    <xacro:if value="${'$(arg gripper_type)' == 'custom'}">
+        <disable_collisions link1="camera_adapter_link" link2="gripper_base" reason="Adjacent"/>
+        <disable_collisions link1="bottom_stick_left" link2="oakd_pro_wrist" reason="Never"/>
+        <disable_collisions link1="bottom_stick_right" link2="oakd_pro_wrist" reason="Never"/>
+        <disable_collisions link1="drive_gear" link2="oakd_pro_wrist" reason="Never"/>
+        <disable_collisions link1="gripper_base" link2="oakd_pro_wrist" reason="Adjacent"/>
+        <disable_collisions link1="left_arm_bottom" link2="oakd_pro_wrist" reason="Never"/>
+        <disable_collisions link1="left_gear" link2="oakd_pro_wrist" reason="Never"/>
+        <disable_collisions link1="oakd_pro_wrist" link2="right_arm_bottom" reason="Never"/>
+        <disable_collisions link1="oakd_pro_wrist" link2="right_gear" reason="Never"/>
+        <disable_collisions link1="oakd_pro_wrist" link2="top_stick_left" reason="Never"/>
+        <disable_collisions link1="oakd_pro_wrist" link2="top_stick_right" reason="Never"/>
+    </xacro:if>
+    <xacro:if value="${'$(arg gripper_type)' == 'vacuum'}">
+        <disable_collisions link1="camera_adapter_link" link2="vacuum_mount_link" reason="Adjacent"/>
+        <disable_collisions link1="camera_adapter_link" link2="vacuum_nozzle_link" reason="Never"/>
+    </xacro:if>
+</robot>

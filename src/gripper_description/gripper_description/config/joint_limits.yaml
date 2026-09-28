@@ -1,0 +1,64 @@
+joint_limits:
+  bottomleftstick:
+    damping: 0.0
+    effort: 100.0
+    friction: 0.0
+    lower: -3.14
+    upper: 3.14
+    velocity: 1.0
+  bottomrightstick:
+    damping: 0.0
+    effort: 100.0
+    friction: 0.0
+    lower: -3.14
+    upper: 3.14
+    velocity: 1.0
+  leftarm:
+    damping: 0.0
+    effort: 100.0
+    friction: 0.0
+    lower: -3.14
+    upper: 3.14
+    velocity: 1.0
+  leftgear:
+    damping: 0.0
+    effort: 100.0
+    friction: 0.0
+    lower: -3.14
+    upper: 3.14
+    velocity: 1.0
+  rightarm:
+    damping: 0.0
+    effort: 100.0
+    friction: 0.0
+    lower: -3.14
+    upper: 3.14
+    velocity: 1.0
+  rightgear:
+    damping: 0.0
+    effort: 100.0
+    friction: 0.0
+    lower: -3.14
+    upper: 3.14
+    velocity: 1.0
+  servotodrivegear:
+    damping: 0.0
+    effort: 100.0
+    friction: 0.0
+    lower: -2.735
+    upper: 0.06
+    velocity: 5.0
+  topleftstick:
+    damping: 0.0
+    effort: 100.0
+    friction: 0.0
+    lower: -3.14
+    upper: 3.14
+    velocity: 1.0
+  toprightstick:
+    damping: 0.0
+    effort: 100.0
+    friction: 0.0
+    lower: -3.14
+    upper: 3.14
+    velocity: 1.0

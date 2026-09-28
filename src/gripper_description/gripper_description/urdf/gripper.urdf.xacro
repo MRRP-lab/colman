@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="gripper">
+  <xacro:arg name="visual_mesh_ext" default="dae"/>
+  <xacro:include filename="gripper.xacro"/>
+  <xacro:gripper prefix="" visual_mesh_ext="$(arg visual_mesh_ext)"/>
+</robot>

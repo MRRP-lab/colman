@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="gripper_gazebo">
+  <xacro:macro name="gripper_gazebo" params="prefix:='' include_controllers:=true">
+    <xacro:property name="joint_limits_file" value="${xacro.load_yaml('$(find gripper_description)/config/joint_limits.yaml')}"/>
+    <xacro:property name="joint_limits" value="${joint_limits_file['joint_limits']}"/>
+    <!-- Gazebo colors -->
+    <xacro:macro name="gripper_material" params="link_name">
+      <gazebo reference="${link_name}">
+        <visual>
+          <material>
+            <ambient>0.2 0.2 0.2 1.0</ambient>
+            <diffuse>0.2 0.2 0.2 1.0</diffuse>
+            <specular>0.1 0.1 0.1 1.0</specular>
+          </material>
+        </visual>
+      </gazebo>
+    </xacro:macro>
+    <xacro:gripper_material link_name="${prefix}gripper_base"/>
+    <xacro:gripper_material link_name="${prefix}left_gear"/>
+    <xacro:gripper_material link_name="${prefix}right_gear"/>
+    <xacro:gripper_material link_name="${prefix}left_arm_bottom"/>
+    <xacro:gripper_material link_name="${prefix}right_arm_bottom"/>
+    <xacro:gripper_material link_name="${prefix}bottom_stick_left"/>
+    <xacro:gripper_material link_name="${prefix}bottom_stick_right"/>
+    <xacro:gripper_material link_name="${prefix}top_stick_left"/>
+    <xacro:gripper_material link_name="${prefix}top_stick_right"/>
+    <xacro:gripper_material link_name="${prefix}drive_gear"/>
+    <!-- ros2_control -->
+    <ros2_control name="${prefix}gripper_system" type="system">
+      <hardware>
+        <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+        <param name="state_following_offset">0.0</param>
+      </hardware>
+      <!-- Drive gear control -->
+      <joint name="${prefix}servotodrivegear">
+        <command_interface name="position">
+          <param name="min">${joint_limits['servotodrivegear']['lower']}</param>
+          <param name="max">${joint_limits['servotodrivegear']['upper']}</param>
+        </command_interface>
+        <state_interface name="position">
+          <param name="initial_value">${joint_limits['servotodrivegear']['lower']}</param>
+        </state_interface>
+        <state_interface name="velocity"/>
+      </joint>
+    </ros2_control>
+    <!-- Gazebo ros2_control plugin -->
+    <xacro:if value="${include_controllers}">
+      <gazebo>
+        <plugin filename="libgz_ros2_control-system.so" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+          <parameters>$(find gripper_gazebo)/config/gripper_controllers.yaml</parameters>
+        </plugin>
+      </gazebo>
+    </xacro:if>
+  </xacro:macro>
+</robot>

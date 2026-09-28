@@ -1,12 +1,10 @@
-<?xml version="1.0" ?>
+<?xml version="1.0"?>
 <sdf version="1.9">
   <model name="oakd_pro">
     <pose>0 0 0 0 0 0</pose>
     <static>false</static>
-
     <link name="oakd_pro_link">
       <pose>0 0 0 0 0 0</pose>
-
       <inertial>
         <mass>0.091</mass>
         <inertia>
@@ -18,12 +16,10 @@
           <izz>0.0000779510</izz>
         </inertia>
       </inertial>
-
       <visual name="oakd_pro_visual">
-
         <geometry>
           <mesh>
-            <uri>meshes/OAK-D-PRO.stl</uri>
+            <uri>meshes/OAK-D-PRO.glb</uri>
           </mesh>
         </geometry>
         <material>
@@ -32,7 +28,6 @@
           <specular>0.02 0.02 0.02 1</specular>
         </material>
       </visual>
-
       <collision name="oakd_pro_collision">
         <geometry>
           <box>
@@ -40,7 +35,6 @@
           </box>
         </geometry>
       </collision>
-
       <sensor name="oakd_pro_left" type="camera">
         <pose>0.0375 0 0 0 -1.5708 -1.5708</pose>
         <topic>oakd_pro/left/image</topic>
@@ -58,7 +52,6 @@
           </clip>
         </camera>
       </sensor>
-
       <sensor name="oakd_pro_right" type="camera">
         <pose>-0.0375 0 0 0 -1.5708 -1.5708</pose>
         <topic>oakd_pro/right/image</topic>
@@ -76,7 +69,6 @@
           </clip>
         </camera>
       </sensor>
-
       <sensor name="oakd_pro_rgb" type="camera">
         <pose>0 0 0 0 -1.5708 -1.5708</pose>
         <topic>oakd_pro/rgb/image</topic>

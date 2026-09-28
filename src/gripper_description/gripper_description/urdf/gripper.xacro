@@ -1,0 +1,292 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="gripper">
+  <xacro:macro name="gripper" params="prefix:='' visual_mesh_ext:='dae'">
+    <xacro:property name="joint_limits_file" value="${xacro.load_yaml('$(find gripper_description)/config/joint_limits.yaml')}"/>
+    <xacro:property name="joint_limits" value="${joint_limits_file['joint_limits']}"/>
+    <xacro:property name="inertials_file" value="${xacro.load_yaml('$(find gripper_description)/config/inertials.yaml')}"/>
+    <xacro:property name="inertials" value="${inertials_file['inertials']}"/>
+    <material name="gripper_dark_grey">
+      <color rgba="0.2 0.2 0.2 1.0"/>
+    </material>
+    <link name="${prefix}gripper_base">
+      <inertial>
+        <mass value="${inertials['base']['mass']}"/>
+        <origin xyz="${inertials['base']['origin']['xyz']}" rpy="${inertials['base']['origin']['rpy']}"/>
+        <inertia ixx="${inertials['base']['inertia']['ixx']}" iyy="${inertials['base']['inertia']['iyy']}" izz="${inertials['base']['inertia']['izz']}" ixy="${inertials['base']['inertia']['ixy']}" ixz="${inertials['base']['inertia']['ixz']}" iyz="${inertials['base']['inertia']['iyz']}"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://gripper_description/meshes/visual/base.${visual_mesh_ext}" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="gripper_dark_grey"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://gripper_description/meshes/collision/base_0.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+      </collision>
+    </link>
+    <link name="${prefix}left_gear">
+      <inertial>
+        <mass value="${inertials['left_gear']['mass']}"/>
+        <origin xyz="${inertials['left_gear']['origin']['xyz']}" rpy="${inertials['left_gear']['origin']['rpy']}"/>
+        <inertia ixx="${inertials['left_gear']['inertia']['ixx']}" iyy="${inertials['left_gear']['inertia']['iyy']}" izz="${inertials['left_gear']['inertia']['izz']}" ixy="${inertials['left_gear']['inertia']['ixy']}" ixz="${inertials['left_gear']['inertia']['ixz']}" iyz="${inertials['left_gear']['inertia']['iyz']}"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://gripper_description/meshes/visual/left_gear.${visual_mesh_ext}" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="gripper_dark_grey"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://gripper_description/meshes/collision/left_gear_0.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+      </collision>
+    </link>
+    <link name="${prefix}right_gear">
+      <inertial>
+        <mass value="${inertials['right_gear']['mass']}"/>
+        <origin xyz="${inertials['right_gear']['origin']['xyz']}" rpy="${inertials['right_gear']['origin']['rpy']}"/>
+        <inertia ixx="${inertials['right_gear']['inertia']['ixx']}" iyy="${inertials['right_gear']['inertia']['iyy']}" izz="${inertials['right_gear']['inertia']['izz']}" ixy="${inertials['right_gear']['inertia']['ixy']}" ixz="${inertials['right_gear']['inertia']['ixz']}" iyz="${inertials['right_gear']['inertia']['iyz']}"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://gripper_description/meshes/visual/right_gear.${visual_mesh_ext}" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="gripper_dark_grey"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://gripper_description/meshes/collision/right_gear_0.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+      </collision>
+    </link>
+    <link name="${prefix}left_arm_bottom">
+      <inertial>
+        <mass value="${inertials['left_arm_bottom']['mass']}"/>
+        <origin xyz="${inertials['left_arm_bottom']['origin']['xyz']}" rpy="${inertials['left_arm_bottom']['origin']['rpy']}"/>
+        <inertia ixx="${inertials['left_arm_bottom']['inertia']['ixx']}" iyy="${inertials['left_arm_bottom']['inertia']['iyy']}" izz="${inertials['left_arm_bottom']['inertia']['izz']}" ixy="${inertials['left_arm_bottom']['inertia']['ixy']}" ixz="${inertials['left_arm_bottom']['inertia']['ixz']}" iyz="${inertials['left_arm_bottom']['inertia']['iyz']}"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://gripper_description/meshes/visual/left_arm_bottom.${visual_mesh_ext}" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="gripper_dark_grey"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://gripper_description/meshes/collision/left_arm_bottom_0.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+      </collision>
+    </link>
+    <link name="${prefix}right_arm_bottom">
+      <inertial>
+        <mass value="${inertials['right_arm_bottom']['mass']}"/>
+        <origin xyz="${inertials['right_arm_bottom']['origin']['xyz']}" rpy="${inertials['right_arm_bottom']['origin']['rpy']}"/>
+        <inertia ixx="${inertials['right_arm_bottom']['inertia']['ixx']}" iyy="${inertials['right_arm_bottom']['inertia']['iyy']}" izz="${inertials['right_arm_bottom']['inertia']['izz']}" ixy="${inertials['right_arm_bottom']['inertia']['ixy']}" ixz="${inertials['right_arm_bottom']['inertia']['ixz']}" iyz="${inertials['right_arm_bottom']['inertia']['iyz']}"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://gripper_description/meshes/visual/right_arm_bottom.${visual_mesh_ext}" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="gripper_dark_grey"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://gripper_description/meshes/collision/right_arm_bottom_0.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+      </collision>
+    </link>
+    <link name="${prefix}bottom_stick_left">
+      <inertial>
+        <mass value="${inertials['bottom_stick_left']['mass']}"/>
+        <origin xyz="${inertials['bottom_stick_left']['origin']['xyz']}" rpy="${inertials['bottom_stick_left']['origin']['rpy']}"/>
+        <inertia ixx="${inertials['bottom_stick_left']['inertia']['ixx']}" iyy="${inertials['bottom_stick_left']['inertia']['iyy']}" izz="${inertials['bottom_stick_left']['inertia']['izz']}" ixy="${inertials['bottom_stick_left']['inertia']['ixy']}" ixz="${inertials['bottom_stick_left']['inertia']['ixz']}" iyz="${inertials['bottom_stick_left']['inertia']['iyz']}"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://gripper_description/meshes/visual/bottom_stick_left.${visual_mesh_ext}" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="gripper_dark_grey"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://gripper_description/meshes/collision/bottom_stick_left_0.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+      </collision>
+    </link>
+    <link name="${prefix}bottom_stick_right">
+      <inertial>
+        <mass value="${inertials['bottom_stick_right']['mass']}"/>
+        <origin xyz="${inertials['bottom_stick_right']['origin']['xyz']}" rpy="${inertials['bottom_stick_right']['origin']['rpy']}"/>
+        <inertia ixx="${inertials['bottom_stick_right']['inertia']['ixx']}" iyy="${inertials['bottom_stick_right']['inertia']['iyy']}" izz="${inertials['bottom_stick_right']['inertia']['izz']}" ixy="${inertials['bottom_stick_right']['inertia']['ixy']}" ixz="${inertials['bottom_stick_right']['inertia']['ixz']}" iyz="${inertials['bottom_stick_right']['inertia']['iyz']}"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://gripper_description/meshes/visual/bottom_stick_right.${visual_mesh_ext}" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="gripper_dark_grey"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://gripper_description/meshes/collision/bottom_stick_right_0.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+      </collision>
+    </link>
+    <link name="${prefix}top_stick_left">
+      <inertial>
+        <mass value="${inertials['top_stick_left']['mass']}"/>
+        <origin xyz="${inertials['top_stick_left']['origin']['xyz']}" rpy="${inertials['top_stick_left']['origin']['rpy']}"/>
+        <inertia ixx="${inertials['top_stick_left']['inertia']['ixx']}" iyy="${inertials['top_stick_left']['inertia']['iyy']}" izz="${inertials['top_stick_left']['inertia']['izz']}" ixy="${inertials['top_stick_left']['inertia']['ixy']}" ixz="${inertials['top_stick_left']['inertia']['ixz']}" iyz="${inertials['top_stick_left']['inertia']['iyz']}"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://gripper_description/meshes/visual/top_stick_left.${visual_mesh_ext}" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="gripper_dark_grey"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://gripper_description/meshes/collision/top_stick_left_0.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+      </collision>
+    </link>
+    <link name="${prefix}top_stick_right">
+      <inertial>
+        <mass value="${inertials['top_stick_right']['mass']}"/>
+        <origin xyz="${inertials['top_stick_right']['origin']['xyz']}" rpy="${inertials['top_stick_right']['origin']['rpy']}"/>
+        <inertia ixx="${inertials['top_stick_right']['inertia']['ixx']}" iyy="${inertials['top_stick_right']['inertia']['iyy']}" izz="${inertials['top_stick_right']['inertia']['izz']}" ixy="${inertials['top_stick_right']['inertia']['ixy']}" ixz="${inertials['top_stick_right']['inertia']['ixz']}" iyz="${inertials['top_stick_right']['inertia']['iyz']}"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://gripper_description/meshes/visual/top_stick_right.${visual_mesh_ext}" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="gripper_dark_grey"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://gripper_description/meshes/collision/top_stick_right_0.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+      </collision>
+    </link>
+    <link name="${prefix}drive_gear">
+      <inertial>
+        <mass value="${inertials['drive_gear']['mass']}"/>
+        <origin xyz="${inertials['drive_gear']['origin']['xyz']}" rpy="${inertials['drive_gear']['origin']['rpy']}"/>
+        <inertia ixx="${inertials['drive_gear']['inertia']['ixx']}" iyy="${inertials['drive_gear']['inertia']['iyy']}" izz="${inertials['drive_gear']['inertia']['izz']}" ixy="${inertials['drive_gear']['inertia']['ixy']}" ixz="${inertials['drive_gear']['inertia']['ixz']}" iyz="${inertials['drive_gear']['inertia']['iyz']}"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://gripper_description/meshes/visual/drive_gear.${visual_mesh_ext}" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="gripper_dark_grey"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://gripper_description/meshes/collision/drive_gear_0.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+      </collision>
+    </link>
+    <joint name="${prefix}servotodrivegear" type="revolute">
+      <origin xyz="-0.01005 0.05210915 0.011233870000000003" rpy="${pi} 0.0 ${-pi/2}"/>
+      <parent link="${prefix}gripper_base"/>
+      <child link="${prefix}drive_gear"/>
+      <axis xyz="0.0 0.0 -1.0"/>
+      <limit lower="${joint_limits['servotodrivegear']['lower']}" upper="${joint_limits['servotodrivegear']['upper']}" effort="${joint_limits['servotodrivegear']['effort']}" velocity="${joint_limits['servotodrivegear']['velocity']}"/>
+      <dynamics damping="${joint_limits['servotodrivegear']['damping']}" friction="${joint_limits['servotodrivegear']['friction']}"/>
+    </joint>
+    <joint name="${prefix}rightgear" type="revolute">
+      <origin xyz="0.022 0.08285000000000001 -0.008116129999999997" rpy="0.0 0.0 ${pi/2}"/>
+      <parent link="${prefix}gripper_base"/>
+      <child link="${prefix}right_gear"/>
+      <axis xyz="0.0 0.0 -1.0"/>
+      <limit lower="${joint_limits['rightgear']['lower']}" upper="${joint_limits['rightgear']['upper']}" effort="${joint_limits['rightgear']['effort']}" velocity="${joint_limits['rightgear']['velocity']}"/>
+      <dynamics damping="${joint_limits['rightgear']['damping']}" friction="${joint_limits['rightgear']['friction']}"/>
+      <mimic joint="${prefix}servotodrivegear" multiplier="-0.5" offset="0"/>
+    </joint>
+    <joint name="${prefix}leftgear" type="revolute">
+      <origin xyz="-0.022 0.08285000000000001 -0.008116129999999997" rpy="0.0 0.0 ${pi/2}"/>
+      <parent link="${prefix}gripper_base"/>
+      <child link="${prefix}left_gear"/>
+      <axis xyz="0.0 0.0 -1.0"/>
+      <limit lower="${joint_limits['leftgear']['lower']}" upper="${joint_limits['leftgear']['upper']}" effort="${joint_limits['leftgear']['effort']}" velocity="${joint_limits['leftgear']['velocity']}"/>
+      <dynamics damping="${joint_limits['leftgear']['damping']}" friction="${joint_limits['leftgear']['friction']}"/>
+      <mimic joint="${prefix}servotodrivegear" multiplier="0.5" offset="0"/>
+    </joint>
+    <joint name="${prefix}leftarm" type="revolute">
+      <origin xyz="0.04858003499999998 0.011831323499999997 -1.734723475976807e-18" rpy="0.0 0.0 -1.3319040916513103"/>
+      <parent link="${prefix}left_gear"/>
+      <child link="${prefix}left_arm_bottom"/>
+      <axis xyz="0.0 0.0 1.0"/>
+      <limit lower="${joint_limits['leftarm']['lower']}" upper="${joint_limits['leftarm']['upper']}" effort="${joint_limits['leftarm']['effort']}" velocity="${joint_limits['leftarm']['velocity']}"/>
+      <dynamics damping="${joint_limits['leftarm']['damping']}" friction="${joint_limits['leftarm']['friction']}"/>
+      <mimic joint="${prefix}leftgear" multiplier="1" offset="0"/>
+    </joint>
+    <joint name="${prefix}rightarm" type="revolute">
+      <origin xyz="0.04858003499999998 -0.011831323499999997 -1.734723475976807e-18" rpy="0.0 0.0 1.3319040916513103"/>
+      <parent link="${prefix}right_gear"/>
+      <child link="${prefix}right_arm_bottom"/>
+      <axis xyz="0.0 0.0 1.0"/>
+      <limit lower="${joint_limits['rightarm']['lower']}" upper="${joint_limits['rightarm']['upper']}" effort="${joint_limits['rightarm']['effort']}" velocity="${joint_limits['rightarm']['velocity']}"/>
+      <dynamics damping="${joint_limits['rightarm']['damping']}" friction="${joint_limits['rightarm']['friction']}"/>
+      <mimic joint="${prefix}rightgear" multiplier="1" offset="0"/>
+    </joint>
+    <joint name="${prefix}topleftstick" type="revolute">
+      <origin xyz="-0.012 0.11585 0.01288387" rpy="${pi} 0.0 ${pi/2}"/>
+      <parent link="${prefix}gripper_base"/>
+      <child link="${prefix}top_stick_left"/>
+      <axis xyz="0.0 0.0 1.0"/>
+      <limit lower="${joint_limits['topleftstick']['lower']}" upper="${joint_limits['topleftstick']['upper']}" effort="${joint_limits['topleftstick']['effort']}" velocity="${joint_limits['topleftstick']['velocity']}"/>
+      <dynamics damping="${joint_limits['topleftstick']['damping']}" friction="${joint_limits['topleftstick']['friction']}"/>
+      <mimic joint="${prefix}leftgear" multiplier="1" offset="0"/>
+    </joint>
+    <joint name="${prefix}bottomleftstick" type="revolute">
+      <origin xyz="-0.012 0.11585 0.0023838699999999997" rpy="0.0 0.0 ${pi/2}"/>
+      <parent link="${prefix}gripper_base"/>
+      <child link="${prefix}bottom_stick_left"/>
+      <axis xyz="0.0 0.0 1.0"/>
+      <limit lower="${joint_limits['bottomleftstick']['lower']}" upper="${joint_limits['bottomleftstick']['upper']}" effort="${joint_limits['bottomleftstick']['effort']}" velocity="${joint_limits['bottomleftstick']['velocity']}"/>
+      <dynamics damping="${joint_limits['bottomleftstick']['damping']}" friction="${joint_limits['bottomleftstick']['friction']}"/>
+      <mimic joint="${prefix}leftgear" multiplier="-1" offset="0"/>
+    </joint>
+    <joint name="${prefix}toprightstick" type="revolute">
+      <origin xyz="0.012 0.11585 0.01288387" rpy="${pi} 0.0 ${pi/2}"/>
+      <parent link="${prefix}gripper_base"/>
+      <child link="${prefix}top_stick_right"/>
+      <axis xyz="0.0 0.0 1.0"/>
+      <limit lower="${joint_limits['toprightstick']['lower']}" upper="${joint_limits['toprightstick']['upper']}" effort="${joint_limits['toprightstick']['effort']}" velocity="${joint_limits['toprightstick']['velocity']}"/>
+      <dynamics damping="${joint_limits['toprightstick']['damping']}" friction="${joint_limits['toprightstick']['friction']}"/>
+      <mimic joint="${prefix}rightgear" multiplier="1" offset="0"/>
+    </joint>
+    <joint name="${prefix}bottomrightstick" type="revolute">
+      <origin xyz="0.012 0.11585 0.0023838699999999997" rpy="0.0 0.0 ${pi/2}"/>
+      <parent link="${prefix}gripper_base"/>
+      <child link="${prefix}bottom_stick_right"/>
+      <axis xyz="0.0 0.0 1.0"/>
+      <limit lower="${joint_limits['bottomrightstick']['lower']}" upper="${joint_limits['bottomrightstick']['upper']}" effort="${joint_limits['bottomrightstick']['effort']}" velocity="${joint_limits['bottomrightstick']['velocity']}"/>
+      <dynamics damping="${joint_limits['bottomrightstick']['damping']}" friction="${joint_limits['bottomrightstick']['friction']}"/>
+      <mimic joint="${prefix}rightgear" multiplier="-1" offset="0"/>
+    </joint>
+  </xacro:macro>
+</robot>

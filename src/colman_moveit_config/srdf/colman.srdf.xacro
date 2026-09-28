@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="colman">
+    <xacro:arg name="gripper_type" default="custom"/>
+    <xacro:arg name="use_camera" default="true"/>
+
+    <xacro:include filename="arm.srdf.xacro"/>
+
+    <xacro:if value="${'$(arg gripper_type)' == 'custom'}">
+        <xacro:include filename="gripper.srdf.xacro"/>
+    </xacro:if>
+    <xacro:if value="${'$(arg gripper_type)' == 'robotiq'}">
+        <xacro:include filename="robotiq.srdf.xacro"/>
+    </xacro:if>
+    <xacro:if value="${'$(arg gripper_type)' == 'vacuum'}">
+        <xacro:include filename="vacuum_gripper.xacro"/>
+    </xacro:if>
+
+    <xacro:if value="$(arg use_camera)">
+        <xacro:include filename="camera.srdf.xacro"/>
+    </xacro:if>
+</robot>

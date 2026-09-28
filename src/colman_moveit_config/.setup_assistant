@@ -1,0 +1,26 @@
+moveit_setup_assistant_config:
+  urdf:
+    package: colman_moveit_config
+    relative_path: config/colman_moveit.urdf.xacro
+    xacro_args: gripper_type:=custom
+  srdf:
+    relative_path: config/colman.srdf
+  package_settings:
+    author_name: pierce
+    author_email: dev@piercecoyle.com
+    generated_timestamp: 1772346413
+  control_xacro:
+    command:
+      - position
+    state:
+      - position
+      - velocity
+  modified_urdf:
+    xacros:
+      - control_xacro
+  control_xacro:
+    command:
+      - position
+    state:
+      - position
+      - velocity

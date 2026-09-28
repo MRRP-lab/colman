@@ -1,32 +1,51 @@
 [workspace]
-authors = ["Neil Macneale V <neil.macneale.v@gmail.com>", "Pierce Coyle <coylep2@wwu.edu>"]
-channels = ["robostack-jazzy", "conda-forge"]
-name = "ur3e"
+authors = ["Neil Macneale V <neil.macneale.v@gmail.com>", "Pierce Coyle <dev@piercecoyle.com>"]
+channels = ["robostack-jazzy", "https://prefix.dev/pierce-colman", "conda-forge"]
+name = "colman"
 platforms = ["linux-64"]
 version = "0.1.0"
+
+[system-requirements]
+linux = "6.8.0"
+libc = { family = "glibc", version = "2.39" }
 
 [activation]
 scripts = ["install/setup.sh"]
 
-[tasks]
-sim = "ros2 launch ros_robotiq_description ur3e_sim.launch.py world:=src/ros_robotiq_description/ros_robotiq_description/worlds/empty_bullet.sdf"
-sim-table = "ros2 launch ros_robotiq_description ur3e_sim.launch.py world:=src/ros_robotiq_description/ros_robotiq_description/worlds/table_world.sdf spawn_z:=0.9652"
-sim-yolo = "ros2 launch ros_robotiq_description ur3e_YOLO.launch.py spawn_z:=0.9652 world:=$PIXI_PROJECT_ROOT/src/ros_robotiq_description/ros_robotiq_description/worlds/table_world.sdf"
-sim-depth = "ros2 launch ros_robotiq_description ur3e_depth.launch.py spawn_z:=0.9652"
-sim-eyeinhand = "ros2 launch ros_robotiq_description ur3e_depth.launch.py spawn_z:=0.9652 world:=$PIXI_PROJECT_ROOT/src/ros_robotiq_description/ros_robotiq_description/worlds/table_world.sdf"
-sim-calibration = "ros2 launch ros_robotiq_description ur3e_depth.launch.py spawn_z:=0.9652 world:=$PIXI_PROJECT_ROOT/src/ros_robotiq_description/ros_robotiq_description/worlds/calibration_world.sdf"
+[tool.ruff.lint]
+select = ["E", "F", "I"]
 
+[tasks]
+sim = "ros2 launch colman_bringup colman.launch.py sim:=true"
+sim-depth = "ros2 launch colman_bringup colman.launch.py sim:=true depth:=true"
+sim-yolo = "ros2 launch colman_bringup colman.launch.py sim:=true yolo:=true"
+sim-calibration = "ros2 launch colman_bringup colman.launch.py sim:=true depth:=true world:=$PIXI_PROJECT_ROOT/src/colman_gazebo/colman_gazebo/worlds/calibration_world.sdf"
+mock = "ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur3e robot_ip:=0.0.0.0 use_mock_hardware:=true launch_dashboard_client:=false description_launchfile:=$(ros2 pkg prefix colman_bringup)/share/colman_bringup/launch/rsp.launch.py"
+driver = "ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur3e robot_ip:=192.168.56.101 headless_mode:=true use_camera:=true description_launchfile:=$(ros2 pkg prefix colman_bringup)/share/colman_bringup/launch/rsp.launch.py"
+
+detect = "ros2 run colman_perception camera_publisher & ros2 launch colman_bringup apriltag.launch.py"
+calibrate = "ros2 run colman_motion eye_in_hand"
+solve = "python src/colman_motion/colman_motion/hand_eye_solve.py"
+demo-vacuum = "ros2 launch colman_motion pick_and_place.launch.py gripper_type:=vacuum"
+demo-gripper = "ros2 launch colman_motion pick_and_place.launch.py gripper_type:=custom"
+demo-turns = "ros2 launch colman_motion pick_and_place.launch.py demo:=demo_turns"
+demo-choose = "ros2 launch colman_motion pick_and_place.launch.py demo:=demo_choose"
+
+stop = "ros2 service call /stop std_srvs/srv/Trigger"
 build = "colcon build --symlink-install"
 node-list = "ros2 node list"
 topic-list = "ros2 topic list"
 gz-list = "gz topic -l"
-params-list = "ros2 param list"
 image-view = "ros2 run rqt_image_view rqt_image_view"
 graph = "rqt_graph"
 
-[activation.env]
-GZ_SIM_RESOURCE_PATH = "$GZ_SIM_RESOURCE_PATH:$PIXI_PROJECT_ROOT/src/models:$PIXI_PROJECT_ROOT/src/oakd_gazebo/oakd_gazebo/models:$PIXI_PROJECT_ROOT/install/oakd_description/share"
+fmt  = "ruff format src/"
+lint = "ruff check --fix src/"
+clean = "rm -rf build install log"
 
+[activation.env]
+# Tells gazebo to look in these directories for models.
+GZ_SIM_RESOURCE_PATH = "$GZ_SIM_RESOURCE_PATH:$PIXI_PROJECT_ROOT/src/colman_gazebo/colman_gazebo/models:$PIXI_PROJECT_ROOT/src/oakd_gazebo/oakd_gazebo/models:$PIXI_PROJECT_ROOT/install/oakd_description/share:$PIXI_PROJECT_ROOT/install/gripper_description/share:$PIXI_PROJECT_ROOT/install/colman_description/share"
 
 [dependencies]
 colcon-common-extensions = ">=0.3.0,<0.4"
@@ -36,7 +55,7 @@ ros-jazzy-desktop = ">=0.11.0,<0.12"
 ros-jazzy-xacro = ">=2.0.11,<3"
 ros-jazzy-ur-description = ">=3.0.1,<4"
 ros-jazzy-robotiq-description = ">=0.0.1,<0.0.2"
-ros-jazzy-gz-sim-vendor = ">=0.0.8,<0.0.9"
+ros-jazzy-gz-sim-vendor = ">=0.0.9,<0.0.10"
 ros-jazzy-ros-gz = ">=1.0.16,<2"
 ros-jazzy-ros2-control = ">=4.33.0,<5"
 ros-jazzy-moveit = ">=2.12.3,<3"
@@ -52,6 +71,12 @@ ros-jazzy-apriltag = ">=3.4.3,<4"
 ros-jazzy-apriltag-ros = ">=3.2.2,<4"
 ros-jazzy-moveit-py = ">=2.12.3,<3"
 git-lfs = ">=3.7.1,<4"
+ros-jazzy-trac-ik-lib = "*"
+ros-jazzy-trac-ik-kinematics-plugin = "*"
+ruff = ">=0.15.4,<0.16"
+ros-jazzy-ur-robot-driver = ">=3.7.0,<4"
+semver = ">=3.0.4,<4"
 
 [pypi-dependencies]
 ultralytics = ">=8.4.11, <9"
+depthai = ">=2.24"
