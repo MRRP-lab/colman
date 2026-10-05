@@ -1,0 +1,49 @@
+// System architecture flowchart.
+// Render with: dot -Tsvg architecture.dot -o architecture.svg  (or -Tpng -Gdpi=200)
+digraph architecture {
+  graph [rankdir=LR, fontname="Helvetica", bgcolor="white", pad=0.4, nodesep=0.5, ranksep=0.9, splines=true, compound=true];
+  node  [fontname="Helvetica", fontsize=13, style="filled", penwidth=1.5];
+  edge  [fontname="Helvetica", fontsize=11, color="#555555", penwidth=1.4, arrowsize=0.8];
+
+  ros [label="ROS", shape=circle, width=1.3, fixedsize=true, fontsize=20,
+       fillcolor="#1f4e79", fontcolor="white", color="#1f4e79"];
+
+  arm [label="arm", shape=ellipse, fillcolor="#e2efda", color="#548235"];
+
+  subgraph cluster_commands {
+    label="commands"; fontname="Helvetica-Bold"; fontsize=12;
+    style="rounded,dashed"; color="#999999";
+    goto_cmd [label="goto A", shape=ellipse, fillcolor="#f2f2f2", color="#7f7f7f"];
+  }
+
+  subgraph cluster_speech_input {
+    label="speech-input node"; fontname="Helvetica-Bold"; fontsize=12;
+    style="rounded,filled"; fillcolor="#fff4e5"; color="#c55a11";
+    person [label="Person\n(words)", shape=ellipse, fillcolor="white", color="#c55a11"];
+    azure  [label="Azure\nspeech-to-text", shape=ellipse, fillcolor="white", color="#c55a11"];
+    person -> azure [dir=both];
+  }
+
+  subgraph cluster_ai {
+    label="AI model node"; fontname="Helvetica-Bold"; fontsize=12;
+    style="rounded,filled"; fillcolor="#ede7f6"; color="#5e35b1";
+    ai [label="AI model", shape=ellipse, fillcolor="white", color="#5e35b1"];
+    tool_goto [label="goto A", shape=box, style="rounded,filled", fillcolor="white", color="#5e35b1"];
+    ai -> tool_goto [label="tool calls", style=dashed, color="#5e35b1", fontcolor="#5e35b1"];
+  }
+
+  subgraph cluster_tts {
+    label="speech-output node"; fontname="Helvetica-Bold"; fontsize=12;
+    style="rounded,filled"; fillcolor="#e3f2fd"; color="#1565c0";
+    elevenlabs [label="ElevenLabs\ntext-to-speech", shape=ellipse, fillcolor="white", color="#1565c0"];
+    speakers   [label="speakers", shape=ellipse, fillcolor="white", color="#1565c0"];
+    elevenlabs -> speakers;
+  }
+
+  goto_cmd  -> ros;
+  ros       -> arm;
+  azure     -> ros       [label="new", ltail=cluster_speech_input, color="#c55a11", fontcolor="#c55a11"];
+  ros       -> ai        [xlabel="pt. 2 (research)", lhead=cluster_ai, color="#5e35b1", fontcolor="#5e35b1"];
+  tool_goto -> ros       [label="publish", color="#5e35b1", fontcolor="#5e35b1"];
+  ai        -> elevenlabs [label="speech", color="#1565c0", fontcolor="#1565c0"];
+}
