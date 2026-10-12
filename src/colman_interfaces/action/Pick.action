@@ -1,0 +1,6 @@
+string frame
+---
+bool success
+string message
+---
+string stage
