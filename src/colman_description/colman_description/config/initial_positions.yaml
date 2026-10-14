@@ -1,0 +1,9 @@
+# Same as ur_description's, but with the shoulder panned to face the middle of
+# the table, inside the pan limits in
+# colman_moveit_config/config/joint_limits.yaml.
+shoulder_pan_joint: -3.141592653589793
+shoulder_lift_joint: -1.57
+elbow_joint: 0.0
+wrist_1_joint: -1.57
+wrist_2_joint: 0.0
+wrist_3_joint: 0.0

@@ -3,7 +3,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from moveit_configs_utils import MoveItConfigsBuilder
 
@@ -11,6 +11,13 @@ from moveit_configs_utils import MoveItConfigsBuilder
 def generate_launch_description():
     gripper_type = LaunchConfiguration("gripper_type")
     demo = LaunchConfiguration("demo")
+    tip_link = PythonExpression(
+        [
+            "{'custom': 'gripper_tip_link', 'vacuum': 'vacuum_tip_link'}.get('",
+            gripper_type,
+            "', 'tool0')",
+        ]
+    )
 
     moveit_py_yaml = os.path.join(
         get_package_share_directory("colman_moveit_config"),
@@ -41,13 +48,13 @@ def generate_launch_description():
         output="both",
         parameters=[
             moveit_config.to_dict(),
-            {"use_sim_time": False},
+            {"use_sim_time": False, "tip_link": tip_link},
         ],
     )
 
     return LaunchDescription(
         [
-            DeclareLaunchArgument("gripper_type", default_value="vacuum"),
+            DeclareLaunchArgument("gripper_type", default_value="custom"),
             DeclareLaunchArgument("demo", default_value="pick_and_place"),
             pick_and_place_node,
         ]
