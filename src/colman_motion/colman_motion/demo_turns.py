@@ -6,6 +6,7 @@ from moveit.planning import MoveItPy, PlanRequestParameters
 from rclpy.executors import MultiThreadedExecutor
 
 from colman_motion.arm_control import ArmControl
+from colman_motion.robot_ready import wait_for_robot
 from colman_motion.scene_manager import SceneManager
 from colman_motion.tag_lookup import TagLookup
 from colman_motion.vacuum_control import VacuumControl
@@ -22,6 +23,7 @@ DROP_OFF = (0.2, -0.2, 0.044)
 def main():
     rclpy.init()
     logger = rclpy.logging.get_logger("moveit_py.pose_goal")
+    wait_for_robot()
     ur = MoveItPy(node_name="moveit_py")
     logger.info("MoveItPy instance created")
 
