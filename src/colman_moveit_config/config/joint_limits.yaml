@@ -20,8 +20,11 @@ joint_limits:
     has_position_limits: true
     has_velocity_limits: true
     max_effort: 56.0
-    min_position: -6.283185307179586
-    max_position:  6.283185307179586
+    # -270 to +45 degrees: the table (around -180) plus some slack either
+    # side, but less than a full turn so the arm can't wind its cables
+    # around the base.
+    min_position: -4.71238898038469
+    max_position:  0.7853981633974483
     max_velocity:  3.141592653589793
   shoulder_lift_joint:
     # acceleration limits are not publicly available

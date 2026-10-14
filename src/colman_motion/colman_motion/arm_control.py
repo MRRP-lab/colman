@@ -13,6 +13,7 @@ class ArmControl(Node):
         self.moveit = moveit
         self.arm = moveit.get_planning_component("ur_arm")
         self.trajectory_execution_manager = moveit.get_trajectory_execution_manager()
+        self.tip_link = self.declare_parameter("tip_link", "gripper_tip_link").value
         self.stop_event = threading.Event()
         self.create_service(Trigger, "/stop", self.stop_cb)
         self.get_logger().info("/stop service started")
@@ -63,7 +64,7 @@ class ArmControl(Node):
         pose_goal.pose.position.x = x
         pose_goal.pose.position.y = y
         pose_goal.pose.position.z = z
-        self.arm.set_goal_state(pose_stamped_msg=pose_goal, pose_link="vacuum_tip_link")
+        self.arm.set_goal_state(pose_stamped_msg=pose_goal, pose_link=self.tip_link)
         return self.plan_and_execute(single_plan_parameters=params)
 
     def go_to_configured_pose(self, pose_name, params=None):

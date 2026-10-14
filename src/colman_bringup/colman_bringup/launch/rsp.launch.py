@@ -84,7 +84,7 @@ def generate_launch_description():
 
     return LaunchDescription(
         [
-            DeclareLaunchArgument("gripper_type", default_value="vacuum"),
+            DeclareLaunchArgument("gripper_type", default_value="custom"),
             DeclareLaunchArgument("use_camera", default_value="false"),
             DeclareLaunchArgument("robot_ip", default_value="0.0.0.0"),
             DeclareLaunchArgument("ur_type", default_value="ur3e"),
