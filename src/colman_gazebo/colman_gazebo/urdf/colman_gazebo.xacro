@@ -1,0 +1,69 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="colman">
+  <xacro:include filename="$(find colman_description)/urdf/colman.urdf.xacro"/>
+  <!-- Gazebo dependencies -->
+  <xacro:include filename="$(find ur_description)/urdf/inc/ur_joint_control.xacro"/>
+  <xacro:include filename="$(find ur_description)/urdf/inc/ur_sensors.xacro"/>
+  <!-- Gazebo specific args -->
+  <xacro:arg name="mock_sensor_commands" default="false"/>
+  <xacro:arg name="initial_positions_file" default="$(find ur_description)/config/initial_positions.yaml"/>
+  <xacro:property name="initial_positions_file" default="$(arg initial_positions_file)"/>
+  <!-- Gripper visuals and hardware interface -->
+  <xacro:if value="${'$(arg gripper_type)' == 'custom'}">
+    <xacro:include filename="$(find gripper_gazebo)/urdf/gripper_gazebo.xacro"/>
+    <xacro:gripper_gazebo prefix="$(arg prefix)" include_controllers="false"/>
+  </xacro:if>
+  <!-- UR ros2_control -->
+  <xacro:macro name="ur_ros2_control" params="     name     tf_prefix     mock_sensor_commands:=false     initial_positions:=${dict(shoulder_pan_joint=0.0,shoulder_lift_joint=-1.57,elbow_joint=0.0,wrist_1_joint=-1.57,wrist_2_joint=0.0,wrist_3_joint=0.0)}     ">
+    <ros2_control name="${name}" type="system">
+      <hardware>
+        <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+        <param name="mock_sensor_commands">${mock_sensor_commands}</param>
+        <param name="state_following_offset">0.0</param>
+        <param name="calculate_dynamics">true</param>
+      </hardware>
+      <xacro:ur_joint_control_description tf_prefix="${tf_prefix}" initial_positions="${initial_positions}"/>
+      <xacro:ur_sensors tf_prefix="${tf_prefix}"/>
+    </ros2_control>
+  </xacro:macro>
+  <!-- Robotiq gripper ros2_control -->
+  <xacro:if value="${'$(arg gripper_type)' == 'robotiq'}">
+    <ros2_control name="robotiq_gripper_system" type="system">
+      <hardware>
+        <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+        <param name="state_following_offset">0.0</param>
+      </hardware>
+      <joint name="robotiq_85_left_knuckle_joint">
+        <command_interface name="position"/>
+        <state_interface name="position">
+          <param name="initial_value">0.7929</param>
+        </state_interface>
+        <state_interface name="velocity"/>
+      </joint>
+    </ros2_control>
+  </xacro:if>
+  <!-- Arm ros2_control -->
+  <xacro:ur_ros2_control name="$(arg name)" tf_prefix="$(arg tf_prefix)" mock_sensor_commands="$(arg mock_sensor_commands)" initial_positions="${xacro.load_yaml(initial_positions_file)}"/>
+  <!-- Camera adapter material -->
+  <xacro:if value="$(arg use_camera)">
+    <gazebo reference="camera_adapter_link">
+      <visual>
+        <material>
+          <ambient>0.08 0.08 0.08 1.0</ambient>
+          <diffuse>0.08 0.08 0.08 1.0</diffuse>
+        </material>
+      </visual>
+    </gazebo>
+  </xacro:if>
+  <!-- Gazebo ros2_control -->
+  <gazebo>
+    <plugin filename="libgz_ros2_control-system.so" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+      <xacro:if value="${'$(arg gripper_type)' == 'robotiq'}">
+        <parameters>$(find colman_description)/config/robotiq_controllers.yaml</parameters>
+      </xacro:if>
+      <xacro:if value="${'$(arg gripper_type)' == 'custom'}">
+        <parameters>$(find colman_description)/config/gripper_controllers.yaml</parameters>
+      </xacro:if>
+    </plugin>
+  </gazebo>
+</robot>
