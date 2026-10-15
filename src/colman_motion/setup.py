@@ -30,6 +30,7 @@ setup(
             "pick_and_place = colman_motion.pick_and_place:main",
             "demo_turns = colman_motion.demo_turns:main",
             "demo_choose = colman_motion.demo_choose:main",
+            "demo_circle = colman_motion.demo_circle:main",
             "eye_in_hand = colman_motion.eye_in_hand:main",
         ],
     },
