@@ -29,6 +29,8 @@ setup(
         ],
     },
     entry_points={
-        "console_scripts": [],
+        "console_scripts": [
+            "driver_supervisor = colman_bringup.driver_supervisor.supervisor_node:main",
+        ],
     },
 )
