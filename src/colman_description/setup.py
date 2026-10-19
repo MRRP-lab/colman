@@ -29,7 +29,7 @@ setup(
     zip_safe=True,
     maintainer="pierce",
     maintainer_email="dev@piercecoyle.com",
-    description="TODO: Package description",
+    description="URDF/Xacro description of the Colman UR3e robot",
     license="TODO: License declaration",
     extras_require={
         "test": [

@@ -3,7 +3,7 @@
 <package format="3">
   <name>colman_gazebo</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>Gazebo worlds, models and simulation launch support for the Colman UR3e workcell</description>
   <maintainer email="dev@piercecoyle.com">pierce</maintainer>
   <license>TODO: License declaration</license>
   <test_depend>ament_copyright</test_depend>

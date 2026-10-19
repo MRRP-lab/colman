@@ -1,6 +1,5 @@
 import threading
 
-import time
 import rclpy
 from moveit.planning import MoveItPy, PlanRequestParameters
 from rclpy.executors import MultiThreadedExecutor
@@ -82,7 +81,11 @@ def main():
                     tag_pose = tag.get_tag_pose(tag_frame)
 
                 tag_translation = tag_pose.translation
-                pick_translation = (tag_translation.x, tag_translation.y, tag_translation.z - EE_OFFSET)
+                pick_translation = (
+                    tag_translation.x,
+                    tag_translation.y,
+                    tag_translation.z - EE_OFFSET,
+                )
                 approach_translation = (
                     tag_translation.x,
                     tag_translation.y,

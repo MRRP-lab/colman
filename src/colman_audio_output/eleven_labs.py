@@ -15,11 +15,10 @@ import queue
 import threading
 
 import rclpy
-from rclpy.node import Node
-from std_msgs.msg import Bool, String
-
 from elevenlabs import play, save, stream
 from elevenlabs.client import ElevenLabs
+from rclpy.node import Node
+from std_msgs.msg import Bool, String
 
 
 class ElevenLabsTTSNode(Node):

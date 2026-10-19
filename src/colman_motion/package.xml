@@ -3,16 +3,18 @@
 <package format="3">
   <name>colman_motion</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>MoveIt-based arm, scene, AprilTag and vacuum control for the Colman robot</description>
   <maintainer email="dev@piercecoyle.com">pierce</maintainer>
   <license>TODO: License declaration</license>
 
   <depend>rclpy</depend>
   <depend>colman_interfaces</depend>
-  <depend>std_srvs</depend>
   <depend>action_msgs</depend>
   <depend>geometry_msgs</depend>
+  <depend>moveit_msgs</depend>
   <depend>sensor_msgs</depend>
+  <depend>shape_msgs</depend>
+  <depend>std_srvs</depend>
   <depend>tf2_ros</depend>
   <depend>ur_msgs</depend>
 
