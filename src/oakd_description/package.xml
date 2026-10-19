@@ -3,7 +3,7 @@
 <package format="3">
   <name>oakd_description</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>URDF and meshes for the OAK-D Pro camera</description>
   <maintainer email="dev@piercecoyle.com">pierce</maintainer>
   <license>BSD-2-Clause</license>
   <test_depend>ament_copyright</test_depend>

@@ -41,7 +41,7 @@ setup(
     zip_safe=True,
     maintainer="pierce",
     maintainer_email="dev@piercecoyle.com",
-    description="TODO: Package description",
+    description="URDF and meshes for the custom Colman gripper",
     license="MIT",
     extras_require={
         "test": [

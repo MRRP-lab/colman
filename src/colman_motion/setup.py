@@ -18,7 +18,7 @@ setup(
     zip_safe=True,
     maintainer="pierce",
     maintainer_email="dev@piercecoyle.com",
-    description="TODO: Package description",
+    description="MoveIt arm, scene, AprilTag and vacuum control for the Colman robot",
     license="TODO: License declaration",
     extras_require={
         "test": [

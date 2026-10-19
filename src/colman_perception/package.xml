@@ -3,7 +3,7 @@
 <package format="3">
   <name>colman_perception</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>OAK-D camera publishing, AprilTag and YOLO perception for the Colman robot</description>
   <maintainer email="dev@piercecoyle.com">pierce</maintainer>
   <license>TODO: License declaration</license>
   <test_depend>ament_copyright</test_depend>

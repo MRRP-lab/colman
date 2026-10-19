@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """ROS 2 node: Azure continuous speech recognition -> std_msgs/String topic.
 
-Requires AZURE_TTS_KEY and AZURE_TTS_REGION in the environment.
+Requires AZURE_SPEECH_KEY and AZURE_SPEECH_REGION in the environment.
+The older AZURE_TTS_KEY and AZURE_TTS_REGION names are still accepted.
 Each finalized utterance is published immediately on the output topic.
 """
 import os
 
+import azure.cognitiveservices.speech as speechsdk
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
-
-import azure.cognitiveservices.speech as speechsdk
 
 
 class SpeechToTextNode(Node):
@@ -20,10 +20,11 @@ class SpeechToTextNode(Node):
         self.declare_parameter('topic', 'speech_text')
         self.declare_parameter('language', 'en-US')
 
-        key = os.getenv('AZURE_TTS_KEY')
-        region = os.getenv('AZURE_TTS_REGION')
+        key = os.getenv('AZURE_SPEECH_KEY') or os.getenv('AZURE_TTS_KEY')
+        region = os.getenv('AZURE_SPEECH_REGION') or os.getenv('AZURE_TTS_REGION')
         if not key or not region:
-            raise RuntimeError('Set AZURE_TTS_KEY and AZURE_TTS_REGION in your environment.')
+            raise RuntimeError(
+                'Set AZURE_SPEECH_KEY and AZURE_SPEECH_REGION in your environment.')
 
         topic = self.get_parameter('topic').value
         self.pub = self.create_publisher(String, topic, 10)
@@ -60,7 +61,8 @@ class SpeechToTextNode(Node):
         self.get_logger().error(f'Speech canceled: {details.reason}')
         if details.reason == speechsdk.CancellationReason.Error:
             self.get_logger().error(f'Error details: {details.error_details}')
-            self.get_logger().error('Check AZURE_TTS_KEY, AZURE_TTS_REGION and your microphone.')
+            self.get_logger().error(
+                'Check AZURE_SPEECH_KEY, AZURE_SPEECH_REGION and your microphone.')
 
     def destroy_node(self):
         try:

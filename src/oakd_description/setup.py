@@ -25,7 +25,7 @@ setup(
     zip_safe=True,
     maintainer="pierce",
     maintainer_email="dev@piercecoyle.com",
-    description="TODO: Package description",
+    description="URDF and meshes for the OAK-D Pro camera",
     license="BSD-2-Clause",
     tests_require=["pytest"],
     entry_points={
