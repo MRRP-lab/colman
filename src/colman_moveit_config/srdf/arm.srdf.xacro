@@ -38,7 +38,7 @@
     <group_state name="Look3" group="ur_arm">
         <joint name="elbow_joint" value="-0.6769"/>
         <joint name="shoulder_lift_joint" value="-1.4927"/>
-        <joint name="shoulder_pan_joint" value="${pi}"/>
+        <joint name="shoulder_pan_joint" value="${-pi}"/>
         <joint name="wrist_1_joint" value="-2.3952"/>
         <joint name="wrist_2_joint" value="1.6315"/>
         <joint name="wrist_3_joint" value="0"/>

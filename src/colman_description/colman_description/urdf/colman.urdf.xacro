@@ -55,7 +55,7 @@
   <!-- simulation parameters -->
   <xacro:arg name="use_mock_hardware" default="false"/>
   <xacro:arg name="mock_sensor_commands" default="false"/>
-  <xacro:arg name="initial_positions_file" default="$(find ur_description)/config/initial_positions.yaml"/>
+  <xacro:arg name="initial_positions_file" default="$(find colman_description)/config/initial_positions.yaml"/>
   <xacro:property name="initial_positions_file" value="$(arg initial_positions_file)"/>
 
   <!-- decide which link to attach the gripper to -->
