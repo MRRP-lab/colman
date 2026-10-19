@@ -6,7 +6,7 @@
   <xacro:include filename="$(find ur_description)/urdf/inc/ur_sensors.xacro"/>
   <!-- Gazebo specific args -->
   <xacro:arg name="mock_sensor_commands" default="false"/>
-  <xacro:arg name="initial_positions_file" default="$(find ur_description)/config/initial_positions.yaml"/>
+  <xacro:arg name="initial_positions_file" default="$(find colman_description)/config/initial_positions.yaml"/>
   <xacro:property name="initial_positions_file" default="$(arg initial_positions_file)"/>
   <!-- Gripper visuals and hardware interface -->
   <xacro:if value="${'$(arg gripper_type)' == 'custom'}">
