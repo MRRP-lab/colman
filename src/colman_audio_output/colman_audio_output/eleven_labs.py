@@ -87,7 +87,10 @@ class ElevenLabsTTSNode(Node):
                 if v.name == voice:
                     return v.voice_id
         except Exception as e:  # noqa: BLE001
-            raise RuntimeError(f"Could not list ElevenLabs voices: {e}") from e
+            # Restricted API keys can't list voices; a voice_id may still work.
+            self.get_logger().warn(
+                f"Could not list voices ({e}); trying '{voice}' as a voice_id"
+            )
         try:
             return self.client.voices.get(voice).voice_id
         except Exception as e:  # noqa: BLE001
@@ -128,7 +131,16 @@ class ElevenLabsTTSNode(Node):
         try:
             self._queue.put_nowait(text)
         except queue.Full:
-            self.get_logger().warn(f"TTS queue full; dropping: {text[:80]}")
+            # Keep the newest message: drop the oldest pending one instead.
+            try:
+                dropped = self._queue.get_nowait()
+            except queue.Empty:
+                dropped = None
+            self.get_logger().warn(f"TTS queue full; dropping: {str(dropped)[:80]}")
+            try:
+                self._queue.put_nowait(text)
+            except queue.Full:
+                self.get_logger().warn(f"TTS queue full; dropping: {text[:80]}")
 
     def _worker_loop(self):
         while True:
@@ -143,7 +155,10 @@ class ElevenLabsTTSNode(Node):
             except Exception as e:  # noqa: BLE001
                 self.get_logger().error(f"TTS failed: {e}")
             finally:
-                self._set_speaking(False)
+                # Stay "speaking" across back-to-back messages so a muted mic
+                # doesn't reopen between them.
+                if self._queue.empty():
+                    self._set_speaking(False)
 
     def shutdown(self):
         # Drop pending messages so the sentinel isn't stuck behind them.
@@ -152,7 +167,10 @@ class ElevenLabsTTSNode(Node):
                 self._queue.get_nowait()
             except queue.Empty:
                 break
-        self._queue.put(None)
+        try:
+            self._queue.put_nowait(None)
+        except queue.Full:
+            pass  # worker is a daemon thread; it exits with the process
         self._worker.join(timeout=2.0)
 
 
