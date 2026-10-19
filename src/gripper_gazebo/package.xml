@@ -3,7 +3,7 @@
 <package format="3">
   <name>gripper_gazebo</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>Gazebo simulation of the custom Colman gripper</description>
   <maintainer email="dev@piercecoyle.com">pierce</maintainer>
   <license>MIT</license>
   <exec_depend>gripper_description</exec_depend>
