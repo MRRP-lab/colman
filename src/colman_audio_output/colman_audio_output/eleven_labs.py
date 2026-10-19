@@ -18,7 +18,6 @@ import threading
 
 import rclpy
 from elevenlabs.client import ElevenLabs
-from elevenlabs.core.api_error import ApiError
 from elevenlabs.play import play, save, stream
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
@@ -26,15 +25,6 @@ from std_msgs.msg import Bool, String
 
 # External player each mode shells out to (save mode needs none).
 PLAYERS = {"stream": "mpv", "play": "ffplay", "save": None}
-
-
-def describe_error(e: Exception) -> str:
-    """Short message for an exception; ApiError's str() dumps every HTTP header."""
-    if not isinstance(e, ApiError):
-        return str(e)
-    detail = e.body.get("detail") if isinstance(e.body, dict) else None
-    message = detail.get("message") if isinstance(detail, dict) else detail or e.body
-    return f"HTTP {e.status_code}: {message}"
 
 
 class ElevenLabsTTSNode(Node):
@@ -97,16 +87,13 @@ class ElevenLabsTTSNode(Node):
                 if v.name == voice:
                     return v.voice_id
         except Exception as e:  # noqa: BLE001
-            raise RuntimeError(
-                f"Could not list ElevenLabs voices: {describe_error(e)}"
-            ) from e
+            raise RuntimeError(f"Could not list ElevenLabs voices: {e}") from e
         try:
             return self.client.voices.get(voice).voice_id
         except Exception as e:  # noqa: BLE001
             raise RuntimeError(
                 f"'{voice}' is neither a voice name on this account nor a valid "
-                f"voice_id ({describe_error(e)}). "
-                "Add the voice to the account or pass its voice_id."
+                f"voice_id ({e}). Add the voice to the account or pass its voice_id."
             ) from e
 
     def _set_speaking(self, value: bool):
@@ -154,7 +141,7 @@ class ElevenLabsTTSNode(Node):
             try:
                 self._speak(text)
             except Exception as e:  # noqa: BLE001
-                self.get_logger().error(f"TTS failed: {describe_error(e)}")
+                self.get_logger().error(f"TTS failed: {e}")
             finally:
                 self._set_speaking(False)
 
