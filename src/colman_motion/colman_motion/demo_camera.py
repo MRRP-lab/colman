@@ -10,9 +10,11 @@ from rclpy.time import Time
 from colman_motion.arm_control import ArmControl
 from colman_motion.robot_ready import wait_for_robot
 from colman_motion.scene_manager import SceneManager
-from colman_motion.tag_lookup import BASE_FRAME, TAG_FRAME, TagLookup
+from colman_motion.tag_lookup import BASE_FRAME, TagLookup
 
 TOOL_FRAME = "vacuum_tip_link"
+
+TARGET_TAG = "tag_3"
 
 UP = (0.0, 0.0, 1.0)
 
@@ -99,7 +101,7 @@ def fresh_tag(tag):
     """
     Returns the cube's latest transform if the tag was seen recently.
     """
-    transform = tag.lookup(TAG_FRAME, BASE_FRAME)
+    transform = tag.lookup(TARGET_TAG, BASE_FRAME)
     if transform is None:
         return None
     age = (tag.get_clock().now() - Time.from_msg(transform.header.stamp)).nanoseconds
