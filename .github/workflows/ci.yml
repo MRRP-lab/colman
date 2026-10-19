@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: prefix-dev/setup-pixi@v0.8.14
+        with:
+          locked: true
+      - run: pixi run ruff format --check src/
+      - run: pixi run ruff check src/
+
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: prefix-dev/setup-pixi@v0.8.14
+        with:
+          locked: true
+      - run: pixi run build
+      - run: pixi run colcon test --event-handlers console_direct+
+      - run: pixi run colcon test-result --verbose
