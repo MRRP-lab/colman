@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1350" height="1300" viewBox="0 0 1350 1300">
+<defs>
+  <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+  </marker>
+  <marker id="cmd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/>
+  </marker>
+</defs>
+<rect width="100%" height="100%" fill="white"/>
+<text x="40" y="46" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="bold" fill="#1e293b" text-anchor="start">Colman: talk to the robot, and it moves</text>
+<text x="40" y="72" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="normal" fill="#64748b" text-anchor="start">You speak, the AI model turns that into arm commands (goto, pickup, ...) and talks back. The camera finds AprilTags so the arm knows where things are.</text>
+<text x="40" y="122" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#64748b" text-anchor="start">VOICE</text>
+<text x="93.0" y="122" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#64748b" text-anchor="start">planned: today these are plain Python scripts in audio/, not ROS nodes</text>
+<path d="M260.0,185 L290.0,185" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linejoin="round" marker-end="url(#arr)"/>
+<path d="M520.0,185 L560.0,185" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linejoin="round" marker-end="url(#arr)"/>
+<path d="M800.0,185 L825.0,185" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linejoin="round" marker-end="url(#arr)"/>
+<path d="M1055.0,185 L1090.0,185" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linejoin="round" marker-end="url(#arr)"/>
+<path d="M680,240.0 L680,395 L1010.0,395" fill="none" stroke="#16a34a" stroke-width="2" stroke-dasharray="7 5" marker-start="url(#cmd)" stroke-linejoin="round" marker-end="url(#cmd)"/>
+<text x="845" y="369" font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#16a34a" text-anchor="middle">AI calls a command,</text>
+<text x="845" y="384" font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" fill="#16a34a" text-anchor="middle">hears back done / failed</text>
+<text x="40" y="505" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#64748b" text-anchor="start">ROBOT</text>
+<text x="93.0" y="505" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#64748b" text-anchor="start">exists today, except the command server</text>
+<path d="M1160,465.0 L1160,575.0" fill="none" stroke="#16a34a" stroke-width="2" stroke-dasharray="7 5" stroke-linejoin="round" marker-end="url(#cmd)"/>
+<path d="M260.0,565 L280.0,565" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linejoin="round" marker-end="url(#arr)"/>
+<path d="M530.0,565 L550.0,565" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linejoin="round" marker-end="url(#arr)"/>
+<path d="M750.0,565 L872,565 L872,605.0" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linejoin="round" marker-end="url(#arr)"/>
+<path d="M260.0,785 L280.0,785" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linejoin="round" marker-end="url(#arr)"/>
+<path d="M530.0,785 L550.0,785" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linejoin="round" marker-end="url(#arr)"/>
+<path d="M750.0,785 L872,785 L872,745.0" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linejoin="round" marker-end="url(#arr)"/>
+<path d="M990.0,675 L1010.0,675" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linejoin="round" marker-end="url(#arr)"/>
+<path d="M1200,775.0 L1200,1015 L105,1015 L105,827.0" fill="none" stroke="#16a34a" stroke-width="2" stroke-dasharray="7 5" stroke-linejoin="round" marker-end="url(#cmd)"/>
+<path d="M1120,775.0 L1120,960 L185,960 L185,827.0" fill="none" stroke="#16a34a" stroke-width="2" stroke-dasharray="7 5" stroke-linejoin="round" marker-end="url(#cmd)"/>
+<rect x="30.0" y="140.0" width="230" height="90" rx="12" fill="white" stroke="#1e293b" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="145" y="173.5" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="bold" fill="#1e293b" text-anchor="middle">Speech recognition</text>
+<text x="145" y="193.5" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">Azure speech-to-text</text>
+<text x="145" y="208.5" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">audio/azure_speech_to_text.py</text>
+<polygon points="405,130.0 520.0,185 405,240.0 290.0,185" fill="#fef3c7" stroke="#d97706" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="405" y="180.5" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="bold" fill="#1e293b" text-anchor="middle">What you said</text>
+<text x="405" y="200.5" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">text topic, name TBD</text>
+<rect x="560.0" y="130.0" width="240" height="110" rx="12" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="680" y="166.0" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="bold" fill="#1e293b" text-anchor="middle">AI model</text>
+<text x="680" y="186.0" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">OpenAI gpt-4o-mini</text>
+<text x="680" y="201.0" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">audio/openai_chat.py</text>
+<text x="680" y="216.0" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">+ tool calls (planned)</text>
+<polygon points="940,130.0 1055.0,185 940,240.0 825.0,185" fill="#fef3c7" stroke="#d97706" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="940" y="180.5" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="bold" fill="#1e293b" text-anchor="middle">What to say back</text>
+<text x="940" y="200.5" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">text topic, name TBD</text>
+<rect x="1090.0" y="140.0" width="230" height="90" rx="12" fill="white" stroke="#1e293b" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="1205" y="173.5" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="bold" fill="#1e293b" text-anchor="middle">Speech synthesis</text>
+<text x="1205" y="193.5" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">ElevenLabs → speakers</text>
+<text x="1205" y="208.5" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">audio/eleven_labs.py</text>
+<rect x="1010.0" y="325.0" width="300" height="140" rx="16" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="1160" y="349.0" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="bold" fill="#1e293b" text-anchor="middle">Arm commands</text>
+<text x="1160" y="367.0" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">ROS actions · names TBD</text>
+<text x="1028.0" y="391.0" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#1e293b" text-anchor="start">go to a spot (&quot;goto A&quot;)</text>
+<text x="1292.0" y="391.0" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="end">goto</text>
+<text x="1028.0" y="411.0" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#1e293b" text-anchor="start">pick something up</text>
+<text x="1292.0" y="411.0" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="end">pickup</text>
+<text x="1028.0" y="431.0" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#1e293b" text-anchor="start">put it down</text>
+<text x="1292.0" y="431.0" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="end">place</text>
+<text x="1028.0" y="451.0" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#1e293b" text-anchor="start">stop right now</text>
+<text x="1292.0" y="451.0" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="end">/stop service</text>
+<rect x="30.0" y="523.0" width="230" height="84" rx="12" fill="white" stroke="#1e293b" stroke-width="1.6"/>
+<text x="145" y="553.5" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="bold" fill="#1e293b" text-anchor="middle">Wrist camera</text>
+<text x="145" y="573.5" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">camera_publisher</text>
+<text x="145" y="588.5" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">sim: Gazebo → ros_gz_bridge</text>
+<polygon points="405,510.0 530.0,565 405,620.0 280.0,565" fill="#fef3c7" stroke="#d97706" stroke-width="1.6"/>
+<text x="405" y="560.5" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="bold" fill="#1e293b" text-anchor="middle">Camera picture</text>
+<text x="405" y="580.5" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">/oakd_pro/rgb/image</text>
+<rect x="550.0" y="529.0" width="200" height="72" rx="12" fill="white" stroke="#1e293b" stroke-width="1.6"/>
+<text x="650" y="561.0" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="bold" fill="#1e293b" text-anchor="middle">Tag finder</text>
+<text x="650" y="581.0" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">apriltag (apriltag_ros)</text>
+<rect x="30.0" y="743.0" width="230" height="84" rx="12" fill="white" stroke="#1e293b" stroke-width="1.6"/>
+<text x="145" y="773.5" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="bold" fill="#1e293b" text-anchor="middle">UR3e arm controllers</text>
+<text x="145" y="793.5" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">ur_robot_driver</text>
+<text x="145" y="808.5" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">sim: Gazebo gz_ros2_control</text>
+<polygon points="405,730.0 530.0,785 405,840.0 280.0,785" fill="#fef3c7" stroke="#d97706" stroke-width="1.6"/>
+<text x="405" y="780.5" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="bold" fill="#1e293b" text-anchor="middle">Joint angles</text>
+<text x="405" y="800.5" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">/joint_states</text>
+<rect x="550.0" y="749.0" width="200" height="72" rx="12" fill="white" stroke="#1e293b" stroke-width="1.6"/>
+<text x="650" y="781.0" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="bold" fill="#1e293b" text-anchor="middle">Body tracker</text>
+<text x="650" y="801.0" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">robot_state_publisher</text>
+<polygon points="872,605.0 990.0,675 872,745.0 754.0,675" fill="#ffedd5" stroke="#ea580c" stroke-width="1.6"/>
+<text x="872" y="663.0" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="bold" fill="#1e293b" text-anchor="middle">Where everything is</text>
+<text x="872" y="683.0" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">/tf</text>
+<text x="872" y="698.0" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">(arm links + tags)</text>
+<rect x="1010.0" y="575.0" width="300" height="200" rx="14" fill="#eef2ff" stroke="#4f46e5" stroke-width="1.8" stroke-dasharray="6 4"/>
+<text x="1160" y="609" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">Arm command server</text>
+<text x="1160" y="629" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">today: hardcoded pick_and_place.py</text>
+<text x="1028.0" y="661" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#1e293b" text-anchor="start">plans arm paths</text>
+<text x="1292.0" y="661" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="end">moveit_py</text>
+<text x="1028.0" y="683" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#1e293b" text-anchor="start">reads tag positions</text>
+<text x="1292.0" y="683" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="end">tag_lookup</text>
+<text x="1028.0" y="705" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#1e293b" text-anchor="start">runs the moves, can stop</text>
+<text x="1292.0" y="705" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="end">arm_control</text>
+<text x="1028.0" y="727" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#1e293b" text-anchor="start">knows the table is there</text>
+<text x="1292.0" y="727" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="end">scene_manager</text>
+<text x="1028.0" y="749" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#1e293b" text-anchor="start">turns suction on/off</text>
+<text x="1292.0" y="749" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="end">vacuum_control</text>
+<rect x="395.0" y="992.0" width="330" height="46" rx="23.0" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
+<text x="560" y="1010.5" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="bold" fill="#1e293b" text-anchor="middle">Move along this path</text>
+<text x="560" y="1030.5" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">follow_joint_trajectory action</text>
+<rect x="395.0" y="937.0" width="330" height="46" rx="23.0" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
+<text x="560" y="955.5" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="bold" fill="#1e293b" text-anchor="middle">Suction on / off</text>
+<text x="560" y="975.5" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">set_io service · real robot only</text>
+<line x1="40" y1="1060" x2="1310" y2="1060" stroke="#e2e8f0"/>
+<rect x="40" y="1076" width="34" height="24" rx="6" fill="white" stroke="#1e293b" stroke-width="1.4"/>
+<text x="84" y="1094" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#1e293b" text-anchor="start">program (ROS node)</text>
+<polygon points="262,1074 282,1088 262,1102 242,1088" fill="#fef3c7" stroke="#d97706" stroke-width="1.4"/>
+<text x="292" y="1094" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#1e293b" text-anchor="start">data stream (topic)</text>
+<rect x="455" y="1076" width="40" height="24" rx="12" fill="#dcfce7" stroke="#16a34a" stroke-width="1.4"/>
+<text x="505" y="1094" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#1e293b" text-anchor="start">request (service / action)</text>
+<rect x="700" y="1076" width="34" height="24" rx="6" fill="white" stroke="#1e293b" stroke-width="1.4" stroke-dasharray="6 4"/>
+<text x="744" y="1094" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#1e293b" text-anchor="start">dashed = planned, not on main yet</text>
+<text x="1310" y="1094" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="normal" fill="#64748b" text-anchor="end">grey text = actual name in the code</text>
+<text x="40" y="1145" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="start">Also in the repo, but not part of the picture above</text>
+<text x="56" y="1175" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="normal" fill="#1e293b" text-anchor="start">•  Object spotter: runs YOLO on the camera picture; nothing reads its output yet</text>
+<text x="1310" y="1175" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="end">yolo_node → /yolo/annotated</text>
+<text x="56" y="1205" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="normal" fill="#1e293b" text-anchor="start">•  3D depth from the two side cameras; sim only, nothing reads it yet</text>
+<text x="1310" y="1205" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="end">depth.launch.py → /oakd_pro/depth/points2</text>
+<text x="56" y="1235" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="normal" fill="#1e293b" text-anchor="start">•  Camera calibration: records arm + tag poses to work out where the camera is mounted</text>
+<text x="1310" y="1235" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="end">eye_in_hand → calib_samples.npz → hand_eye_solve.py</text>
+<text x="56" y="1265" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="normal" fill="#1e293b" text-anchor="start">•  Sim-only path planner with a 3D viewer, for planning by hand in RViz</text>
+<text x="1310" y="1265" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="end">move_group + rviz2</text>
+</svg>

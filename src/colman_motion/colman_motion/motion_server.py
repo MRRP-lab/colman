@@ -15,6 +15,7 @@ from rclpy.signals import SignalHandlerOptions
 
 from colman_interfaces.action import MoveTo, Pick, Place
 from colman_motion.arm_control import ArmControl
+from colman_motion.robot_ready import wait_for_robot
 from colman_motion.scene_manager import SceneManager
 from colman_motion.tag_lookup import TagLookup
 from colman_motion.vacuum_control import VacuumControl
@@ -294,6 +295,7 @@ def main():
     rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
 
     try:
+        wait_for_robot()
         ur = MoveItPy(node_name="moveit_py")
         for sig in SIGNALS:
             signal.signal(sig, on_signal)

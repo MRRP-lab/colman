@@ -11,7 +11,10 @@ setup(
         ("share/" + package_name, ["package.xml"]),
         (
             "share/" + package_name + "/launch",
-            ["colman_motion/motion_server.launch.py"],
+            [
+                "colman_motion/motion_server.launch.py",
+                "colman_motion/demo.launch.py",
+            ],
         ),
     ],
     install_requires=["setuptools"],
@@ -29,6 +32,9 @@ setup(
         "console_scripts": [
             "pick_and_place = colman_motion.pick_and_place:main",
             "motion_server = colman_motion.motion_server:main",
+            "demo_turns = colman_motion.demo_turns:main",
+            "demo_choose = colman_motion.demo_choose:main",
+            "demo_circle = colman_motion.demo_circle:main",
             "eye_in_hand = colman_motion.eye_in_hand:main",
         ],
     },
