@@ -1,0 +1,7 @@
+string location
+geometry_msgs/Point position
+---
+bool success
+string message
+---
+string stage
