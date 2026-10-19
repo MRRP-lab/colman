@@ -7,8 +7,8 @@ from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import CameraInfo, Image
 
 FRAME_ID = "oakd_pro_camera_rgb_optical_frame_wrist"
-WIDTH = 1280
-HEIGHT = 720
+WIDTH = 1920
+HEIGHT = 1080
 
 
 class CameraPublisher(Node):
