@@ -8,11 +8,11 @@ This repository is a ROS 2 Jazzy workspace for a simulated or real UR3e robot wi
 - OAK-D camera support
 - AprilTag and YOLO perception
 - Azure speech-to-text input
-- A partially implemented audio/LLM architecture
+- A partially implemented voice/LLM architecture
 
-The workspace currently builds successfully, but the LLM/audio-output portion is incomplete. There is no current `colman_llm` package, no current `colman_audio_output` package, and no custom `pick_and_place` ROS action in `main`.
+The workspace currently builds successfully, but the LLM/voice-command portion is incomplete. A ROS-compatible ElevenLabs speech-output script now exists at `src/colman_audio_output/eleven_labs.py`, but it is not yet an installable ROS package. There is still no `colman_llm` package and no custom `pick_and_place` ROS action in `main`.
 
-The historical branch [`origin/eyeinhand`](https://github.com/MRRP-lab/colman/tree/eyeinhand) contains a useful but unmerged custom action-server implementation with `MoveTo`, `Pick`, and `Place` actions. That is probably the best starting point for the next phase.
+The current architecture diagram in `docs/architecture/architecture.svg` describes a planned voice pipeline: speech recognition, a text topic, an AI model with tool calls, a response text topic, and ElevenLabs speech synthesis. It also identifies the arm command server as the missing boundary between AI tool calls and MoveIt. The historical branch [`origin/eyeinhand`](https://github.com/MRRP-lab/colman/tree/eyeinhand) contains a useful but unmerged custom action-server implementation with `MoveTo`, `Pick`, and `Place` actions. That is probably the best starting point for the command-server portion.
 
 ---
 
@@ -20,23 +20,23 @@ The historical branch [`origin/eyeinhand`](https://github.com/MRRP-lab/colman/tr
 
 ## High-priority issues
 
-### 1.1 No current LLM or audio-output implementation
+### 1.1 LLM implementation is missing; audio output is not packaged
 
-The architecture diagram describes an AI node and speech output, but the actual repository only contains the Azure speech-input node:
+The architecture diagram now shows the intended voice path, but only part of that path is implemented:
 
-- `speech_to_text_node.py`
-- `architecture.dot`
+- `src/colman_audio_input/colman_audio_input/speech_to_text_node.py` is an installable Azure speech-input ROS node.
+- `src/colman_audio_output/eleven_labs.py` is an ElevenLabs ROS node implementation, but it lives outside an `ament_python` package and is not exposed through `ros2 run`.
+- `docs/architecture/architecture.svg` and `docs/architecture/architecture.png` document the planned pipeline.
 
 The following are currently absent:
 
 - `src/colman_llm`
-- `src/colman_audio_output`
 - Claude API integration
-- A text-to-speech ROS node
+- An AI node that turns text into tool calls
 - An LLM launch file
 - A custom high-level manipulation action
 
-There was a historical ElevenLabs implementation in commit `c981150`, but it was reverted in `4d36a05`.
+The audio-output script currently subscribes to `llm_response` by default, publishes `tts_speaking`, and supports ElevenLabs `stream`, `play`, and `save` modes. It requires `ELEVENLABS_API_KEY` and an installed ElevenLabs Python SDK. It should either be moved into a real `colman_audio_output` package or clearly documented as a standalone script.
 
 ### 1.2 No custom manipulation actions exist on the current branch
 
@@ -330,7 +330,7 @@ tag_6
 
 That is important for the LLM design: the LLM should map natural language like “the red block” to a known object/frame name. It should not directly invent arbitrary coordinates.
 
-## Audio input
+## Voice input and output
 
 The Azure node:
 
@@ -344,7 +344,7 @@ By default it publishes on:
 /speech_text
 ```
 
-The relevant code is:
+The relevant input code is:
 
 - `speech_to_text_node.py`
 
@@ -354,6 +354,26 @@ It is not currently included in the main bringup launch file, so it must be star
 ros2 run colman_audio_input speech_to_text
 ```
 
+The new ElevenLabs output implementation is:
+
+- `src/colman_audio_output/eleven_labs.py`
+
+It currently:
+
+- subscribes to `llm_response` (`std_msgs/msg/String`) by default
+- publishes `tts_speaking` (`std_msgs/msg/Bool`)
+- converts text through ElevenLabs
+- plays, streams, or saves the generated audio
+- processes synthesis in a worker thread so the ROS subscription callback stays short
+
+It is not currently a ROS package, so this does not work yet:
+
+```bash
+ros2 run colman_audio_output eleven_labs
+```
+
+The simplest packaging fix is to add `package.xml`, `setup.py`, `setup.cfg`, a resource marker, and an entry point such as `eleven_labs = colman_audio_output.eleven_labs:main`. The package should also declare `std_msgs` and document the external ElevenLabs and playback dependencies.
+
 ---
 
 # 3. ROS communication summary
@@ -361,6 +381,8 @@ ros2 run colman_audio_input speech_to_text
 | Component | Interface | Purpose |
 |---|---|---|
 | Azure speech input | Publishes `std_msgs/msg/String` on `/speech_text` | Human speech converted to text |
+| ElevenLabs speech output | Subscribes to `std_msgs/msg/String` on `llm_response` | Text converted to spoken audio |
+| ElevenLabs speech output | Publishes `std_msgs/msg/Bool` on `tts_speaking` | Indicates when speech playback is active |
 | Camera publisher | Publishes `sensor_msgs/msg/Image` | RGB/stereo camera images |
 | Camera publisher | Publishes `sensor_msgs/msg/CameraInfo` | Camera calibration |
 | YOLO node | Subscribes to `/oakd_pro/rgb/image` | Runs object detection |
@@ -571,15 +593,15 @@ colman_audio_input
    v
 colman_llm
    |
-   | Claude tool-use request
+   | LLM tool-use request
    |
-   +--> pick_and_place action client
+   +--> arm command/action client
    |
    +--> other future action clients
    |
-   | /llm_response
+   | llm_response
    v
-colman_audio_output
+colman_audio_output / ElevenLabs
    |
    v
 speaker
@@ -604,11 +626,13 @@ Initially, keep the implementation in one node.
 The node should:
 
 1. Subscribe to `/speech_text`.
-2. Send the text to Claude.
-3. Give Claude a small, explicit list of tools.
-4. If Claude requests a tool, call the corresponding ROS action.
-5. Send the action result back to Claude.
-6. Publish Claude’s final response on `/llm_response`.
+2. Send the text to the selected model.
+3. Give the model a small, explicit list of tools.
+4. If the model requests a tool, call the corresponding ROS action or service.
+5. Send the action result back to the model.
+6. Publish the final response on `llm_response`, matching the current ElevenLabs node's default subscription.
+
+The updated architecture diagram labels the model as OpenAI `gpt-4o-mini`, while the original project goal described Claude. This is an implementation choice, not a ROS constraint. Use one provider initially and keep provider-specific API calls behind a small adapter; do not implement both providers until the end-to-end ROS flow works.
 
 ## Claude tool definitions
 
@@ -723,14 +747,14 @@ This keeps the ROS executor responsive.
 
 ## Audio output
 
-Create a small `colman_audio_output` node that:
+The repository now has the core of a small `colman_audio_output` node in `src/colman_audio_output/eleven_labs.py`. After packaging it, the node should:
 
-- subscribes to `/llm_response`
+- subscribe to `llm_response`
 - converts text to speech
 - plays it
-- optionally publishes `/tts_speaking`
+- publish `tts_speaking` while playback is active
 
-The historical ElevenLabs implementation is a reasonable template. For an initial version, use one provider and one output mode. Do not add streaming, interruption, voice selection, caching, and multi-provider fallback until the basic loop works.
+The existing script already supports stream, play, and save modes. For an initial version, use one provider and one mode. Do not add interruption, caching, and multi-provider fallback until the basic loop works. The `tts_speaking` topic can later coordinate microphone muting, but it should not be required for the first closed-loop test.
 
 The speech loop would be:
 
@@ -741,27 +765,33 @@ User: "Pick up the block and put it in the tray."
 /speech_text
     |
     v
-Claude decides to call pick_and_place
+The model decides to call an arm tool
     |
     v
 ROS action executes
     |
     v
-Claude receives success/failure
+The model receives success/failure
     |
     v
 /llm_response: "I picked up the block and placed it in the tray."
     |
     v
-Audio output speaks the response
+ElevenLabs speaks the response
 ```
 
-## Claude API credentials
+## Model API credentials
 
-Use an environment variable:
+Use the environment variable for the selected provider. For Claude:
 
 ```bash
 export ANTHROPIC_API_KEY="..."
+```
+
+For the OpenAI model shown in the current architecture diagram:
+
+```bash
+export OPENAI_API_KEY="..."
 ```
 
 Do not place the key in:
@@ -772,7 +802,7 @@ Do not place the key in:
 - YAML files
 - git history
 
-The Claude dependency should be added through the project’s dependency management rather than installed ad hoc.
+The selected model SDK should be added through the project’s dependency management rather than installed ad hoc.
 
 ---
 
@@ -807,12 +837,12 @@ At this stage, inspect the response with:
 ros2 topic echo /llm_response
 ```
 
-## Phase 3: add audio output
+## Phase 3: package and connect audio output
 
-Add the text-to-speech node and verify:
+Package `src/colman_audio_output/eleven_labs.py`, expose it through `ros2 run`, add it to the launch flow, and verify:
 
 ```text
-speech_text -> Claude -> llm_response -> speaker
+speech_text -> LLM -> llm_response -> ElevenLabs -> speaker
 ```
 
 ## Phase 4: connect microphone input
@@ -833,10 +863,11 @@ I would make these changes first:
 4. Install Gazebo models from `colman_gazebo/setup.py`.
 5. Rename or compatibly deprecate the misleading Azure `TTS` environment variables.
 6. Decide whether `calib_samples.npz` is a required fixture.
-7. Update the architecture diagram to reflect the actual implementation.
-8. Add `colman_interfaces`, a motion action server, `colman_llm`, and `colman_audio_output`.
-9. Keep the LLM tool list very small and allow-listed.
-10. Keep the local `llm` branch only if it is intentionally reserved for this work; otherwise it is redundant with `main`.
+7. Keep the architecture diagram synchronized with the actual implementation; the current diagram correctly marks the AI, response topic, and arm command server as planned.
+8. Package `colman_audio_output` and expose the existing ElevenLabs node through `ros2 run`.
+9. Add `colman_interfaces`, an arm command server, and `colman_llm`.
+10. Keep the LLM tool list very small and allow-listed.
+11. Keep the local `llm` branch only if it is intentionally reserved for this work; otherwise it is redundant with `main`.
 
 The current build result is good:
 
