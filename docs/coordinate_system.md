@@ -30,7 +30,7 @@ All Cartesian poses sent to the arm (`go_to_pose`, `MoveTo`, tag lookups) are ex
 
 ## Table corners
 
-The four AprilTags mark the corners of the table. Measured positions in `base_link` (metres). Spread is the variation across samples.
+The four AprilTags mark the corners of the table. Each tag is on top of a 50 mm cube, and the readings are the top centre of that cube. Measured positions in `base_link` (metres). Spread is the variation across samples.
 
 | Tag | x | y | z | Samples | Spread (mm) |
 |-----|-------|--------|-------|---------|-------------|
@@ -39,7 +39,7 @@ The four AprilTags mark the corners of the table. Measured positions in `base_li
 | tag_5 | 0.117 | 0.541 | 0.045 | 24 | up to 0.6 |
 | tag_6 | 0.612 | -0.555 | 0.038 | 232 | up to 0.3 |
 
-The table spans x ≈ 0.11 to 0.62 and y ≈ -0.55 to +0.55, with the surface at z ≈ 0.04 m. The centre of the corners is x ≈ 0.36, so the nominal centre of (0.3, 0) is approximate.
+The table spans x ≈ 0.11 to 0.62 and y ≈ -0.55 to +0.55, with the table surface at z = 0. The tag z of about 0.04 m is the top of the cubes, not the table surface. The centre of the corners is x ≈ 0.36, so the nominal centre of (0.3, 0) is approximate.
 
 ## Open items
 
