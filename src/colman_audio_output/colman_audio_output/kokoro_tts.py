@@ -60,7 +60,8 @@ class KokoroTTSNode(Node):
         # ---- Kokoro pipeline (loads the model; downloads weights on first run) ----
         self.get_logger().info("Loading Kokoro-82M...")
         self.pipeline = KPipeline(
-            lang_code=self.get_parameter("lang_code").value, repo_id="hexgrad/Kokoro-82M"
+            lang_code=self.get_parameter("lang_code").value,
+            repo_id="hexgrad/Kokoro-82M",
         )
 
         # ---- ROS interfaces ----
@@ -103,7 +104,7 @@ class KokoroTTSNode(Node):
             ]  # fmt: skip
         return [
             "ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet",
-            "-f", "f32le", "-ar", str(SAMPLE_RATE), "-ac", "1", "-",
+            "-f", "f32le", "-ar", str(SAMPLE_RATE), "-ch_layout", "mono", "-",
         ]  # fmt: skip
 
     def _play(self, chunks):
