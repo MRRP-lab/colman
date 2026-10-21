@@ -7,10 +7,12 @@ This repository is a ROS 2 Jazzy workspace for a simulated or real UR3e robot wi
 - Custom gripper or Robotiq gripper support
 - OAK-D camera support
 - AprilTag and YOLO perception
-- Azure speech-to-text input
+- Local Parakeet speech-to-text input (via `onnx-asr`)
 - A partially implemented voice/LLM architecture
 
-The workspace builds successfully, but the LLM/voice-command portion is incomplete. The local Kokoro-82M speech-output node lives in the `colman_audio_output` package. The custom `MoveTo`, `Pick` and `Place` actions and a motion action server are in open PR #14. There is still no `colman_llm` package on `main`.
+The workspace builds successfully, but the LLM/voice-command portion is incomplete. The local Kokoro-82M speech-output node lives in the `colman_audio_output` package. The custom `MoveTo`, `Pick` and `Place` actions (`colman_interfaces`) and the motion action server (`colman_motion`) are merged (PR #14). A driver supervisor in `colman_bringup` recovers the UR arm in place (PR #13). There is still no `colman_llm` package.
+
+Dependencies for local Parakeet speech recognition (`onnx-asr`, `onnxruntime-gpu`, `silero-vad`, `sounddevice`, `huggingface_hub`, plus `portaudio`) are in `pixi.toml`, but no node uses them yet. `speech_to_text_node.py` still uses Azure and is to be replaced by a Parakeet node.
 
 The architecture diagram in `docs/architecture/architecture.svg` describes the planned voice pipeline: speech recognition, a text topic, an AI model with tool calls, a response text topic, and local Kokoro-82M speech synthesis. It also identifies the arm command server as the boundary between AI tool calls and MoveIt. The design for the LLM node is in [`plan.md`](plan.md).
 
@@ -111,7 +113,14 @@ The current motion demo:
 10. Moves to a destination.
 11. Releases the vacuum.
 
-The important limitation is that this behavior is hard-coded into a process. Other ROS nodes cannot request “pick up tag 3 and put it at tag 1” through a clean interface on `main`; PR #14 adds `MoveTo`, `Pick` and `Place` actions for this.
+That sequence is still available as a standalone demo (`pixi run demo`), alongside `demo-turns`, `demo-choose` and `demo-circle`.
+
+For other nodes, `motion_server.py` (`pixi run motion`) exposes the same behaviour as ROS interfaces:
+
+- actions `/move_to` (`MoveTo`: `pose_name`), `/pick` (`Pick`: `frame`) and `/place` (`Place`: `location`, optional `position`), each returning `success` and `message` and reporting a `stage` as feedback
+- services `/stop` and `/resume` (`std_srvs/Trigger`)
+
+It accepts one goal at a time and rejects goals while stopped. `pixi run driver` starts the driver supervisor, which restarts the UR driver and recovers the arm without restarting the rest of the stack.
 
 ## Perception
 
@@ -149,7 +158,7 @@ That is important for the LLM design: the LLM should map natural language like �
 
 ## Voice input and output
 
-The Azure node:
+The speech input node (`speech_to_text_node.py`, currently Azure-based and to be replaced by a local Parakeet node):
 
 - listens to the microphone
 - converts speech to text
@@ -193,7 +202,7 @@ pixi run speak
 
 | Component | Interface | Purpose |
 |---|---|---|
-| Azure speech input | Publishes `std_msgs/msg/String` on `/speech_text` | Human speech converted to text |
+| Speech input (Parakeet; current node is Azure) | Publishes `std_msgs/msg/String` on `/speech_text` | Human speech converted to text |
 | Kokoro speech output | Subscribes to `std_msgs/msg/String` on `llm_response` | Text converted to spoken audio |
 | Kokoro speech output | Publishes `std_msgs/msg/Bool` on `tts_speaking` | Indicates when speech playback is active |
 | Camera publisher | Publishes `sensor_msgs/msg/Image` | RGB/stereo camera images |
@@ -206,12 +215,14 @@ pixi run speak
 | Joint state broadcaster | Publishes `/joint_states` | Current robot joint positions |
 | MoveIt | Uses planning/action interfaces | Plans and executes motion |
 | Vacuum control | Calls `/io_and_status_controller/set_io` | Turns vacuum on/off |
-| Arm control | Provides `/stop` | Stops current MoveIt execution |
+| Motion server | Provides actions `/move_to`, `/pick`, `/place` | Arm commands for other nodes |
+| Motion server | Provides services `/stop`, `/resume` | Halts the arm and re-enables goals |
 
-The stop interface is a service, not an action:
+The stop interface is a service, not an action (`pixi run stop` and `pixi run resume` wrap these):
 
 ```bash
 ros2 service call /stop std_srvs/srv/Trigger "{}"
+ros2 service call /resume std_srvs/srv/Trigger "{}"
 ```
 
 ---
@@ -222,11 +233,10 @@ ros2 service call /stop std_srvs/srv/Trigger "{}"
 
 ## Phase 1: make the motion interface callable
 
-PR #14 covers much of this phase.
+`MoveTo`, `Pick` and `Place` and the motion server are done (PR #14).
 
-1. Merge `colman_interfaces` and the motion action server (PR #14).
-2. Add a single `PickAndPlace.action` (see [`plan.md`](plan.md)).
-3. Test it manually with `ros2 action send_goal`.
+1. Test them manually with `ros2 action send_goal`.
+2. Add a single `PickAndPlace.action` only if pick and place must be atomic (see [`plan.md`](plan.md)).
 
 ## Phase 2: add text-only LLM interaction
 
@@ -251,7 +261,7 @@ ros2 topic echo /llm_response
 
 ## Phase 3: package and connect audio output
 
-Add the packaged `colman_audio_output` node to the launch flow, and verify:
+Add the packaged `colman_audio_output` node (`pixi run speak`) to the launch flow, and verify:
 
 ```text
 speech_text -> LLM -> llm_response -> Kokoro -> speaker
@@ -259,7 +269,7 @@ speech_text -> LLM -> llm_response -> Kokoro -> speaker
 
 ## Phase 4: connect microphone input
 
-Finally launch Azure speech recognition and verify the complete loop.
+Finally launch speech recognition and verify the complete loop. Parakeet (through `onnx-asr`, with `silero-vad` for voice activity detection) replaces the Azure node here. Mute the microphone while `tts_speaking` is true, or the robot will hear itself.
 
 This ordering makes debugging much easier because each layer can be tested independently.
 
@@ -271,8 +281,8 @@ This ordering makes debugging much easier because each layer can be tested indep
 
 The repository cleanup from the original review is complete (PRs #9 and #12). Still open:
 
-1. Merge the action server (PR #14).
-2. Choose a license. The repository has no LICENSE file, and several `package.xml` and `setup.py` files still say `TODO: License declaration`.
-3. Add a `PickAndPlace` action and the `colman_llm` package, following [`plan.md`](plan.md).
+1. Choose a license. The repository has no LICENSE file, and several `package.xml` and `setup.py` files still say `TODO: License declaration`.
+2. Add the `colman_llm` package, following [`plan.md`](plan.md).
+3. Replace the Azure speech input with a local Parakeet node (the dependencies are already in `pixi.toml`).
 4. Decide which stale remote branches to delete. Several contain unmerged work, so do not delete them blindly.
 5. Keep the architecture diagram synchronized with the implementation.

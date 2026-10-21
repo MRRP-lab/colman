@@ -6,7 +6,9 @@ Design for adding voice-driven control to the robot. For how the rest of the rep
 
 - `colman_audio_input` publishes recognized speech on `/speech_text` (`std_msgs/String`).
 - `colman_audio_output` subscribes to `llm_response` (`std_msgs/String`), speaks it locally with Kokoro-82M, and publishes `tts_speaking` (`std_msgs/Bool`, transient-local) while audio plays.
-- `colman_interfaces` and `colman_motion` provide `MoveTo`, `Pick` and `Place` actions on `/move_to`, `/pick` and `/place`, plus `std_srvs/Trigger` services `/stop` and `/resume`.
+- `colman_audio_input` is meant to use local Parakeet speech recognition (`onnx-asr`, `silero-vad`, `sounddevice`, all in `pixi.toml`). The current `speech_to_text_node.py` is still Azure-based until the Parakeet node replaces it.
+- `colman_interfaces` and `colman_motion` provide `MoveTo`, `Pick` and `Place` actions on `/move_to`, `/pick` and `/place`, plus `std_srvs/Trigger` services `/stop` and `/resume`. Run the server with `pixi run motion`.
+- `colman_bringup` has a driver supervisor (`pixi run driver`) that recovers the UR arm in place.
 - There is no `colman_llm` package yet.
 
 The `Pick` action takes a `frame` (for example `tag_3`) and reports a `stage` as feedback. The `Place` action takes a `location` frame and an optional `position`. Both return `success` and `message`.
@@ -185,7 +187,7 @@ The output node already supports stream, play and save modes and a bounded queue
 - subscribe to `tts_speaking` in `colman_audio_input` and drop recognized text while it is `True` (plus a short tail of about 0.5 s), or
 - do the same drop in `colman_llm`, which keeps `colman_audio_input` unchanged.
 
-The first option is cleaner. The transient-local QoS means a late-starting mic node still sees the current state.
+Put the mute in the Parakeet node. The first option is cleaner. The transient-local QoS means a late-starting mic node still sees the current state.
 
 Also consider speaking a short acknowledgement (for example "On it.") before a long action starts, so the user knows the command was heard. It can be published as a separate `llm_response` message from the worker.
 
