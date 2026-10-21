@@ -64,7 +64,6 @@ def main():
 
         tag_pattern = ["tag_1", "tag_3"]
 
-
         while not stop_event.is_set():
             old = None
             for tag_name in tag_pattern:
@@ -130,20 +129,19 @@ def main():
                 if not arm.go_to_pose(*drop_off_approach, *EE_DOWN, fast):
                     logger.warn("Stopping")
                     return
-                
+
                 if not arm.go_to_pose(*drop_off, *EE_DOWN, slow):
                     logger.warn("Stopping")
                     return
-                
+
                 vacuum.release()
-                
+
                 if not arm.go_to_pose(*drop_off_approach, *EE_DOWN, slow):
                     logger.warn("Stopping")
                     return
                 old = tag_name
-            logger.warn("\nreturning\n")    
+            logger.warn("\nreturning\n")
             return
-                
 
     finally:
         vacuum.release()

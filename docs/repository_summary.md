@@ -10,9 +10,9 @@ This repository is a ROS 2 Jazzy workspace for a simulated or real UR3e robot wi
 - Azure speech-to-text input
 - A partially implemented voice/LLM architecture
 
-The workspace builds successfully, but the LLM/voice-command portion is incomplete. The ElevenLabs speech-output node is being packaged as `colman_audio_output` in open PR #8. The custom `MoveTo`, `Pick` and `Place` actions and a motion action server are in open PR #14. There is still no `colman_llm` package on `main`.
+The workspace builds successfully, but the LLM/voice-command portion is incomplete. The local Kokoro-82M speech-output node lives in the `colman_audio_output` package. The custom `MoveTo`, `Pick` and `Place` actions and a motion action server are in open PR #14. There is still no `colman_llm` package on `main`.
 
-The architecture diagram in `docs/architecture/architecture.svg` describes the planned voice pipeline: speech recognition, a text topic, an AI model with tool calls, a response text topic, and ElevenLabs speech synthesis. It also identifies the arm command server as the boundary between AI tool calls and MoveIt. The design for the LLM node is in [`plan.md`](plan.md).
+The architecture diagram in `docs/architecture/architecture.svg` describes the planned voice pipeline: speech recognition, a text topic, an AI model with tool calls, a response text topic, and local Kokoro-82M speech synthesis. It also identifies the arm command server as the boundary between AI tool calls and MoveIt. The design for the LLM node is in [`plan.md`](plan.md).
 
 ---
 
@@ -171,23 +171,20 @@ It is not currently included in the main bringup launch file, so it must be star
 ros2 run colman_audio_input speech_to_text
 ```
 
-The ElevenLabs output node is:
-
-- `src/colman_audio_output/eleven_labs.py` on `main`
-- `colman_audio_output/eleven_labs.py` inside an installable package in open PR #8
+The Kokoro output node is `src/colman_audio_output/colman_audio_output/kokoro_tts.py`.
 
 It:
 
 - subscribes to `llm_response` (`std_msgs/msg/String`) by default
 - publishes `tts_speaking` (`std_msgs/msg/Bool`)
-- converts text through ElevenLabs
-- plays, streams, or saves the generated audio
+- converts text to speech locally with Kokoro-82M (Apache 2.0), with no API key or network access after the first weight download
+- streams (mpv), plays (ffplay), or saves (`.wav`) the generated audio
 - processes synthesis in a worker thread so the ROS subscription callback stays short
 
-It needs `ELEVENLABS_API_KEY` and the ElevenLabs Python SDK. Once PR #8 is merged it runs with:
+Parameters: `input_topic`, `voice` (default `af_heart`), `lang_code`, `speed`, `mode` (`stream`, `play` or `save`), `output_dir`, `max_queue`. The `kokoro`, `soundfile` and spaCy model dependencies come from `pixi.toml`; `espeak-ng` is bundled by `espeakng-loader`. Run it with:
 
 ```bash
-ros2 run colman_audio_output eleven_labs
+pixi run speak
 ```
 
 ---
@@ -197,8 +194,8 @@ ros2 run colman_audio_output eleven_labs
 | Component | Interface | Purpose |
 |---|---|---|
 | Azure speech input | Publishes `std_msgs/msg/String` on `/speech_text` | Human speech converted to text |
-| ElevenLabs speech output | Subscribes to `std_msgs/msg/String` on `llm_response` | Text converted to spoken audio |
-| ElevenLabs speech output | Publishes `std_msgs/msg/Bool` on `tts_speaking` | Indicates when speech playback is active |
+| Kokoro speech output | Subscribes to `std_msgs/msg/String` on `llm_response` | Text converted to spoken audio |
+| Kokoro speech output | Publishes `std_msgs/msg/Bool` on `tts_speaking` | Indicates when speech playback is active |
 | Camera publisher | Publishes `sensor_msgs/msg/Image` | RGB/stereo camera images |
 | Camera publisher | Publishes `sensor_msgs/msg/CameraInfo` | Camera calibration |
 | YOLO node | Subscribes to `/oakd_pro/rgb/image` | Runs object detection |
@@ -254,10 +251,10 @@ ros2 topic echo /llm_response
 
 ## Phase 3: package and connect audio output
 
-Merge the packaged `colman_audio_output` node (PR #8), add it to the launch flow, and verify:
+Add the packaged `colman_audio_output` node to the launch flow, and verify:
 
 ```text
-speech_text -> LLM -> llm_response -> ElevenLabs -> speaker
+speech_text -> LLM -> llm_response -> Kokoro -> speaker
 ```
 
 ## Phase 4: connect microphone input
@@ -274,7 +271,7 @@ This ordering makes debugging much easier because each layer can be tested indep
 
 The repository cleanup from the original review is complete (PRs #9 and #12). Still open:
 
-1. Merge the audio output package (PR #8) and the action server (PR #14).
+1. Merge the action server (PR #14).
 2. Choose a license. The repository has no LICENSE file, and several `package.xml` and `setup.py` files still say `TODO: License declaration`.
 3. Add a `PickAndPlace` action and the `colman_llm` package, following [`plan.md`](plan.md).
 4. Decide which stale remote branches to delete. Several contain unmerged work, so do not delete them blindly.

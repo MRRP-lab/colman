@@ -5,6 +5,7 @@ Requires AZURE_SPEECH_KEY and AZURE_SPEECH_REGION in the environment.
 The older AZURE_TTS_KEY and AZURE_TTS_REGION names are still accepted.
 Each finalized utterance is published immediately on the output topic.
 """
+
 import os
 
 import azure.cognitiveservices.speech as speechsdk
@@ -15,22 +16,23 @@ from std_msgs.msg import String
 
 class SpeechToTextNode(Node):
     def __init__(self):
-        super().__init__('speech_to_text')
+        super().__init__("speech_to_text")
 
-        self.declare_parameter('topic', 'speech_text')
-        self.declare_parameter('language', 'en-US')
+        self.declare_parameter("topic", "speech_text")
+        self.declare_parameter("language", "en-US")
 
-        key = os.getenv('AZURE_SPEECH_KEY') or os.getenv('AZURE_TTS_KEY')
-        region = os.getenv('AZURE_SPEECH_REGION') or os.getenv('AZURE_TTS_REGION')
+        key = os.getenv("AZURE_SPEECH_KEY") or os.getenv("AZURE_TTS_KEY")
+        region = os.getenv("AZURE_SPEECH_REGION") or os.getenv("AZURE_TTS_REGION")
         if not key or not region:
             raise RuntimeError(
-                'Set AZURE_SPEECH_KEY and AZURE_SPEECH_REGION in your environment.')
+                "Set AZURE_SPEECH_KEY and AZURE_SPEECH_REGION in your environment."
+            )
 
-        topic = self.get_parameter('topic').value
+        topic = self.get_parameter("topic").value
         self.pub = self.create_publisher(String, topic, 10)
 
         speech_config = speechsdk.SpeechConfig(subscription=key, region=region)
-        speech_config.speech_recognition_language = self.get_parameter('language').value
+        speech_config.speech_recognition_language = self.get_parameter("language").value
 
         audio_config = speechsdk.audio.AudioConfig(use_default_microphone=True)
         self.recognizer = speechsdk.SpeechRecognizer(
@@ -41,9 +43,11 @@ class SpeechToTextNode(Node):
         self.recognizer.recognized.connect(self._on_recognized)
         self.recognizer.canceled.connect(self._on_canceled)
         self.recognizer.session_started.connect(
-            lambda evt: self.get_logger().info('Speech session started'))
+            lambda evt: self.get_logger().info("Speech session started")
+        )
         self.recognizer.session_stopped.connect(
-            lambda evt: self.get_logger().info('Speech session stopped'))
+            lambda evt: self.get_logger().info("Speech session stopped")
+        )
 
         self.recognizer.start_continuous_recognition_async().get()
         self.get_logger().info(f'Listening. Publishing recognized text on "{topic}".')
@@ -54,21 +58,22 @@ class SpeechToTextNode(Node):
             msg = String()
             msg.data = result.text
             self.pub.publish(msg)
-            self.get_logger().info(f'Published: {result.text}')
+            self.get_logger().info(f"Published: {result.text}")
 
     def _on_canceled(self, evt):
         details = evt.cancellation_details
-        self.get_logger().error(f'Speech canceled: {details.reason}')
+        self.get_logger().error(f"Speech canceled: {details.reason}")
         if details.reason == speechsdk.CancellationReason.Error:
-            self.get_logger().error(f'Error details: {details.error_details}')
+            self.get_logger().error(f"Error details: {details.error_details}")
             self.get_logger().error(
-                'Check AZURE_SPEECH_KEY, AZURE_SPEECH_REGION and your microphone.')
+                "Check AZURE_SPEECH_KEY, AZURE_SPEECH_REGION and your microphone."
+            )
 
     def destroy_node(self):
         try:
             self.recognizer.stop_continuous_recognition_async().get()
         except Exception as exc:  # shutting down anyway
-            self.get_logger().warn(f'Error stopping recognizer: {exc}')
+            self.get_logger().warn(f"Error stopping recognizer: {exc}")
         super().destroy_node()
 
 
@@ -89,5 +94,5 @@ def main():
             rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

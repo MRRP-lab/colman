@@ -10,7 +10,7 @@ from moveit_configs_utils import MoveItConfigsBuilder
 
 def generate_launch_description():
     gripper_type = LaunchConfiguration("gripper_type")
-    demo = LaunchConfiguration("demo")
+    use_camera = LaunchConfiguration("use_camera")
 
     moveit_py_yaml = os.path.join(
         get_package_share_directory("colman_moveit_config"),
@@ -22,11 +22,11 @@ def generate_launch_description():
         MoveItConfigsBuilder(robot_name="colman", package_name="colman_moveit_config")
         .robot_description(
             file_path="config/colman_moveit.urdf.xacro",
-            mappings={"gripper_type": gripper_type, "use_camera": "true"},
+            mappings={"gripper_type": gripper_type, "use_camera": use_camera},
         )
         .robot_description_semantic(
             file_path="srdf/colman.srdf.xacro",
-            mappings={"gripper_type": gripper_type, "use_camera": "true"},
+            mappings={"gripper_type": gripper_type, "use_camera": use_camera},
         )
         .robot_description_kinematics(file_path="config/kinematics.yaml")
         .planning_pipelines(pipelines=["ompl"])
@@ -34,11 +34,11 @@ def generate_launch_description():
         .to_moveit_configs()
     )
 
-    pick_and_place_node = Node(
-        name="moveit_py",
+    motion_server_node = Node(
         package="colman_motion",
-        executable=demo,
+        executable="motion_server",
         output="both",
+        sigterm_timeout="15",
         parameters=[
             moveit_config.to_dict(),
             {"use_sim_time": False},
@@ -48,7 +48,7 @@ def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument("gripper_type", default_value="vacuum"),
-            DeclareLaunchArgument("demo", default_value="pick_and_place"),
-            pick_and_place_node,
+            DeclareLaunchArgument("use_camera", default_value="true"),
+            motion_server_node,
         ]
     )

@@ -10,6 +10,7 @@ FRAME_ID = "oakd_pro_camera_rgb_optical_frame_wrist"
 WIDTH = 1280
 HEIGHT = 720
 
+
 class CameraPublisher(Node):
     def __init__(self):
         super().__init__("camera_publisher")
