@@ -36,7 +36,7 @@ speak = "ros2 run colman_audio_output eleven_labs"
 
 stop = "ros2 service call /stop std_srvs/srv/Trigger"
 resume = "ros2 service call /resume std_srvs/srv/Trigger"
-build = "colcon build --symlink-install"
+build = "colcon build --symlink-install --base-paths src"
 node-list = "ros2 node list"
 topic-list = "ros2 topic list"
 gz-list = "gz topic -l"
