@@ -80,6 +80,7 @@ ruff = ">=0.15.4,<0.16"
 ros-jazzy-ur-robot-driver = ">=3.7.0,<4"
 mpv = ">=0.41.0,<0.42"
 ffmpeg = ">=8.0.1,<9"
+portaudio = "*"
 
 [pypi-dependencies]
 ultralytics = ">=8.4.11, <9"
@@ -87,3 +88,8 @@ depthai = ">=2.24"
 kokoro = ">=0.9.4, <1"
 soundfile = ">=0.12"
 en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
+onnx-asr = { version = ">=0.7", extras = ["hub"] }
+onnxruntime-gpu = ">=1.20"
+silero-vad = ">=5"
+sounddevice = "*"
+huggingface_hub = "*"
