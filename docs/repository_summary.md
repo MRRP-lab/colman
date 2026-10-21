@@ -12,6 +12,8 @@ This repository is a ROS 2 Jazzy workspace for a simulated or real UR3e robot wi
 
 The workspace builds successfully, but the LLM/voice-command portion is incomplete. The ElevenLabs speech-output node is being packaged as `colman_audio_output` in open PR #8. The custom `MoveTo`, `Pick` and `Place` actions and a motion action server are in open PR #14. There is still no `colman_llm` package on `main`.
 
+The coordinate conventions for the table and robot are in [`coordinate_system.md`](coordinate_system.md).
+
 The architecture diagram in `docs/architecture/architecture.svg` describes the planned voice pipeline: speech recognition, a text topic, an AI model with tool calls, a response text topic, and ElevenLabs speech synthesis. It also identifies the arm command server as the boundary between AI tool calls and MoveIt. The design for the LLM node is in [`plan.md`](plan.md).
 
 ---
