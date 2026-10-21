@@ -41,6 +41,12 @@ The four AprilTags mark the corners of the table. Each tag is on top of a 50 mm 
 
 The table spans x ≈ 0.11 to 0.62 and y ≈ -0.55 to +0.55, with the table surface at z = 0. The tag z of about 0.04 m is the top of the cubes, not the table surface. The centre of the corners is x ≈ 0.36, so the nominal centre of (0.3, 0) is approximate.
 
+## Known discrepancies (calibration)
+
+- The cubes are 50 mm tall, so the cube tops should read z = 0.050. The measured z values are 0.038 to 0.045 (5 to 12 mm low). This may be a calibration offset in z, or the tags may sit slightly below the cube top. The cause has not been determined.
+- The readings are cube centres, so the physical table edges may sit slightly beyond the x and y corner values.
+- The centre of the four corners is x ≈ 0.36, not the nominal 0.3.
+
 ## Open items
 
 - Confirm which side of the robot +y is on in the real setup (tag_3 and tag_5 are at +y).
