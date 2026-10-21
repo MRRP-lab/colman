@@ -7,12 +7,12 @@ This repository is a ROS 2 Jazzy workspace for a simulated or real UR3e robot wi
 - Custom gripper or Robotiq gripper support
 - OAK-D camera support
 - AprilTag and YOLO perception
-- Azure speech-to-text input
+- Local Parakeet speech-to-text input (via `onnx-asr`)
 - A partially implemented voice/LLM architecture
 
 The workspace builds successfully, but the LLM/voice-command portion is incomplete. The local Kokoro-82M speech-output node lives in the `colman_audio_output` package. The custom `MoveTo`, `Pick` and `Place` actions (`colman_interfaces`) and the motion action server (`colman_motion`) are merged (PR #14). A driver supervisor in `colman_bringup` recovers the UR arm in place (PR #13). There is still no `colman_llm` package.
 
-Dependencies for local speech recognition (`onnx-asr`, `onnxruntime-gpu`, `silero-vad`, `sounddevice`, `huggingface_hub`, plus `portaudio`) are in `pixi.toml`, but no node uses them yet. Speech input is still the Azure node.
+Dependencies for local Parakeet speech recognition (`onnx-asr`, `onnxruntime-gpu`, `silero-vad`, `sounddevice`, `huggingface_hub`, plus `portaudio`) are in `pixi.toml`, but no node uses them yet. `speech_to_text_node.py` still uses Azure and is to be replaced by a Parakeet node.
 
 The architecture diagram in `docs/architecture/architecture.svg` describes the planned voice pipeline: speech recognition, a text topic, an AI model with tool calls, a response text topic, and local Kokoro-82M speech synthesis. It also identifies the arm command server as the boundary between AI tool calls and MoveIt. The design for the LLM node is in [`plan.md`](plan.md).
 
@@ -158,7 +158,7 @@ That is important for the LLM design: the LLM should map natural language like â
 
 ## Voice input and output
 
-The Azure node:
+The speech input node (`speech_to_text_node.py`, currently Azure-based and to be replaced by a local Parakeet node):
 
 - listens to the microphone
 - converts speech to text
@@ -202,7 +202,7 @@ pixi run speak
 
 | Component | Interface | Purpose |
 |---|---|---|
-| Azure speech input | Publishes `std_msgs/msg/String` on `/speech_text` | Human speech converted to text |
+| Speech input (Parakeet; current node is Azure) | Publishes `std_msgs/msg/String` on `/speech_text` | Human speech converted to text |
 | Kokoro speech output | Subscribes to `std_msgs/msg/String` on `llm_response` | Text converted to spoken audio |
 | Kokoro speech output | Publishes `std_msgs/msg/Bool` on `tts_speaking` | Indicates when speech playback is active |
 | Camera publisher | Publishes `sensor_msgs/msg/Image` | RGB/stereo camera images |
@@ -269,7 +269,7 @@ speech_text -> LLM -> llm_response -> Kokoro -> speaker
 
 ## Phase 4: connect microphone input
 
-Finally launch speech recognition and verify the complete loop. Replacing Azure with local recognition (the new `onnx-asr` and `silero-vad` dependencies) is an option here. Mute the microphone while `tts_speaking` is true, or the robot will hear itself.
+Finally launch speech recognition and verify the complete loop. Parakeet (through `onnx-asr`, with `silero-vad` for voice activity detection) replaces the Azure node here. Mute the microphone while `tts_speaking` is true, or the robot will hear itself.
 
 This ordering makes debugging much easier because each layer can be tested independently.
 
@@ -283,6 +283,6 @@ The repository cleanup from the original review is complete (PRs #9 and #12). St
 
 1. Choose a license. The repository has no LICENSE file, and several `package.xml` and `setup.py` files still say `TODO: License declaration`.
 2. Add the `colman_llm` package, following [`plan.md`](plan.md).
-3. Decide whether to move speech input from Azure to local recognition, and write that node (the dependencies are already in `pixi.toml`).
+3. Replace the Azure speech input with a local Parakeet node (the dependencies are already in `pixi.toml`).
 4. Decide which stale remote branches to delete. Several contain unmerged work, so do not delete them blindly.
 5. Keep the architecture diagram synchronized with the implementation.
