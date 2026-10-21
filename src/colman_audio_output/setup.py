@@ -23,7 +23,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "eleven_labs = colman_audio_output.eleven_labs:main",
+            "kokoro_tts = colman_audio_output.kokoro_tts:main",
         ],
     },
 )

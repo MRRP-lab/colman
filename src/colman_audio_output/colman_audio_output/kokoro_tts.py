@@ -1,63 +1,67 @@
 #!/usr/bin/env python3
-"""ROS 2 node: subscribes to LLM text output and speaks it with ElevenLabs TTS.
+"""ROS 2 node: subscribes to LLM text output and speaks it with local Kokoro-82M TTS.
 
 Subscribes:  <input_topic>  (std_msgs/String)  -- text from the LLM node
 Publishes:   tts_speaking   (std_msgs/Bool)    -- True while audio is playing
                                                   (handy for muting the mic node)
 
-Run with:  ros2 run colman_audio_output eleven_labs
-Requires ELEVENLABS_API_KEY in the environment, plus mpv (stream mode) or
-ffplay from ffmpeg (play mode) on the PATH. All three come with the pixi env.
+Run with:  ros2 run colman_audio_output kokoro_tts
+Kokoro-82M (Apache 2.0) runs locally; weights are downloaded from Hugging Face on
+first use. Needs mpv (stream mode) or ffplay from ffmpeg (play mode)
+on the PATH. These come with the pixi env.
 """
 
 import hashlib
 import os
 import queue
 import shutil
+import subprocess
 import threading
 
+import numpy as np
 import rclpy
-from elevenlabs.client import ElevenLabs
-from elevenlabs.play import play, save, stream
+import soundfile as sf
+from kokoro import KPipeline
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
 from std_msgs.msg import Bool, String
+
+SAMPLE_RATE = 24000  # Kokoro's fixed output rate
 
 # External player each mode shells out to (save mode needs none).
 PLAYERS = {"stream": "mpv", "play": "ffplay", "save": None}
 
 
-class ElevenLabsTTSNode(Node):
+class KokoroTTSNode(Node):
     def __init__(self):
-        super().__init__("elevenlabs_tts")
+        super().__init__("kokoro_tts")
 
         # ---- Parameters ----
         self.declare_parameter("input_topic", "llm_response")
-        self.declare_parameter("voice", "Doug VO Only")  # voice name or voice_id
-        self.declare_parameter("model", "eleven_flash_v2")
+        self.declare_parameter("voice", "af_heart")  # Kokoro voice pack name
+        self.declare_parameter("lang_code", "a")  # 'a' = American, 'b' = British
+        self.declare_parameter("speed", 1.0)
         self.declare_parameter("mode", "stream")  # stream | play | save
         self.declare_parameter("output_dir", "/tmp/tts")  # used when mode == save
-        self.declare_parameter("api_key_env", "ELEVENLABS_API_KEY")
         self.declare_parameter("max_queue", 5)  # pending messages; 0 = unbounded
 
         input_topic = self.get_parameter("input_topic").value
-        self.model = self.get_parameter("model").value
+        self.voice = self.get_parameter("voice").value
+        self.speed = self.get_parameter("speed").value
         self.mode = self.get_parameter("mode").value
         self.output_dir = self.get_parameter("output_dir").value
-        api_key_env = self.get_parameter("api_key_env").value
-        api_key = os.getenv(api_key_env)
 
-        if not api_key:
-            raise RuntimeError(f"{api_key_env} is not set in the environment")
         if self.mode not in PLAYERS:
             raise RuntimeError(f"Invalid mode '{self.mode}' (use {', '.join(PLAYERS)})")
         player = PLAYERS[self.mode]
         if player and not shutil.which(player):
             raise RuntimeError(f"mode '{self.mode}' needs '{player}' on the PATH")
 
-        # ---- ElevenLabs client ----
-        self.client = ElevenLabs(api_key=api_key)
-        self.voice_id = self._resolve_voice(self.get_parameter("voice").value)
+        # ---- Kokoro pipeline (loads the model; downloads weights on first run) ----
+        self.get_logger().info("Loading Kokoro-82M...")
+        self.pipeline = KPipeline(
+            lang_code=self.get_parameter("lang_code").value, repo_id="hexgrad/Kokoro-82M"
+        )
 
         # ---- ROS interfaces ----
         # Transient-local so a mic node that starts mid-utterance still sees
@@ -75,53 +79,55 @@ class ElevenLabsTTSNode(Node):
         self._worker.start()
 
         self.get_logger().info(
-            f"Listening on '{input_topic}' | voice_id={self.voice_id} | "
-            f"model={self.model} | mode={self.mode}"
+            f"Listening on '{input_topic}' | voice={self.voice} | mode={self.mode}"
         )
 
     # ------------------------------------------------------------------ helpers
-    def _resolve_voice(self, voice: str) -> str:
-        """Accept a voice name on the account or a raw voice_id; fail otherwise."""
-        try:
-            for v in self.client.voices.get_all().voices:
-                if v.name == voice:
-                    return v.voice_id
-        except Exception as e:  # noqa: BLE001
-            # Restricted API keys can't list voices; a voice_id may still work.
-            self.get_logger().warn(
-                f"Could not list voices ({e}); trying '{voice}' as a voice_id"
-            )
-        try:
-            return self.client.voices.get(voice).voice_id
-        except Exception as e:  # noqa: BLE001
-            raise RuntimeError(
-                f"'{voice}' is neither a voice name on this account nor a valid "
-                f"voice_id ({e}). Add the voice to the account or pass its voice_id."
-            ) from e
-
     def _set_speaking(self, value: bool):
         self.speaking_pub.publish(Bool(data=value))
 
     def _synthesize(self, text: str):
-        return self.client.text_to_speech.convert(
-            text=text,
-            voice_id=self.voice_id,
-            model_id=self.model,
-            output_format="mp3_44100_128",
-        )
+        """Yield float32 mono audio chunks, one per sentence-ish segment."""
+        for _, _, audio in self.pipeline(text, voice=self.voice, speed=self.speed):
+            if audio is not None:
+                yield np.asarray(audio, dtype=np.float32)
+
+    def _player_cmd(self) -> list[str]:
+        # Raw 32-bit float PCM on stdin.
+        if self.mode == "stream":
+            return [
+                "mpv", "--no-terminal", "--no-video", "--demuxer=rawaudio",
+                "--demuxer-rawaudio-format=floatle",
+                f"--demuxer-rawaudio-rate={SAMPLE_RATE}",
+                "--demuxer-rawaudio-channels=1", "-",
+            ]  # fmt: skip
+        return [
+            "ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet",
+            "-f", "f32le", "-ar", str(SAMPLE_RATE), "-ac", "1", "-",
+        ]  # fmt: skip
+
+    def _play(self, chunks):
+        """Pipe audio to the player; stream mode starts playing on the first chunk."""
+        if self.mode == "play":
+            chunks = [np.concatenate(list(chunks))]  # synthesize everything first
+        proc = subprocess.Popen(self._player_cmd(), stdin=subprocess.PIPE)
+        try:
+            for chunk in chunks:
+                proc.stdin.write(chunk.tobytes())
+        finally:
+            proc.stdin.close()
+            proc.wait()
 
     def _speak(self, text: str):
-        audio = self._synthesize(text)  # iterator of bytes
-        if self.mode == "stream":
-            stream(audio)
-        elif self.mode == "play":
-            play(b"".join(audio))
-        else:  # save
-            os.makedirs(self.output_dir, exist_ok=True)
-            name = hashlib.sha1(text.encode("utf-8")).hexdigest()[:16]
-            path = os.path.join(self.output_dir, f"msg_{name}.mp3")
-            save(b"".join(audio), path)
-            self.get_logger().info(f"Saved audio to {path}")
+        chunks = self._synthesize(text)
+        if self.mode != "save":
+            self._play(chunks)
+            return
+        os.makedirs(self.output_dir, exist_ok=True)
+        name = hashlib.sha1(text.encode("utf-8")).hexdigest()[:16]
+        path = os.path.join(self.output_dir, f"msg_{name}.wav")
+        sf.write(path, np.concatenate(list(chunks)), SAMPLE_RATE)
+        self.get_logger().info(f"Saved audio to {path}")
 
     # ---------------------------------------------------------------- callbacks
     def _on_text(self, msg: String):
@@ -178,10 +184,10 @@ def main(args=None):
     rclpy.init(args=args)
     node = None
     try:
-        node = ElevenLabsTTSNode()
+        node = KokoroTTSNode()
         rclpy.spin(node)
     except RuntimeError as e:
-        rclpy.logging.get_logger("elevenlabs_tts").fatal(str(e))
+        rclpy.logging.get_logger("kokoro_tts").fatal(str(e))
         raise SystemExit(1)
     except KeyboardInterrupt:
         pass
