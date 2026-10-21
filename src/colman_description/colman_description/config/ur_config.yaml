@@ -1,3 +1,4 @@
+# Kinematics calibration for the UR arm with serial number 20245300947.
 kinematics:
   shoulder:
     x: 0
