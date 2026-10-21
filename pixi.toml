@@ -33,6 +33,8 @@ demo-choose = "ros2 launch colman_motion demo.launch.py demo:=demo_choose"
 demo-circle = "ros2 launch colman_motion demo.launch.py demo:=demo_circle"
 demo-obstacle = "ros2 launch colman_motion demo.launch.py demo:=demo_obstacle"
 demo-camera = "ros2 launch colman_motion demo.launch.py demo:=demo_camera"
+click-move = "ros2 launch colman_motion demo.launch.py demo:=click_move"
+record-tags = "ros2 run colman_perception tag_recorder"
 
 speak = "ros2 run colman_audio_output kokoro_tts"
 

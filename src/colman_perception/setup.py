@@ -33,6 +33,7 @@ setup(
             "detection = colman_perception.detection:main",
             "camera_info_republisher = colman_perception.camera_info_republisher:main",
             "camera_publisher = colman_perception.camera_publisher:main",
+            "tag_recorder = colman_perception.tag_recorder:main",
         ],
     },
 )
