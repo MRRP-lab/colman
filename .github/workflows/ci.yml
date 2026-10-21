@@ -43,5 +43,7 @@ jobs:
           # Don't cache the multi-GB env; saving it can also exhaust disk.
           cache: false
       - run: pixi run build
-      - run: pixi run colcon test --event-handlers console_direct+
+      # ruff (lint job) is the style checker; the ament flake8/pep257 template
+      # tests disagree with its formatting, so skip them here.
+      - run: pixi run colcon test --event-handlers console_direct+ --pytest-args -k "not flake8 and not pep257"
       - run: pixi run colcon test-result --verbose
