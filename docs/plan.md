@@ -5,7 +5,7 @@ Design for adding voice-driven control to the robot. For how the rest of the rep
 ## Starting point
 
 - `colman_audio_input` publishes recognized speech on `/speech_text` (`std_msgs/String`).
-- `colman_audio_output` subscribes to `llm_response` (`std_msgs/String`), speaks it through ElevenLabs, and publishes `tts_speaking` (`std_msgs/Bool`, transient-local) while audio plays.
+- `colman_audio_output` subscribes to `llm_response` (`std_msgs/String`), speaks it locally with Kokoro-82M, and publishes `tts_speaking` (`std_msgs/Bool`, transient-local) while audio plays.
 - `colman_interfaces` and `colman_motion` provide `MoveTo`, `Pick` and `Place` actions on `/move_to`, `/pick` and `/place`, plus `std_srvs/Trigger` services `/stop` and `/resume`.
 - There is no `colman_llm` package yet.
 
@@ -36,7 +36,7 @@ colman_llm  --- messages.create(tools=[...]) ---> Claude Sonnet 5.5
    |
    |  llm_response
    v
-colman_audio_output / ElevenLabs
+colman_audio_output / Kokoro-82M
    |
    v
 speaker
@@ -210,7 +210,7 @@ Claude receives success/failure as tool_result
 /llm_response: "I picked up the red block and placed it in the left tray."
     |
     v
-ElevenLabs speaks the response
+Kokoro speaks the response
 ```
 
 ## Credentials and dependencies

@@ -48,8 +48,8 @@
 <text x="940" y="200.5" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">text topic, name TBD</text>
 <rect x="1090.0" y="140.0" width="230" height="90" rx="12" fill="white" stroke="#1e293b" stroke-width="1.6" stroke-dasharray="6 4"/>
 <text x="1205" y="173.5" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="bold" fill="#1e293b" text-anchor="middle">Speech synthesis</text>
-<text x="1205" y="193.5" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">ElevenLabs → speakers</text>
-<text x="1205" y="208.5" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">audio/eleven_labs.py</text>
+<text x="1205" y="193.5" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">Kokoro-82M → speakers</text>
+<text x="1205" y="208.5" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">audio/kokoro_tts.py</text>
 <rect x="1010.0" y="325.0" width="300" height="140" rx="16" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6" stroke-dasharray="6 4"/>
 <text x="1160" y="349.0" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="bold" fill="#1e293b" text-anchor="middle">Arm commands</text>
 <text x="1160" y="367.0" font-family="Menlo, monospace" font-size="12" font-weight="normal" fill="#64748b" text-anchor="middle">ROS actions · names TBD</text>
