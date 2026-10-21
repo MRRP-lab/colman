@@ -17,6 +17,7 @@ def model_files():
             entries.setdefault(target, []).append(path)
     return list(entries.items())
 
+
 setup(
     name=package_name,
     version="0.0.0",
