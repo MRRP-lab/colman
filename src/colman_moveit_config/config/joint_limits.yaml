@@ -85,9 +85,14 @@ joint_limits:
     has_acceleration_limits: true
     max_acceleration: 5.0
     has_effort_limits: true
-    has_position_limits: false
+    has_position_limits: true
     has_velocity_limits: true
     max_effort: 12.0
+    # -270 to +270 degrees: more than the plain +- pi so the tool can reach
+    # either side of a pose, but less than unlimited rotation so the wrist
+    # can't wind the attached cables around itself.
+    min_position: -4.71238898038469
+    max_position:  4.71238898038469
     max_velocity:  6.283185307179586
 
   servotodrivegear:
