@@ -29,7 +29,7 @@ def generate_launch_description():
             mappings={"gripper_type": gripper_type, "use_camera": use_camera},
         )
         .robot_description_kinematics(file_path="config/kinematics.yaml")
-        .planning_pipelines(pipelines=["ompl"])
+        .planning_pipelines(pipelines=["ompl", "pilz_industrial_motion_planner"])
         .moveit_cpp(file_path=moveit_py_yaml)
         .to_moveit_configs()
     )

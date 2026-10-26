@@ -34,8 +34,10 @@ joint_limits:
     has_position_limits: true
     has_velocity_limits: true
     max_effort: 54.0
-    min_position: -6.283185307179586
-    max_position:  6.283185307179586
+    # arm stays above the horizontal; the table is at base height, and
+    # the other half-range only holds mirrored IK solutions (upside down)
+    min_position: -3.141592653589793
+    max_position: 0.0
     max_velocity:  3.141592653589793
   elbow_joint:
     # acceleration limits are not publicly available
@@ -66,8 +68,9 @@ joint_limits:
     has_position_limits: true
     has_velocity_limits: true
     max_effort: 9.0
-    min_position: -6.283185307179586
-    max_position:  6.283185307179586
+    # one turn is enough; the second turn only holds duplicate IK solutions
+    min_position: -3.141592653589793
+    max_position: 3.141592653589793
     max_velocity:  6.283185307179586
   wrist_2_joint:
     # acceleration limits are not publicly available
@@ -77,8 +80,8 @@ joint_limits:
     has_position_limits: true
     has_velocity_limits: true
     max_effort: 12.0
-    min_position: -6.283185307179586
-    max_position:  6.283185307179586
+    min_position: -3.141592653589793
+    max_position: 3.141592653589793
     max_velocity:  6.283185307179586
   wrist_3_joint:
     # acceleration limits are not publicly available
