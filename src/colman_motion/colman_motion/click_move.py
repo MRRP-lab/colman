@@ -1,6 +1,5 @@
-import math
-import queue
 import threading
+import time
 
 import cv2
 import numpy as np
@@ -8,31 +7,30 @@ import rclpy
 from apriltag_msgs.msg import AprilTagDetectionArray
 from cv_bridge import CvBridge
 from moveit.planning import MoveItPy, PlanRequestParameters
-from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
-from sensor_msgs.msg import CameraInfo, Image
+from sensor_msgs.msg import Image
 from tf2_ros import Buffer, TransformException, TransformListener
 
 from colman_motion.arm_control import ArmControl
+from colman_motion.demo_camera import rotation_to_quaternion
 from colman_motion.robot_ready import wait_for_robot
 from colman_motion.scene_manager import SceneManager
 
 BASE_FRAME = "base_link"
-
-EE_DOWN = (1.0, 0.0, 0.0, 0.0)
-
-HOVER_HEIGHT_M = 0.3
-
-# Clicks outside this ring around the base are refused, the arm can't reach them.
-MIN_REACH_M = 0.15
-MAX_REACH_M = 0.55
-
 TOOL_FRAME = "vacuum_tip_link"
+CAMERA_FRAME = "oakd_pro_camera_rgb_optical_frame_wrist"
 
-WINDOW = "click to move (q quits)"
+# The hand stays here, only its rotation changes. Middle of the table, 30 cm up.
+HAND_POSITION = (0.3, 0.0, 0.3)
+
+# Height of the point the camera aims at, the top of a tag cube.
+AIM_HEIGHT_M = 0.04
+
+TABLE_WINDOW = "click to aim (q quits)"
+CAMERA_WINDOW = "camera"
 
 # Top-down view: a square of VIEW_SPAN_M around the base, +x up, +y left.
 VIEW_SPAN_M = 1.2
@@ -49,6 +47,8 @@ WORLD_TO_VIEW = np.array(
     ]
 )
 
+CAMERA_VIEW_WIDTH = 960
+
 
 def quaternion_to_matrix(q):
     x, y, z, w = q
@@ -61,31 +61,21 @@ def quaternion_to_matrix(q):
     )
 
 
-class CameraView(Node):
+class Feed(Node):
     """
-    Keeps the latest camera frame, its intrinsics and the detected tags,
-    and turns a clicked pixel into a point on the table.
+    Keeps the latest camera image and tag detections, and looks up frames.
     """
 
     def __init__(self):
-        super().__init__("camera_view")
+        super().__init__("click_move_feed")
         self.bridge = CvBridge()
         self.buffer = Buffer()
         self.listener = TransformListener(self.buffer, self)
         self.lock = threading.Lock()
         self.image = None
-        self.stamp = None
-        self.frame_id = None
-        self.k = None
         self.detections = []
         self.create_subscription(
             Image, "/oakd_pro/rgb/image", self.image_cb, qos_profile_sensor_data
-        )
-        self.create_subscription(
-            CameraInfo,
-            "/oakd_pro/rgb/camera_info",
-            self.info_cb,
-            qos_profile_sensor_data,
         )
         self.create_subscription(
             AprilTagDetectionArray, "/detections", self.detections_cb, 1
@@ -95,48 +85,49 @@ class CameraView(Node):
         image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
         with self.lock:
             self.image = image
-            self.stamp = msg.header.stamp
-            self.frame_id = msg.header.frame_id
-
-    def info_cb(self, msg):
-        self.k = np.array(msg.k).reshape(3, 3)
 
     def detections_cb(self, msg):
         self.detections = list(msg.detections)
 
     def snapshot(self):
         with self.lock:
-            if self.image is None:
-                return None
-            return self.image.copy(), self.stamp, self.frame_id
+            return None if self.image is None else self.image.copy()
 
-    def table_homography(self, stamp, frame_id):
+    def pose(self, frame):
         """
-        Returns the matrix mapping table points (x, y, 1) in the base frame
-        to camera pixels, or None.
+        Returns the frame's (position, rotation matrix) in the base frame, or None.
         """
-        if self.k is None:
-            return None
         try:
-            transform = self.buffer.lookup_transform(
-                BASE_FRAME, frame_id, Time.from_msg(stamp), Duration(seconds=0.5)
-            )
+            transform = self.buffer.lookup_transform(BASE_FRAME, frame, Time())
         except TransformException:
             return None
         t = transform.transform.translation
         r = transform.transform.rotation
-        to_cam = quaternion_to_matrix((r.x, r.y, r.z, r.w)).T
-        origin = to_cam @ np.array([t.x, t.y, t.z])
-        table_to_cam = np.column_stack([to_cam[:, 0], to_cam[:, 1], -origin])
-        return self.k @ table_to_cam
+        return (
+            np.array([t.x, t.y, t.z]),
+            quaternion_to_matrix((r.x, r.y, r.z, r.w)),
+        )
 
-    def tool_xy(self):
-        try:
-            transform = self.buffer.lookup_transform(BASE_FRAME, TOOL_FRAME, Time())
-        except TransformException:
-            return None
-        t = transform.transform.translation
-        return t.x, t.y
+    def rotation(self, frame):
+        """
+        Returns the frame's rotation matrix in the base frame, or None.
+        """
+        pose = self.pose(frame)
+        return None if pose is None else pose[1]
+
+
+def level_camera_rotation(direction):
+    """
+    Camera rotation (columns x right, y down, z forward) looking along direction
+    with the image's up side toward world up. Looking straight down, up is +x.
+    """
+    down = np.array([0.0, 0.0, -1.0])
+    if abs(np.dot(direction, down)) > 0.99:
+        down = np.array([-1.0, 0.0, 0.0])
+    y = down - np.dot(down, direction) * direction
+    y /= np.linalg.norm(y)
+    x = np.cross(y, direction)
+    return np.column_stack([x, y, direction])
 
 
 def view_point(world):
@@ -149,25 +140,24 @@ def view_to_world(u, v):
     return float(x / w), float(y / w)
 
 
-def topdown(image, homography):
-    to_view = WORLD_TO_VIEW @ np.linalg.inv(homography)
-    return cv2.warpPerspective(image, to_view, (VIEW_PX, VIEW_PX))
-
-
-def draw(view, homography, detections, target, tool, status):
-    reachable = np.zeros(view.shape[:2], np.uint8)
-    cv2.circle(reachable, view_point((0, 0)), int(MAX_REACH_M * PX_PER_M), 255, -1)
-    cv2.circle(reachable, view_point((0, 0)), int(MIN_REACH_M * PX_PER_M), 0, -1)
-    view[reachable == 0] = view[reachable == 0] // 3
-    for radius in (MIN_REACH_M, MAX_REACH_M):
-        cv2.circle(
-            view, view_point((0, 0)), int(radius * PX_PER_M), (0, 200, 0), 2
-        )
-
+def tabletop():
+    view = np.full((VIEW_PX, VIEW_PX, 3), (95, 110, 125), np.uint8)
     for i in range(-6, 7):
         along = i * GRID_M
-        cv2.line(view, view_point((along, -0.6)), view_point((along, 0.6)), (90, 90, 90), 1)
-        cv2.line(view, view_point((-0.6, along)), view_point((0.6, along)), (90, 90, 90), 1)
+        cv2.line(
+            view,
+            view_point((along, -0.6)),
+            view_point((along, 0.6)),
+            (130, 130, 130),
+            1,
+        )
+        cv2.line(
+            view,
+            view_point((-0.6, along)),
+            view_point((0.6, along)),
+            (130, 130, 130),
+            1,
+        )
     for i in range(0, 7):
         cv2.putText(
             view,
@@ -175,32 +165,56 @@ def draw(view, homography, detections, target, tool, status):
             view_point((i * GRID_M, -0.58)),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.5,
-            (200, 200, 200),
+            (220, 220, 220),
             1,
         )
+    cv2.drawMarker(view, view_point((0, 0)), (255, 255, 255), cv2.MARKER_DIAMOND, 24, 2)
+    cv2.drawMarker(
+        view,
+        view_point(HAND_POSITION[:2]),
+        (255, 128, 0),
+        cv2.MARKER_TILTED_CROSS,
+        30,
+        3,
+    )
+    return view
 
-    inverse = np.linalg.inv(homography)
+
+def facing_point(camera_rot):
+    """
+    Where the camera's optical axis, from the hand, meets the aim height, or None.
+    """
+    axis = camera_rot[:, 2]
+    if axis[2] > -0.05:
+        return None
+    reach = (AIM_HEIGHT_M - HAND_POSITION[2]) / axis[2]
+    return HAND_POSITION[0] + reach * axis[0], HAND_POSITION[1] + reach * axis[1]
+
+
+def draw_facing(background, camera_rot):
+    view = background.copy()
+    point = facing_point(camera_rot)
+    if point is not None:
+        cv2.line(view, view_point(HAND_POSITION[:2]), view_point(point), (0, 0, 255), 2)
+        cv2.drawMarker(view, view_point(point), (0, 0, 255), cv2.MARKER_CROSS, 40, 3)
+    return view
+
+
+def draw_tags(image, detections):
     for d in detections:
-        corners = np.array([[c.x, c.y, 1.0] for c in d.corners]) @ inverse.T
-        corners = corners[:, :2] / corners[:, 2:]
-        pts = np.array([view_point(c) for c in corners], np.int32)
-        cv2.polylines(view, [pts], True, (0, 255, 0), 2)
+        pts = np.array([[c.x, c.y] for c in d.corners], np.int32)
+        cv2.polylines(image, [pts], True, (0, 255, 0), 4)
         cv2.putText(
-            view,
+            image,
             f"tag {d.id}",
             tuple(pts[0]),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
+            1.5,
             (0, 255, 0),
-            2,
+            4,
         )
-
-    cv2.drawMarker(view, view_point((0, 0)), (255, 255, 255), cv2.MARKER_DIAMOND, 24, 2)
-    if tool is not None:
-        cv2.drawMarker(view, view_point(tool), (255, 128, 0), cv2.MARKER_TILTED_CROSS, 30, 3)
-    if target is not None:
-        cv2.drawMarker(view, view_point(target), (0, 0, 255), cv2.MARKER_CROSS, 40, 3)
-    cv2.putText(view, status, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 255), 2)
+    scale = CAMERA_VIEW_WIDTH / image.shape[1]
+    return cv2.resize(image, None, fx=scale, fy=scale)
 
 
 def main():
@@ -211,80 +225,74 @@ def main():
 
     arm = ArmControl(ur)
     scene = SceneManager(ur)
-    camera = CameraView()
+    feed = Feed()
 
     executor = MultiThreadedExecutor()
     executor.add_node(arm)
     executor.add_node(scene)
-    executor.add_node(camera)
+    executor.add_node(feed)
     threading.Thread(target=executor.spin, daemon=True).start()
 
     params = PlanRequestParameters(ur, "ompl")
     params.max_velocity_scaling_factor = 0.3
     params.max_acceleration_scaling_factor = 0.3
 
-    targets = queue.Queue(maxsize=1)
-    state = {"status": "click the table to move there", "target": None}
-    done = threading.Event()
-
-    def worker():
-        while not done.is_set():
-            try:
-                x, y = targets.get(timeout=0.2)
-            except queue.Empty:
-                continue
-            state["status"] = f"moving to x={x:.3f} y={y:.3f}"
-            if arm.go_to_pose(x, y, HOVER_HEIGHT_M, *EE_DOWN, params):
-                state["status"] = f"at x={x:.3f} y={y:.3f}"
-            else:
-                state["status"] = f"could not reach x={x:.3f} y={y:.3f}"
-            logger.info(state["status"])
-
-    def on_mouse(event, u, v, flags, param):
-        if event != cv2.EVENT_LBUTTONDOWN:
-            return
-        if not targets.empty() or state["status"].startswith("moving"):
-            return
-        hit = view_to_world(u, v)
-        reach = math.hypot(*hit)
-        if not MIN_REACH_M <= reach <= MAX_REACH_M:
-            state["status"] = f"x={hit[0]:.2f} y={hit[1]:.2f} is out of reach"
-            return
-        state["target"] = hit
-        targets.put(hit)
-
-    threading.Thread(target=worker, daemon=True).start()
-
     try:
-        scene.add_box(
-            "table",
-            "base_link",
-            [2.0, 2.0, 0.01],
-            (0.0, 0.0, -0.01),
-        )
+        scene.add_box("table", "base_link", [2.0, 2.0, 0.01], (0.0, 0.0, -0.01))
 
-        cv2.namedWindow(WINDOW)
-        cv2.setMouseCallback(WINDOW, on_mouse)
+        # How the hand is turned relative to the camera, which never changes.
+        camera_rot = tool_rot = None
+        while camera_rot is None or tool_rot is None:
+            camera_rot = feed.rotation(CAMERA_FRAME)
+            tool_rot = feed.rotation(TOOL_FRAME)
+            time.sleep(0.2)
+        hand_from_camera = camera_rot.T @ tool_rot
+
+        def aim(x, y):
+            direction = np.array([x, y, AIM_HEIGHT_M]) - np.array(HAND_POSITION)
+            direction /= np.linalg.norm(direction)
+            hand_rot = level_camera_rotation(direction) @ hand_from_camera
+            quaternion = rotation_to_quaternion(*hand_rot.T)
+            if arm.go_to_pose(*HAND_POSITION, *quaternion, params):
+                logger.info(f"aimed at x={x:.3f} y={y:.3f}")
+            else:
+                logger.warn(f"could not aim at x={x:.3f} y={y:.3f}")
+
+        busy = threading.Lock()
+
+        def aim_and_release(x, y):
+            try:
+                aim(x, y)
+            finally:
+                busy.release()
+
+        def on_mouse(event, u, v, flags, param):
+            if event != cv2.EVENT_LBUTTONDOWN or not busy.acquire(blocking=False):
+                return
+            threading.Thread(
+                target=aim_and_release, args=view_to_world(u, v), daemon=True
+            ).start()
+
+        background = tabletop()
+        cv2.namedWindow(TABLE_WINDOW)
+        cv2.setMouseCallback(TABLE_WINDOW, on_mouse)
+        cv2.imshow(TABLE_WINDOW, background)
+
+        if busy.acquire(blocking=False):
+            threading.Thread(
+                target=aim_and_release, args=(HAND_POSITION[0], 0.0), daemon=True
+            ).start()
+
         while rclpy.ok() and not arm.stop_event.is_set():
-            snap = camera.snapshot()
-            if snap is not None:
-                image, stamp, frame_id = snap
-                homography = camera.table_homography(stamp, frame_id)
-                if homography is not None:
-                    view = topdown(image, homography)
-                    draw(
-                        view,
-                        homography,
-                        camera.detections,
-                        state["target"],
-                        camera.tool_xy(),
-                        state["status"],
-                    )
-                    cv2.imshow(WINDOW, view)
+            camera_rot = feed.rotation(CAMERA_FRAME)
+            if camera_rot is not None:
+                cv2.imshow(TABLE_WINDOW, draw_facing(background, camera_rot))
+            image = feed.snapshot()
+            if image is not None:
+                cv2.imshow(CAMERA_WINDOW, draw_tags(image, feed.detections))
             if cv2.waitKey(30) & 0xFF == ord("q"):
                 break
     finally:
-        done.set()
         cv2.destroyAllWindows()
         scene.clear_scene()
         executor.shutdown()

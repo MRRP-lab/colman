@@ -40,6 +40,8 @@ setup(
             "hand_up = colman_motion.hand_up:main",
             "look_around = colman_motion.look_around:main",
             "click_move = colman_motion.click_move:main",
+            "tag_sweep = colman_motion.tag_sweep:main",
+            "calib_sweep = colman_motion.calib_sweep:main",
             "eye_in_hand = colman_motion.eye_in_hand:main",
         ],
     },
