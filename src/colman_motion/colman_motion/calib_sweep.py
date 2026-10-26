@@ -6,8 +6,9 @@ import cv2
 import numpy as np
 import rclpy
 from cv_bridge import CvBridge
+from geometry_msgs.msg import Pose
 from moveit.planning import MoveItPy, PlanRequestParameters
-from rclpy.executors import MultiThreadedExecutor
+from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
@@ -49,6 +50,18 @@ DEPTH_FRAMES = 10
 # The arm must not creep more than this while the data is taken.
 MAX_DRIFT_M = 0.0005
 
+# The camera must be publishing before anything moves, and the latest color
+# image must be no older than this when a view is taken.
+STREAM_TIMEOUT_S = 20.0
+MAX_IMAGE_AGE_S = 1.0
+
+
+
+class SweepError(Exception):
+    """
+    Something went wrong that makes the rest of the sweep pointless.
+    """
+
 
 def matrix(position, rotation):
     m = np.eye(4)
@@ -70,6 +83,7 @@ class Recorder(Node):
         self.listener = TransformListener(self.buffer, self)
         self.lock = threading.Lock()
         self.rgb = None
+        self.rgb_time = 0.0
         self.rgb_k = None
         self.depth_k = None
         self.depths = []
@@ -97,6 +111,7 @@ class Recorder(Node):
         image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
         with self.lock:
             self.rgb = image
+            self.rgb_time = time.time()
 
     def depth_cb(self, msg):
         if not self.collecting:
@@ -110,6 +125,57 @@ class Recorder(Node):
 
     def depth_info_cb(self, msg):
         self.depth_k = np.array(msg.k).reshape(3, 3)
+
+    def check_streams(self):
+        """
+        Raises SweepError unless the camera is publishing color, depth and both
+        camera infos.
+        """
+        deadline = time.time() + STREAM_TIMEOUT_S
+        while time.time() < deadline:
+            if (
+                self.rgb_k is not None
+                and self.depth_k is not None
+                and self.image_age() < MAX_IMAGE_AGE_S
+            ):
+                break
+            time.sleep(0.1)
+        missing = []
+        if self.image_age() >= MAX_IMAGE_AGE_S:
+            missing.append("/oakd_pro/rgb/image")
+        if self.rgb_k is None:
+            missing.append("/oakd_pro/rgb/camera_info")
+        if self.depth_k is None:
+            missing.append("/oakd_pro/depth/camera_info")
+        with self.lock:
+            self.depths = []
+        self.collecting = True
+        deadline = time.time() + 5.0
+        while time.time() < deadline:
+            with self.lock:
+                if len(self.depths) >= DEPTH_FRAMES:
+                    break
+            time.sleep(0.05)
+        self.collecting = False
+        with self.lock:
+            count = len(self.depths)
+        if count < DEPTH_FRAMES:
+            missing.append(f"/oakd_pro/depth/image ({count}/{DEPTH_FRAMES} frames)")
+        if missing:
+            raise SweepError(
+                "The camera is not publishing: "
+                + ", ".join(missing)
+                + ". Start it with `ros2 run colman_perception camera_publisher`."
+            )
+
+    def image_age(self):
+        """
+        Seconds since the last color image, or infinity if there has been none.
+        """
+        with self.lock:
+            if self.rgb is None:
+                return float("inf")
+            return time.time() - self.rgb_time
 
     def pose(self, parent, child):
         """
@@ -125,7 +191,7 @@ class Recorder(Node):
 
     def capture(self):
         """
-        Collects one still view, or returns None if the arm moved or data is missing.
+        Collects one still view. Raises SweepError if the arm moved or data is missing.
         """
         before = self.pose(BASE_FRAME, TOOL_FRAME)
         with self.lock:
@@ -142,6 +208,8 @@ class Recorder(Node):
         with self.lock:
             depths = list(self.depths)
             rgb = None if self.rgb is None else self.rgb.copy()
+        if self.image_age() > MAX_IMAGE_AGE_S:
+            rgb = None
         camera_in_tool = self.pose(TOOL_FRAME, CAMERA_FRAME)
         missing = [
             name
@@ -149,7 +217,7 @@ class Recorder(Node):
                 ("tool pose", before),
                 ("tool pose after", after),
                 ("camera in tool", camera_in_tool),
-                ("color image", rgb),
+                ("a fresh color image", rgb),
                 ("color info", self.rgb_k),
                 ("depth info", self.depth_k),
             )
@@ -158,12 +226,10 @@ class Recorder(Node):
         if len(depths) < DEPTH_FRAMES:
             missing.append(f"depth frames ({len(depths)}/{DEPTH_FRAMES})")
         if missing:
-            self.get_logger().warn("Missing " + ", ".join(missing))
-            return None
+            raise SweepError("Missing " + ", ".join(missing))
         drift = np.linalg.norm(after[:3, 3] - before[:3, 3])
         if drift > MAX_DRIFT_M:
-            self.get_logger().warn(f"The arm moved {drift * 1000:.2f} mm")
-            return None
+            raise SweepError(f"The arm moved {drift * 1000:.2f} mm while capturing")
         stack = np.array(depths, dtype=np.float32)
         stack[stack == 0] = np.nan
         with np.errstate(all="ignore"):
@@ -205,67 +271,130 @@ def views():
                 yield camera, np.array([*(corner + distance * toward), 0.0])
 
 
-def main():
-    rclpy.init()
+def tool_goal(camera, target, camera_in_tool):
+    """
+    The tool position and quaternion that put the camera at `camera` looking at
+    `target`.
+    """
+    direction = target - camera
+    direction /= np.linalg.norm(direction)
+    camera_rotation = level_camera_rotation(direction)
+    tool_rotation = camera_rotation @ camera_in_tool[:3, :3].T
+    tool_position = camera - tool_rotation @ camera_in_tool[:3, 3]
+    return tool_position, rotation_to_quaternion(*tool_rotation.T)
+
+
+def solve_view(arm, position, quaternion, seed):
+    """
+    The arm state that puts the tool at the pose, on the IK branch nearest the
+    seed state (the current state if None), or None if there is no collision
+    free solution. Nothing moves.
+    """
+    pose = Pose()
+    pose.position.x, pose.position.y, pose.position.z = position
+    (
+        pose.orientation.x,
+        pose.orientation.y,
+        pose.orientation.z,
+        pose.orientation.w,
+    ) = quaternion
+    state = arm.state_from_ik(pose, TOOL_FRAME, seed)
+    if state is None or not arm.is_valid(state):
+        return None
+    return state
+
+
+def run():
     logger = rclpy.logging.get_logger("moveit_py.calib_sweep")
+    output = os.environ.get("CALIB_DIR", "calib_data")
+
+    # The camera comes first: there is no point in starting the arm without it.
+    recorder = Recorder()
+    recorder_executor = SingleThreadedExecutor()
+    recorder_executor.add_node(recorder)
+    threading.Thread(target=recorder_executor.spin, daemon=True).start()
+    logger.info("Checking the camera streams")
+    recorder.check_streams()
+    logger.info("The camera is publishing")
+
     wait_for_robot()
     ur = MoveItPy(node_name="moveit_py")
 
     arm = ArmControl(ur)
     scene = SceneManager(ur)
-    recorder = Recorder()
 
     executor = MultiThreadedExecutor()
     executor.add_node(arm)
     executor.add_node(scene)
-    executor.add_node(recorder)
     threading.Thread(target=executor.spin, daemon=True).start()
 
     params = PlanRequestParameters(ur, "ompl")
     params.max_velocity_scaling_factor = 0.3
     params.max_acceleration_scaling_factor = 0.3
 
-    output = os.environ.get("CALIB_DIR", "calib_data")
-    os.makedirs(output, exist_ok=True)
-
     try:
         scene.add_box("table", "base_link", [2.0, 2.0, 0.01], (0.0, 0.0, -0.01))
 
-        start = recorder.pose(TOOL_FRAME, CAMERA_FRAME)
-        while start is None or recorder.pose(BASE_FRAME, TOOL_FRAME) is None:
-            time.sleep(0.2)
-            start = recorder.pose(TOOL_FRAME, CAMERA_FRAME)
         # Where the camera sits on the hand, which never changes.
-        camera_in_tool = start
-        camera_rotation_in_tool = camera_in_tool[:3, :3]
-        camera_origin_in_tool = camera_in_tool[:3, 3]
+        deadline = time.time() + STREAM_TIMEOUT_S
+        camera_in_tool = None
+        while time.time() < deadline:
+            camera_in_tool = recorder.pose(TOOL_FRAME, CAMERA_FRAME)
+            if camera_in_tool is not None and (
+                recorder.pose(BASE_FRAME, TOOL_FRAME) is not None
+            ):
+                break
+            camera_in_tool = None
+            time.sleep(0.2)
+        if camera_in_tool is None:
+            raise SweepError(f"No transform between {TOOL_FRAME}, {CAMERA_FRAME}")
 
-        saved = 0
-        for index, (camera, target) in enumerate(views()):
-            direction = target - camera
-            direction /= np.linalg.norm(direction)
-            camera_rotation = level_camera_rotation(direction)
-            tool_rotation = camera_rotation @ camera_rotation_in_tool.T
-            tool_position = camera - tool_rotation @ camera_origin_in_tool
-            quaternion = rotation_to_quaternion(*tool_rotation.T)
-            if not arm.go_to_pose(*tool_position, *quaternion, params):
-                logger.warn(f"View {index}: no plan")
-                continue
+        goals = [
+            tool_goal(camera, target, camera_in_tool) for camera, target in views()
+        ][: int(os.environ.get("CALIB_VIEWS", "24"))]
+
+        # Solve every view before anything moves, each from the one before so
+        # the arm stays on one branch.
+        logger.info(f"Solving all {len(goals)} views")
+        solutions = []
+        seed = None
+        for position, quaternion in goals:
+            seed = solve_view(arm, position, quaternion, seed)
+            solutions.append(seed)
+        failed = [index for index, state in enumerate(solutions) if state is None]
+        if failed:
+            raise SweepError(
+                f"No collision free IK solution for views {failed}, nothing was moved"
+            )
+        logger.info("All views solved")
+
+        os.makedirs(output, exist_ok=True)
+        for index, state in enumerate(solutions):
+            if not arm.move_to_state(state, params):
+                raise SweepError(f"View {index}: no plan or the move failed")
             time.sleep(SETTLE_S)
-            data = recorder.capture()
-            if data is None:
-                logger.warn(
-                    f"View {index}: no data, the arm moved or a stream is missing"
-                )
-                continue
+            try:
+                data = recorder.capture()
+            except SweepError as error:
+                raise SweepError(f"View {index}: {error}") from error
             cv2.imwrite(f"{output}/view_{index:02d}_rgb.png", data.pop("rgb"))
             np.savez(f"{output}/view_{index:02d}.npz", **data)
-            saved += 1
-            logger.info(f"View {index}: saved ({saved} so far)")
-        logger.info(f"Done, {saved} views in {output}")
+            logger.info(f"View {index}: saved ({index + 1}/{len(goals)})")
+        logger.info(f"SWEEP COMPLETE: {len(goals)} views in {output}")
     finally:
         scene.clear_scene()
         executor.shutdown()
+        recorder_executor.shutdown()
+
+
+def main():
+    rclpy.init()
+    try:
+        run()
+    except SweepError as error:
+        rclpy.logging.get_logger("moveit_py.calib_sweep").error(f"SWEEP FAILED: {error}")
+        raise SystemExit(1)
+    finally:
         rclpy.shutdown()
 
 
