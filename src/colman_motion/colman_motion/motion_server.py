@@ -13,7 +13,7 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.signals import SignalHandlerOptions
 
-from colman_interfaces.action import MoveTo, Pick, Place
+from colman_interfaces.action import MovePose, MoveTo, Pick, Place
 from colman_motion.arm_control import ArmControl
 from colman_motion.robot_ready import wait_for_robot
 from colman_motion.scene_manager import SceneManager
@@ -51,6 +51,15 @@ class MotionServer(Node):
             cancel_callback=self.cancel_cb,
             callback_group=group,
         )
+        self.move_pose_server = ActionServer(
+            self,
+            MovePose,
+            "move_pose",
+            execute_callback=self.move_pose_cb,
+            goal_callback=self.goal_cb,
+            cancel_callback=self.cancel_cb,
+            callback_group=group,
+        )
         self.pick_server = ActionServer(
             self,
             Pick,
@@ -69,7 +78,7 @@ class MotionServer(Node):
             cancel_callback=self.cancel_cb,
             callback_group=group,
         )
-        self.get_logger().info("/move_to, /pick and /place action servers started")
+        self.get_logger().info("/move_to, /move_pose, /pick and /place action servers started")
 
     def goal_cb(self, request):
         with self.arm.busy_lock:
@@ -140,6 +149,39 @@ class MotionServer(Node):
             result.success = self.arm.go_to_configured_pose(
                 goal_handle.request.pose_name, self.arm.fast
             )
+            canceled = not result.success and self.cancel_requested(goal_handle)
+            self.finish()
+            if result.success:
+                goal_handle.succeed(result)
+            elif canceled:
+                goal_handle.canceled(result)
+            else:
+                goal_handle.abort(result)
+            return result
+        finally:
+            if goal_handle.is_active:
+                self.finish()
+
+    def move_pose_cb(self, goal_handle):
+        result = MovePose.Result()
+        self.arm.running = True
+        try:
+            pose = goal_handle.request.pose
+            params = self.arm.slow if goal_handle.request.slow else self.arm.fast
+            position = pose.position
+            orientation = pose.orientation
+            result.success = self.arm.go_to_pose(
+                position.x,
+                position.y,
+                position.z,
+                orientation.x,
+                orientation.y,
+                orientation.z,
+                orientation.w,
+                params,
+            )
+            if not result.success:
+                result.message = "Move failed"
             canceled = not result.success and self.cancel_requested(goal_handle)
             self.finish()
             if result.success:
