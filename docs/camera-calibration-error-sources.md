@@ -9,7 +9,7 @@ knowledge of this class of hardware, not measurements from our setup.
 
 | Source | Status | Rough size at the camera | Likely a main culprit? |
 |---|---|---|---|
-| Lens intrinsics / residual distortion | Corrected, never verified | 0.1–several mm | Possible |
+| Lens intrinsics / residual distortion | Corrected on the device; checked against the factory model and a straight edge (2026-10-26) | 0.1–several mm | Distortion no; focal length not ruled out |
 | Hand-eye transform (camera on hand) | Nominal from URDF, never calibrated | mm to cm | **Very likely** |
 | Stereo depth scale/offset | Uncalibrated | mm to cm at 0.3–0.4 m | **Very likely** |
 | Arm absolute accuracy | Factory cal loaded, unverified | ~0.1–1 mm | Unlikely to explain 1 cm |
@@ -40,8 +40,35 @@ Repeatable-but-wrong is the signature of a systematic offset.
   in `camera_publisher.py`), so the device's reported intrinsics are not entirely
   trustworthy. We replaced the depth intrinsics with the scaled colour intrinsics.
 - Undistortion is done on a 1920×1080 output; the sensor's native aspect may be cropped or
-  scaled, which affects how intrinsics map. Worth confirming `camera_info` matches the
-  actual frames.
+  scaled, which affects how intrinsics map.
+
+### Which K is right (checked 2026-10-26)
+
+The OAK exposes two different colour K matrices at 1920×1080, about 5% apart:
+
+| Source | fx, fy | Use? |
+|---|---|---|
+| Frame: `packet.getTransformation().getIntrinsicMatrix()` | 1461.0, 1460.2 (cx 968.0, cy 562.0) | **Yes.** This is what `camera_publisher.py` publishes. |
+| Device calibration: `readCalibration().getCameraIntrinsics(CAM_A, 1920, 1080)` | 1540.2, 1539.3 (cx 968.4, cy 563.2) | **No.** It does not describe the frames the device sends. |
+
+The calibration-object K cannot be removed from the SDK or the device, and nothing in the
+repo reads it. Do not use it, and do not scale the factory file's `intrinsicMatrix` to
+1920×1080 and compare: it gives the 1540 number, not 1461.
+
+Evidence that the frame K is the right one:
+
+- The raw stream (`enableUndistortion=False`) reports the same K (1461) together with the
+  factory 14-coefficient distortion set. The undistorted stream reports 1461 with all
+  coefficients zero.
+- SIFT matches between a raw and an undistorted frame (1466 inliers) are predicted to a
+  median of 0.84 px by the 14-coefficient model with K = 1461. The 8-coefficient rational
+  model gives 2.5 px and no correction gives 9.5 px. Using K = 1540 for the raw frame
+  gives 34 px, so it is not the K of those images.
+- The far edge of the table, near the top of the undistorted image, fits a straight line
+  to 0.15 px RMS (max 0.32 px), with no curvature.
+
+This shows the device applies its factory distortion model correctly. It does not show
+the factory focal length is right for this unit; that is still fitted by `calibrate_camera.py`.
 
 ## Hand-eye transform (camera in tool frame)
 
