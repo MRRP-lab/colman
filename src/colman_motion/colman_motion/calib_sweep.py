@@ -42,6 +42,10 @@ CAMERA_HEIGHTS_M = (0.22, 0.32)
 LOOK_INWARD_M = 0.15
 LOOK_ALONG_M = 0.25
 
+# A view this close to straight down has no natural "up" for the image, so the
+# camera roll is chosen to keep the hand near the base instead.
+STEEP_VIEW_Z = 0.9
+
 # How long the arm sits still before data is taken, and how many depth frames
 # are collected for the median.
 SETTLE_S = 1.5
@@ -53,6 +57,10 @@ MAX_DRIFT_M = 0.0005
 # The camera must be publishing before anything moves, and the latest color
 # image must be no older than this when a view is taken.
 STREAM_TIMEOUT_S = 20.0
+
+# The camera can drop off USB and reconnect by itself. A view waits this long
+# for it to come back, with the arm held still, before giving up.
+STREAM_RECOVERY_S = 30.0
 MAX_IMAGE_AGE_S = 1.0
 
 
@@ -193,6 +201,11 @@ class Recorder(Node):
         """
         Collects one still view. Raises SweepError if the arm moved or data is missing.
         """
+        if self.image_age() > MAX_IMAGE_AGE_S:
+            self.get_logger().warn("The camera stopped publishing, waiting for it")
+            deadline = time.time() + STREAM_RECOVERY_S
+            while self.image_age() > MAX_IMAGE_AGE_S and time.time() < deadline:
+                time.sleep(0.1)
         before = self.pose(BASE_FRAME, TOOL_FRAME)
         with self.lock:
             self.depths = []
@@ -271,6 +284,19 @@ def views():
                 yield camera, np.array([*(corner + distance * toward), 0.0])
 
 
+def inward_camera_rotation(camera, direction):
+    """
+    Camera rotation (columns x right, y down, z forward) looking along direction
+    with the image's down side toward the base axis. The camera is mounted to
+    one side of the hand, so this puts the hand nearer the base than the camera
+    rather than 10 cm farther out, where steep views are beyond the arm's reach.
+    """
+    y = -np.array([camera[0], camera[1], 0.0])
+    y -= np.dot(y, direction) * direction
+    y /= np.linalg.norm(y)
+    return np.column_stack([np.cross(y, direction), y, direction])
+
+
 def tool_goal(camera, target, camera_in_tool):
     """
     The tool position and quaternion that put the camera at `camera` looking at
@@ -278,7 +304,10 @@ def tool_goal(camera, target, camera_in_tool):
     """
     direction = target - camera
     direction /= np.linalg.norm(direction)
-    camera_rotation = level_camera_rotation(direction)
+    if abs(direction[2]) > STEEP_VIEW_Z:
+        camera_rotation = inward_camera_rotation(camera, direction)
+    else:
+        camera_rotation = level_camera_rotation(direction)
     tool_rotation = camera_rotation @ camera_in_tool[:3, :3].T
     tool_position = camera - tool_rotation @ camera_in_tool[:3, 3]
     return tool_position, rotation_to_quaternion(*tool_rotation.T)
@@ -287,8 +316,8 @@ def tool_goal(camera, target, camera_in_tool):
 def solve_view(arm, position, quaternion, seed):
     """
     The arm state that puts the tool at the pose, on the IK branch nearest the
-    seed state (the current state if None), or None if there is no collision
-    free solution. Nothing moves.
+    seed state (the current state if None), and a reason string if there is no
+    collision free solution. Nothing moves.
     """
     pose = Pose()
     pose.position.x, pose.position.y, pose.position.z = position
@@ -299,14 +328,22 @@ def solve_view(arm, position, quaternion, seed):
         pose.orientation.w,
     ) = quaternion
     state = arm.state_from_ik(pose, TOOL_FRAME, seed)
-    if state is None or not arm.is_valid(state):
-        return None
-    return state
+    if state is None:
+        return None, "no IK solution"
+    if not arm.is_valid(state):
+        joints = ", ".join(
+            f"{name} {value:.2f}" for name, value in state.joint_positions.items()
+        )
+        return None, f"the IK solution is in collision or out of bounds ({joints})"
+    return state, None
 
 
 def run():
     logger = rclpy.logging.get_logger("moveit_py.calib_sweep")
-    output = os.environ.get("CALIB_DIR", "calib_data")
+    # A new folder each run, unless CALIB_DIR names one to resume into.
+    output = os.environ.get(
+        "CALIB_DIR", time.strftime("calib_data_%Y%m%d_%H%M%S", time.localtime())
+    )
 
     # The camera comes first: there is no point in starting the arm without it.
     recorder = Recorder()
@@ -353,23 +390,39 @@ def run():
             tool_goal(camera, target, camera_in_tool) for camera, target in views()
         ][: int(os.environ.get("CALIB_VIEWS", "24"))]
 
-        # Solve every view before anything moves, each from the one before so
-        # the arm stays on one branch.
-        logger.info(f"Solving all {len(goals)} views")
-        solutions = []
+        # Views already in the folder are kept, so a sweep that stopped (the
+        # camera dropping off USB, say) resumes by running again with the same
+        # CALIB_DIR.
+        done = [
+            index
+            for index in range(len(goals))
+            if os.path.exists(f"{output}/view_{index:02d}.npz")
+            and os.path.exists(f"{output}/view_{index:02d}_rgb.png")
+        ]
+        if done:
+            logger.info(f"Resuming, {len(done)} views already in {output}: {done}")
+
+        # Solve every remaining view before anything moves, each from the one
+        # before so the arm stays on one branch.
+        logger.info(f"Solving {len(goals) - len(done)} views")
+        solutions = {}
+        failed = []
         seed = None
-        for position, quaternion in goals:
-            seed = solve_view(arm, position, quaternion, seed)
-            solutions.append(seed)
-        failed = [index for index, state in enumerate(solutions) if state is None]
+        for index, (position, quaternion) in enumerate(goals):
+            if index in done:
+                continue
+            state, reason = solve_view(arm, position, quaternion, seed)
+            if state is None:
+                failed.append(f"view {index}: {reason}")
+            else:
+                seed = state
+                solutions[index] = state
         if failed:
-            raise SweepError(
-                f"No collision free IK solution for views {failed}, nothing was moved"
-            )
+            raise SweepError("nothing was moved. " + "; ".join(failed))
         logger.info("All views solved")
 
         os.makedirs(output, exist_ok=True)
-        for index, state in enumerate(solutions):
+        for index, state in solutions.items():
             if not arm.move_to_state(state, params):
                 raise SweepError(f"View {index}: no plan or the move failed")
             time.sleep(SETTLE_S)
@@ -377,6 +430,7 @@ def run():
                 data = recorder.capture()
             except SweepError as error:
                 raise SweepError(f"View {index}: {error}") from error
+            # The .npz goes last: a view only counts as saved once it exists.
             cv2.imwrite(f"{output}/view_{index:02d}_rgb.png", data.pop("rgb"))
             np.savez(f"{output}/view_{index:02d}.npz", **data)
             logger.info(f"View {index}: saved ({index + 1}/{len(goals)})")

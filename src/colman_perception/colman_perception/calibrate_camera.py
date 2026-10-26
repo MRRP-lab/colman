@@ -10,6 +10,7 @@ Usage: python calibrate_camera.py <view directory> [output.yaml]
 """
 
 import glob
+import os
 import sys
 
 import cv2
@@ -56,6 +57,15 @@ EDGE_FIT_PX = 2.5
 MIN_EDGE_KEEP = 0.6
 
 MIN_EDGE_POINTS = 30
+
+EDGE_NAMES = ["y=+0.5625", "y=-0.5625", "x=0.63", "x=0.09"]
+
+# Overlay colors (BGR).
+TABLE_TINT = (255, 140, 0)
+DEPTH_EDGE_COLOR = (0, 220, 255)
+COLOR_EDGE_COLOR = (255, 255, 0)
+FACTORY_LINE_COLOR = (0, 0, 255)
+FITTED_LINE_COLOR = (0, 220, 0)
 
 
 def depth_intrinsics(k):
@@ -141,6 +151,8 @@ class View:
         self.plane_pixels = None
         self.edge_pixels = []
         self.edge_ids = []
+        self.table_mask = None
+        self.depth_edge_pixels = []
 
     def camera_pose(self, correction=np.eye(4)):
         m = self.base_from_tool @ self.tool_from_camera @ correction
@@ -238,6 +250,8 @@ def analyze(view):
     result = fit_table(view.depth_mm / 1000.0, view.depth_k, rotation, translation)
     if result is None:
         return False
+    view.table_mask = result["mask"]
+    view.depth_edge_pixels = [edge["pixels"] for edge in result["edges"]]
     # Table pixels, the ones on the plane found in depth, so cubes and the like
     # don't count.
     u, v = np.meshgrid(np.arange(640), np.arange(360))
@@ -334,26 +348,148 @@ def rms_mm(theta, views, theta0):
     )
 
 
+def camera_matrix(theta):
+    correction, (fx, fy, cx, cy), _, _ = unpack(theta)
+    return correction, np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1.0]])
+
+
+def view_edge_errors(view, correction, k):
+    """
+    {edge index: mean signed error in mm} for the edges found in one view.
+    """
+    rotation, translation = view.camera_pose(correction)
+    errors = {}
+    for pixels, index in zip(view.edge_pixels, view.edge_ids):
+        xy, _ = ray_on_table(rotation, translation, k, pixels)
+        origin, direction, _, _ = EDGES[index]
+        normal = np.array([-direction[1], direction[0]])
+        errors[index] = float(np.mean((xy[:, :2] - origin) @ normal) * 1000.0)
+    return errors
+
+
+def known_edge_pixels(rotation, translation, k):
+    """
+    The four known table edges projected into the color image, as a list of
+    runs of pixels (the parts in front of the camera).
+    """
+    runs = []
+    for origin, direction, _, (low, high) in EDGES:
+        s = np.linspace(low, high, 300)
+        xy = origin[None, :] + s[:, None] * direction[None, :]
+        points = np.column_stack([xy, np.zeros(len(xy))])
+        camera = (points - translation) @ rotation
+        z = np.maximum(camera[:, 2], 1e-6)
+        uv = np.column_stack(
+            [k[0, 0] * camera[:, 0] / z + k[0, 2], k[1, 1] * camera[:, 1] / z + k[1, 2]]
+        )
+        ok = (camera[:, 2] > 0.05) & (np.abs(uv).max(axis=1) < 20000)
+        run = []
+        for point, good in zip(uv, ok):
+            if good:
+                run.append(point)
+            elif run:
+                runs.append(np.array(run))
+                run = []
+        if run:
+            runs.append(np.array(run))
+    return runs
+
+
+def draw_text(image, lines):
+    scale = 0.9
+    line_height = 36
+    width = max(
+        cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, scale, 2)[0][0]
+        for text in lines
+    )
+    cv2.rectangle(
+        image, (0, 0), (width + 20, line_height * len(lines) + 12), (0, 0, 0), -1
+    )
+    for i, text in enumerate(lines):
+        cv2.putText(
+            image,
+            text,
+            (10, line_height * (i + 1)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            scale,
+            (255, 255, 255),
+            2,
+            cv2.LINE_AA,
+        )
+
+
+def save_overlay(view, path, factory, fitted=None):
+    """
+    Saves the view's color image with what the calibration saw and used:
+      blue tint      the table surface found in depth
+      yellow dots    table edge pixels found in depth
+      cyan dots      the same edges found in the color image (what is fitted)
+      red lines      the four known table edges projected with the factory
+                     calibration
+      green lines    the same with the fitted calibration
+    factory and fitted are (correction, k) pairs.
+    """
+    image = view.rgb.copy()
+    height, width = image.shape[:2]
+    if view.table_mask is not None:
+        mask = (
+            cv2.resize(
+                (view.table_mask > 0).astype(np.uint8),
+                (width, height),
+                interpolation=cv2.INTER_NEAREST,
+            )
+            > 0
+        )
+        image[mask] = (0.7 * image[mask] + 0.3 * np.array(TABLE_TINT)).astype(np.uint8)
+    for pixels in view.depth_edge_pixels:
+        for u, v in depth_to_color_pixels(pixels):
+            cv2.circle(image, (int(u), int(v)), 3, DEPTH_EDGE_COLOR, -1)
+    for pixels in view.edge_pixels:
+        for u, v in pixels:
+            cv2.circle(image, (int(round(u)), int(round(v))), 5, COLOR_EDGE_COLOR, -1)
+    lines = [view.name]
+    for label, camera, color in (
+        ("factory", factory, FACTORY_LINE_COLOR),
+        ("fitted", fitted, FITTED_LINE_COLOR),
+    ):
+        if camera is None:
+            continue
+        correction, k = camera
+        rotation, translation = view.camera_pose(correction)
+        for run in known_edge_pixels(rotation, translation, k):
+            if len(run) > 1:
+                cv2.polylines(
+                    image,
+                    [np.round(run).astype(np.int32)],
+                    False,
+                    color,
+                    2,
+                    cv2.LINE_AA,
+                )
+        errors = view_edge_errors(view, correction, k)
+        text = ", ".join(f"{EDGE_NAMES[i]} {e:+.1f}" for i, e in sorted(errors.items()))
+        lines.append(f"{label} (mm): {text or 'no edges'}")
+    if view.table_mask is None:
+        lines.append("NO TABLETOP FOUND in depth")
+    lines.append("blue=table yellow=depth edge cyan=color edge red=factory green=fitted")
+    draw_text(image, lines)
+    cv2.imwrite(path, image)
+
+
 def edge_report(theta, views):
     """
     The signed error of each known edge, averaged over the views that saw it:
     positive means the edge is measured beyond where it really is.
     """
-    correction, (fx, fy, cx, cy), _, _ = unpack(theta)
-    k = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1.0]])
-    names = ["y=+0.5625", "y=-0.5625", "x=0.63", "x=0.09"]
+    correction, k = camera_matrix(theta)
     errors = {i: [] for i in range(len(EDGES))}
     for view in views:
-        rotation, translation = view.camera_pose(correction)
-        for pixels, index in zip(view.edge_pixels, view.edge_ids):
-            xy, _ = ray_on_table(rotation, translation, k, pixels)
-            origin, direction, _, _ = EDGES[index]
-            normal = np.array([-direction[1], direction[0]])
-            errors[index].append(np.mean((xy[:, :2] - origin) @ normal) * 1000.0)
+        for index, error in view_edge_errors(view, correction, k).items():
+            errors[index].append(error)
     for index, values in errors.items():
         if values:
             print(
-                f"  {names[index]:10s} mean {np.mean(values):+6.1f} mm, "
+                f"  {EDGE_NAMES[index]:10s} mean {np.mean(values):+6.1f} mm, "
                 f"spread {np.std(values):4.1f} mm over {len(values)} views"
             )
 
@@ -362,10 +498,25 @@ def main():
     folder = sys.argv[1]
     output = sys.argv[2] if len(sys.argv) > 2 else None
     paths = sorted(glob.glob(f"{folder}/view_??.npz"))
+    if not paths:
+        print("No views")
+        return
+    overlays = f"{folder}/overlays"
+    os.makedirs(overlays, exist_ok=True)
+    k = View(paths[0]).rgb_k
+    theta0 = np.array([0, 0, 0, 0, 0, 0, k[0, 0], k[1, 1], k[0, 2], k[1, 2], 1.0, 0.0])
+    factory = camera_matrix(theta0)
+
+    # Each view's overlay is written as soon as it is analyzed, so the
+    # detections can be checked while the rest run.
     views = []
+    every = []
     for path in paths:
         view = View(path)
-        if analyze(view):
+        every.append(view)
+        found = analyze(view)
+        save_overlay(view, f"{overlays}/{view.name}_overlay.png", factory)
+        if found:
             views.append(view)
             print(
                 f"{view.name}: {len(view.plane_pixels)} plane pixels, "
@@ -373,12 +524,17 @@ def main():
             )
         else:
             print(f"{view.name}: no tabletop found")
+    print(f"Overlays in {overlays}")
+
+    def write_overlays(theta):
+        fitted = camera_matrix(theta)
+        for view in every:
+            save_overlay(view, f"{overlays}/{view.name}_overlay.png", factory, fitted)
+        print(f"\nFitted overlays in {overlays}")
+
     if len(views) < 4:
         print("Not enough views")
         return
-
-    k = views[0].rgb_k
-    theta0 = np.array([0, 0, 0, 0, 0, 0, k[0, 0], k[1, 1], k[0, 2], k[1, 2], 1.0, 0.0])
     names = [
         "rx",
         "ry",
@@ -405,6 +561,8 @@ def main():
     print(f"Table edge rms:  {before[1]:.1f} -> {after[1]:.1f} mm")
     for name, a, b in zip(names, theta0, theta):
         print(f"  {name:16s} {a:12.5f} -> {b:12.5f}")
+
+    write_overlays(theta)
 
     # Cross-validation: fit on most views, test on the rest.
     folds = 4
