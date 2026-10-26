@@ -144,20 +144,16 @@ def ray_on_plane(rays, pixels, rotation, translation, plane):
     return translation + direction * scale[:, None]
 
 
-def edge_pixels(mask, depth_m, rays, rotation, translation, plane, dropouts=False):
+def edge_pixels(mask, depth_m, rays, rotation, translation, plane):
     """
     Pixels on the border of the table region with something much farther away
     just beyond them. That's the table's real edge, not a dropout in the depth.
-    With dropouts, missing depth just beyond the border counts too, for views
-    where the stereo gives nothing past the table's edge.
     """
     normal, offset = plane
     along = (rays @ rotation.T) @ normal
     with np.errstate(all="ignore"):
         plane_depth = (offset - normal @ translation) / along
     far = (depth_m > 0) & (plane_depth > 0) & (depth_m > plane_depth + FAR_M)
-    if dropouts:
-        far |= depth_m == 0
     reach = 2 * EDGE_REACH_PX + 1
     near_far = cv2.dilate(far.astype(np.uint8), np.ones((reach, reach), np.uint8)) > 0
     border = (mask > 0) & (cv2.erode(mask, np.ones((3, 3), np.uint8)) == 0)
@@ -168,12 +164,12 @@ def edge_pixels(mask, depth_m, rays, rotation, translation, plane, dropouts=Fals
     return np.column_stack([u, v])
 
 
-def fit_edges(mask, depth_m, rays, rotation, translation, plane, dropouts=False):
+def fit_edges(mask, depth_m, rays, rotation, translation, plane):
     """
     Straight edges of the table, as lines in the base frame's xy plane, found by
     repeated RANSAC over the edge pixels.
     """
-    pixels = edge_pixels(mask, depth_m, rays, rotation, translation, plane, dropouts)
+    pixels = edge_pixels(mask, depth_m, rays, rotation, translation, plane)
     if len(pixels) < MIN_EDGE_POINTS:
         return []
     xy = ray_on_plane(rays, pixels, rotation, translation, plane)[:, :2]
@@ -247,7 +243,7 @@ def corners(edges):
     return found
 
 
-def fit_table(depth_m, k, rotation, translation, seed=0, dropouts=False):
+def fit_table(depth_m, k, rotation, translation, seed=0):
     """
     Finds the tabletop plane and its straight edges in one depth image.
     Returns a dict, with the mask and edge pixels for drawing, or None.
@@ -265,7 +261,7 @@ def fit_table(depth_m, k, rotation, translation, seed=0, dropouts=False):
         return None
     normal, offset = plane
     inliers = points[np.abs(points @ normal - offset) < REFINE_TOLERANCE_M]
-    edges = fit_edges(mask, depth_m, rays, rotation, translation, plane, dropouts)
+    edges = fit_edges(mask, depth_m, rays, rotation, translation, plane)
     return {
         "height_m": float(offset / normal[2]),
         "tilt_deg": float(np.degrees(np.arccos(min(1.0, normal[2])))),
