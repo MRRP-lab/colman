@@ -283,6 +283,6 @@ The repository cleanup from the original review is complete (PRs #9 and #12). St
 
 1. Choose a license. The repository has no LICENSE file, and several `package.xml` and `setup.py` files still say `TODO: License declaration`.
 2. Add the `colman_llm` package, following [`plan.md`](plan.md).
-3. Replace the Azure speech input with a local Parakeet node (the dependencies are already in `pixi.toml`).
+3. Merge the `NVIDIA-Parakeet` branch, which replaces the Azure speech input with a local Parakeet node and mutes the microphone while the robot speaks.
 4. Decide which stale remote branches to delete. Several contain unmerged work, so do not delete them blindly.
 5. Keep the architecture diagram synchronized with the implementation.
