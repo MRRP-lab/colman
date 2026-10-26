@@ -35,6 +35,7 @@ setup(
             "demo_turns = colman_motion.demo_turns:main",
             "demo_choose = colman_motion.demo_choose:main",
             "demo_circle = colman_motion.demo_circle:main",
+            "demo_obstacle = colman_motion.demo_obstacle:main",
             "eye_in_hand = colman_motion.eye_in_hand:main",
         ],
     },

@@ -31,6 +31,7 @@ demo = "ros2 run colman_motion pick_and_place"
 demo-turns = "ros2 launch colman_motion demo.launch.py demo:=demo_turns"
 demo-choose = "ros2 launch colman_motion demo.launch.py demo:=demo_choose"
 demo-circle = "ros2 launch colman_motion demo.launch.py demo:=demo_circle"
+demo-obstacle = "ros2 launch colman_motion demo.launch.py demo:=demo_obstacle"
 
 speak = "ros2 run colman_audio_output kokoro_tts"
 
