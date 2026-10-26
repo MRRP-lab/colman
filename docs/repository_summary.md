@@ -229,14 +229,14 @@ ros2 service call /resume std_srvs/srv/Trigger "{}"
 
 ---
 
-# 3. Suggested implementation order
+# 3. Implementation order
 
 ## Phase 1: make the motion interface callable
 
 `MoveTo`, `Pick` and `Place` and the motion server are done (PR #14).
 
 1. Test them manually with `ros2 action send_goal`.
-2. Add a single `PickAndPlace.action` only if pick and place must be atomic (see [`plan.md`](plan.md)).
+2. The LLM `pick_and_place` tool calls `/pick` then `/place`. No `PickAndPlace.action` is added (see [`plan.md`](plan.md)).
 
 ## Phase 2: add text-only LLM interaction
 
@@ -269,7 +269,7 @@ speech_text -> LLM -> llm_response -> Kokoro -> speaker
 
 ## Phase 4: connect microphone input
 
-Finally launch speech recognition and verify the complete loop. Parakeet (through `onnx-asr`, with `silero-vad` for voice activity detection) replaces the Azure node here. Mute the microphone while `tts_speaking` is true, or the robot will hear itself.
+Finally launch speech recognition and verify the complete loop. Parakeet (through `onnx-asr`, with `silero-vad` for voice activity detection) replaces the Azure node here. Mute the microphone while `tts_speaking` is true so the robot does not hear itself.
 
 This ordering makes debugging much easier because each layer can be tested independently.
 

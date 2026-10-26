@@ -44,7 +44,7 @@ colman_audio_output / Kokoro-82M
 speaker
 ```
 
-Keep the implementation to one node first. Do not build a general-purpose agent, and do not add a second provider. The Anthropic call lives in one small function so a different model or provider could replace it later.
+Keep the implementation to one node first. Do not build a general-purpose agent, and do not add a second provider. The Anthropic call lives in one small function.
 
 ## Package layout
 
@@ -141,9 +141,7 @@ Parse `tool_use.input` as already-decoded JSON from the SDK. Do not string-match
 
 Do not add a `PickAndPlace.action` first. The `pick_and_place` tool handler can call `/pick` then `/place` from the worker thread. It aborts and reports if `/pick` fails, and it only calls `/place` after `/pick` succeeds. This avoids new interface code in `colman_interfaces` and a new server path to test.
 
-Add `PickAndPlace.action` later only if the sequence needs to be atomic, for example to keep the arm from being claimed by another client between pick and place.
-
-Later tools could include `move_to_named_pose`, `pick_object` and `place_object`.
+The tool set is `pick_and_place` only. No other tools are added in the first version.
 
 ## Conversation loop and threading
 
@@ -176,20 +174,14 @@ Details:
 - Ignore speech while the arm is moving? Not needed if goals are serialized, but reject new tool calls with a clear `tool_result` error if the arm reports busy.
 - Rate-limit tool calls (at most one pick-and-place at a time) and log each tool call with its validated arguments.
 - Treat transcription as untrusted input. A misheard sentence can still only select from the enumerated objects and destinations.
-- Test with the arm in simulation or with the vacuum gripper disabled first.
 
 ## Audio loop
 
 The output node already supports stream, play and save modes and a bounded queue. For the first version use one mode and one voice.
 
-**The microphone does not currently use `tts_speaking`.** `speech_to_text_node.py` has no mute logic, so the robot will hear its own voice through the speaker and answer itself. Fix this before the first closed-loop test, not later. Either:
+Ensure the microphone has mute logic, so the robot will not hear its own voice through the speaker and answer itself. Fix this before the first closed-loop test, not later.
 
-- subscribe to `tts_speaking` in `colman_audio_input` and drop recognized text while it is `True` (plus a short tail of about 0.5 s), or
-- do the same drop in `colman_llm`, which keeps `colman_audio_input` unchanged.
-
-Put the mute in the Parakeet node. The first option is cleaner. The transient-local QoS means a late-starting mic node still sees the current state.
-
-Also consider speaking a short acknowledgement (for example "On it.") before a long action starts, so the user knows the command was heard. It can be published as a separate `llm_response` message from the worker.
+Before a long action starts, the worker publishes the acknowledgement "On it." as a separate `llm_response` message, so the user knows the command was heard.
 
 The speech loop:
 
@@ -215,17 +207,6 @@ Claude receives success/failure as tool_result
 Kokoro speaks the response
 ```
 
-## Credentials and dependencies
-
-Set the key in the environment:
-
-```bash
-export ANTHROPIC_API_KEY="..."
-```
-
-`anthropic.Anthropic()` reads it automatically, so the node never handles the key. Do not put it in `pixi.toml`, launch files, source code, YAML files or git history. Follow the audio output node's pattern of naming the environment variable in a parameter if it needs to be configurable, and fail at startup with a clear message when the key is missing.
-
-Add `anthropic` through `pixi.toml` (`[pypi-dependencies]`, with a version range) and `package.xml` rather than installing it ad hoc. Note that `anthropic` 1.x is built on `httpx2`, so avoid importing `httpx` directly.
 
 ## Cost and latency
 
@@ -240,7 +221,7 @@ Add `anthropic` through `pixi.toml` (`[pypi-dependencies]`, with a version range
 3. Simulation: run `colman_llm` with the motion server in Gazebo and publish text on `/speech_text` directly (`ros2 topic pub`), without the microphone.
 4. Closed loop with real audio, only after the mic mute is in place.
 
-## Suggested order of work
+## Order of work
 
 1. Scaffold `colman_llm` with a node that echoes `/speech_text` to `llm_response` through a Claude call with no tools.
 2. Add the `pick_and_place` tool with a fake executor that returns canned results.
