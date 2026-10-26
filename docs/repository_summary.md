@@ -229,14 +229,14 @@ ros2 service call /resume std_srvs/srv/Trigger "{}"
 
 ---
 
-# 3. Suggested implementation order
+# 3. Implementation order
 
 ## Phase 1: make the motion interface callable
 
 `MoveTo`, `Pick` and `Place` and the motion server are done (PR #14).
 
 1. Test them manually with `ros2 action send_goal`.
-2. Add a single `PickAndPlace.action` only if pick and place must be atomic (see [`plan.md`](plan.md)).
+2. The LLM `pick_and_place` tool calls `/pick` then `/place`. No `PickAndPlace.action` is added (see [`plan.md`](plan.md)).
 
 ## Phase 2: add text-only LLM interaction
 
@@ -269,7 +269,7 @@ speech_text -> LLM -> llm_response -> Kokoro -> speaker
 
 ## Phase 4: connect microphone input
 
-Finally launch speech recognition and verify the complete loop. Parakeet (through `onnx-asr`, with `silero-vad` for voice activity detection) replaces the Azure node here. Mute the microphone while `tts_speaking` is true, or the robot will hear itself.
+Finally launch speech recognition and verify the complete loop. Parakeet (through `onnx-asr`, with `silero-vad` for voice activity detection) replaces the Azure node here. Mute the microphone while `tts_speaking` is true so the robot does not hear itself.
 
 This ordering makes debugging much easier because each layer can be tested independently.
 
@@ -283,6 +283,6 @@ The repository cleanup from the original review is complete (PRs #9 and #12). St
 
 1. Choose a license. The repository has no LICENSE file, and several `package.xml` and `setup.py` files still say `TODO: License declaration`.
 2. Add the `colman_llm` package, following [`plan.md`](plan.md).
-3. Replace the Azure speech input with a local Parakeet node (the dependencies are already in `pixi.toml`).
+3. Merge the `NVIDIA-Parakeet` branch, which replaces the Azure speech input with a local Parakeet node and mutes the microphone while the robot speaks.
 4. Decide which stale remote branches to delete. Several contain unmerged work, so do not delete them blindly.
 5. Keep the architecture diagram synchronized with the implementation.
