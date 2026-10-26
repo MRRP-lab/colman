@@ -10,6 +10,7 @@ utterance. Each non-empty transcript is published immediately.
 
 import queue
 import threading
+import time
 from pathlib import Path
 
 import numpy as np
@@ -20,8 +21,9 @@ import sounddevice as sd
 import torch
 from huggingface_hub import snapshot_download
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile
 from silero_vad import VADIterator, load_silero_vad
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
 
 SAMPLE_RATE = 16000
 BLOCK_SAMPLES = 512  # Silero VAD requires 512-sample chunks at 16 kHz
@@ -48,6 +50,10 @@ class SpeechToTextNode(Node):
         self.declare_parameter("silence_ms", 700)
         self.declare_parameter("max_utterance_s", 30.0)
         self.declare_parameter("vad_threshold", 0.5)
+        # Bool topic that is True while the robot is speaking; '' disables muting.
+        self.declare_parameter("mute_topic", "tts_speaking")
+        # Keep the mic muted this long after speech ends (speaker/room tail).
+        self.declare_parameter("mute_tail_ms", 600)
 
         topic = self.get_parameter("topic").value
         model_name = self.get_parameter("model_name").value
@@ -59,6 +65,17 @@ class SpeechToTextNode(Node):
             )
 
         self.pub = self.create_publisher(String, topic, 10)
+
+        # Mute the mic while the robot speaks so it doesn't transcribe itself.
+        self._speaking = False
+        self._unmute_at = 0.0
+        self._mute_tail_s = int(self.get_parameter("mute_tail_ms").value) / 1000.0
+        mute_topic = self.get_parameter("mute_topic").value
+        if mute_topic:
+            # Match the TTS node's transient-local QoS so we learn the current
+            # state even if we start mid-utterance.
+            mute_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+            self.create_subscription(Bool, mute_topic, self._on_speaking, mute_qos)
 
         self._silence_ms = int(self.get_parameter("silence_ms").value)
         max_utterance_s = self.get_parameter("max_utterance_s").value
@@ -130,9 +147,22 @@ class SpeechToTextNode(Node):
         else:
             self.get_logger().warn(f"No usable GPU, running on {active} (slower).")
 
+    def _on_speaking(self, msg):
+        if msg.data:
+            self._speaking = True
+        else:
+            self._unmute_at = time.monotonic() + self._mute_tail_s
+            self._speaking = False
+        self.get_logger().debug(f"tts_speaking={msg.data}")
+
+    def _is_muted(self):
+        return self._speaking or time.monotonic() < self._unmute_at
+
     def _on_audio(self, indata, frames, time_info, status):
         if status:
             self.get_logger().warn(f"Audio status: {status}", throttle_duration_sec=5.0)
+        if self._is_muted():
+            return
         try:
             self._audio_q.put_nowait(indata[:, 0].copy())
         except queue.Full:
@@ -155,6 +185,13 @@ class SpeechToTextNode(Node):
             try:
                 block = self._audio_q.get(timeout=0.2)
             except queue.Empty:
+                continue
+
+            if self._is_muted():
+                # Discard anything captured around the robot's own speech.
+                pre_roll = []
+                segment = None
+                vad.reset_states()
                 continue
 
             event = vad(torch.from_numpy(block))
@@ -190,6 +227,10 @@ class SpeechToTextNode(Node):
                 text = self._transcribe(audio)
             except Exception as exc:  # keep listening after a bad utterance
                 self.get_logger().error(f"Transcription failed: {exc}")
+                continue
+            if text and self._is_muted():
+                # Segment was captured just before/while the robot started talking.
+                self.get_logger().debug(f"Dropped while muted: {text}")
                 continue
             if text:
                 msg = String()
