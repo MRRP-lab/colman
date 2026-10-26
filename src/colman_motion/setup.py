@@ -36,7 +36,11 @@ setup(
             "demo_choose = colman_motion.demo_choose:main",
             "demo_circle = colman_motion.demo_circle:main",
             "demo_obstacle = colman_motion.demo_obstacle:main",
-            "eye_in_hand = colman_motion.eye_in_hand:main",
+            "demo_camera = colman_motion.demo_camera:main",
+            "hand_up = colman_motion.hand_up:main",
+            "look_around = colman_motion.look_around:main",
+            "click_move = colman_motion.click_move:main",
+            "calib_sweep = colman_motion.calib_sweep:main",
         ],
     },
 )
