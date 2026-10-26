@@ -1,9 +1,8 @@
 import copy
+import math
 import threading
 
 from geometry_msgs.msg import Pose
-from moveit.core.kinematic_constraints import construct_joint_constraint
-from moveit.core.robot_state import RobotState
 from moveit.planning import PlanRequestParameters
 from rclpy.node import Node
 from std_srvs.srv import Trigger
@@ -13,6 +12,8 @@ SLOW_SCALING = 0.3
 
 PILZ = "pilz_industrial_motion_planner"
 IK_TIMEOUT_S = 0.1
+TIP_LINK = "vacuum_tip_link"
+VERTICAL_TOLERANCE_M = 0.001
 
 
 class ArmControl(Node):
@@ -116,22 +117,39 @@ class ArmControl(Node):
         self.get_logger().error("Planning failed")
         return False
 
-    def solve_ik_near_current(self, pose, tip_link="vacuum_tip_link"):
-        """Return joint values for pose, on the IK branch nearest the current state.
+    def current_state(self):
+        psm = self.moveit.get_planning_scene_monitor()
+        with psm.read_only() as scene:
+            return copy.deepcopy(scene.current_state)
+
+    def is_valid(self, state):
+        psm = self.moveit.get_planning_scene_monitor()
+        with psm.read_only() as scene:
+            return scene.is_state_valid(state, "ur_arm")
+
+    def state_from_ik(self, pose):
+        """Joint state for pose on the IK branch nearest the current state.
 
         TRAC-IK in Distance mode is seeded with the current joint state, so it
         stays on the current shoulder/elbow/wrist branch instead of the random
         one OMPL's goal sampler would pick.
         """
-        psm = self.moveit.get_planning_scene_monitor()
-        with psm.read_only() as scene:
-            state = copy.deepcopy(scene.current_state)
-            if not state.set_from_ik("ur_arm", pose, tip_link, IK_TIMEOUT_S):
-                return None
-            state.update()
-            if not scene.is_state_valid(state, "ur_arm"):
-                return None
+        state = self.current_state()
+        if not state.set_from_ik("ur_arm", pose, TIP_LINK, IK_TIMEOUT_S):
+            return None
+        state.update()
         return state
+
+    def state_from_joints(self, joint_values):
+        state = self.current_state()
+        state.joint_positions = joint_values
+        state.update()
+        return state
+
+    def is_vertical_move(self, start, goal):
+        a = start.get_pose(TIP_LINK).position
+        b = goal.get_pose(TIP_LINK).position
+        return math.hypot(a.x - b.x, a.y - b.y) < VERTICAL_TOLERANCE_M
 
     def pilz_params(self, params, planner_id):
         pilz = PlanRequestParameters(self.moveit, "ompl")
@@ -141,9 +159,36 @@ class ArmControl(Node):
         pilz.max_acceleration_scaling_factor = params.max_acceleration_scaling_factor
         return pilz
 
-    def go_to_pose(
-        self, x, y, z, qx=0.0, qy=0.0, qz=0.0, qw=1.0, params=None, linear=False
-    ):
+    def move_to_state(self, goal_state, params=None):
+        """Every arm move goes through here.
+
+        Pilz is deterministic and moves straight (LIN for vertical moves, PTP
+        otherwise), but only works in free space. It checks collisions itself,
+        so on failure fall back to OMPL toward the same joint goal.
+        """
+        params = params or self.fast
+        if not self.is_valid(goal_state):
+            self.get_logger().error("Goal state is in collision or out of bounds")
+            return False
+
+        vertical = self.is_vertical_move(self.current_state(), goal_state)
+        planner_id = "LIN" if vertical else "PTP"
+        if self.plan_state_and_execute(
+            goal_state, self.pilz_params(params, planner_id), retries=1
+        ):
+            return True
+        if self.stop_event.is_set():
+            return False
+        self.get_logger().info(f"Pilz {planner_id} failed, falling back to OMPL")
+        return self.plan_state_and_execute(goal_state, params)
+
+    def plan_state_and_execute(self, goal_state, params, retries=3):
+        self.arm.set_start_state_to_current_state()
+        if not self.arm.set_goal_state(robot_state=goal_state):
+            return False
+        return self.plan_and_execute(single_plan_parameters=params, retries=retries)
+
+    def go_to_pose(self, x, y, z, qx=0.0, qy=0.0, qz=0.0, qw=1.0, params=None):
         pose = Pose()
         pose.orientation.x = qx
         pose.orientation.y = qy
@@ -153,45 +198,18 @@ class ArmControl(Node):
         pose.position.y = y
         pose.position.z = z
 
-        goal_state = self.solve_ik_near_current(pose)
+        goal_state = self.state_from_ik(pose)
         if goal_state is None:
-            self.get_logger().error("No collision-free IK solution for pose")
+            self.get_logger().error("No IK solution for pose")
             return False
-
-        # Pilz is deterministic and straight, but only works in free space.
-        # It checks collisions itself, so on failure fall back to OMPL.
-        if params is not None:
-            planner_id = "LIN" if linear else "PTP"
-            if self.plan_state_and_execute(
-                goal_state, self.pilz_params(params, planner_id), retries=1
-            ):
-                return True
-            if self.stop_event.is_set():
-                return False
-            self.get_logger().info(f"Pilz {planner_id} failed, falling back to OMPL")
-        return self.plan_state_and_execute(goal_state, params)
-
-    def plan_state_and_execute(self, goal_state, params, retries=3):
-        self.arm.set_start_state_to_current_state()
-        if not self.arm.set_goal_state(robot_state=goal_state):
-            return False
-        return self.plan_and_execute(single_plan_parameters=params, retries=retries)
+        return self.move_to_state(goal_state, params)
 
     def go_to_configured_pose(self, pose_name, params=None):
-        self.arm.set_start_state_to_current_state()
-        if not self.arm.set_goal_state(configuration_name=pose_name):
+        joint_values = self.arm.get_named_target_state_values(pose_name)
+        if not joint_values:
+            self.get_logger().error(f"Unknown pose {pose_name}")
             return False
-        return self.plan_and_execute(single_plan_parameters=params)
+        return self.move_to_state(self.state_from_joints(joint_values), params)
 
     def go_to_joint_pose(self, joint_values, params=None):
-        self.arm.set_start_state_to_current_state()
-        robot_model = self.moveit.get_robot_model()
-        robot_state = RobotState(robot_model)
-        robot_state.joint_positions = joint_values
-        joint_constraint = construct_joint_constraint(
-            robot_state=robot_state,
-            joint_model_group=robot_model.get_joint_model_group("ur_arm"),
-        )
-        if not self.arm.set_goal_state(motion_plan_constraints=[joint_constraint]):
-            return False
-        return self.plan_and_execute(single_plan_parameters=params)
+        return self.move_to_state(self.state_from_joints(joint_values), params)

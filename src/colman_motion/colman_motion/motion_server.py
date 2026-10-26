@@ -190,9 +190,7 @@ class MotionServer(Node):
                 return self.fail(goal_handle, result, "Approach failed")
 
             self.stage(goal_handle, feedback, "lowering")
-            if not self.arm.go_to_pose(
-                *pick_translation, *EE_DOWN, self.arm.slow, linear=True
-            ):
+            if not self.arm.go_to_pose(*pick_translation, *EE_DOWN, self.arm.slow):
                 return self.fail(goal_handle, result, "Lower failed")
 
             self.stage(goal_handle, feedback, "grasping")
@@ -203,9 +201,7 @@ class MotionServer(Node):
             time.sleep(GRASP_DWELL_S)
 
             self.stage(goal_handle, feedback, "retreating")
-            if not self.arm.go_to_pose(
-                *approach_translation, *EE_DOWN, self.arm.fast, linear=True
-            ):
+            if not self.arm.go_to_pose(*approach_translation, *EE_DOWN, self.arm.fast):
                 return self.fail(goal_handle, result, "Retreat failed, still holding")
 
             result.success = True
@@ -260,7 +256,7 @@ class MotionServer(Node):
                 return self.fail(goal_handle, result, "Approach failed")
 
             self.stage(goal_handle, feedback, "lowering")
-            if not self.arm.go_to_pose(*drop_off, *EE_DOWN, self.arm.slow, linear=True):
+            if not self.arm.go_to_pose(*drop_off, *EE_DOWN, self.arm.slow):
                 return self.fail(goal_handle, result, "Lower failed")
 
             self.stage(goal_handle, feedback, "releasing")
@@ -271,9 +267,7 @@ class MotionServer(Node):
             time.sleep(RELEASE_DWELL_S)
 
             self.stage(goal_handle, feedback, "retreating")
-            if not self.arm.go_to_pose(
-                *drop_off_approach, *EE_DOWN, self.arm.slow, linear=True
-            ):
+            if not self.arm.go_to_pose(*drop_off_approach, *EE_DOWN, self.arm.slow):
                 return self.fail(goal_handle, result, "Retreat failed")
 
             result.success = True
