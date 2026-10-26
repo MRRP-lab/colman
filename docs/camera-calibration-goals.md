@@ -44,8 +44,8 @@ Constraints used to fit them, from views taken at many arm poses:
 
 1. The table surface seen in depth must lie at z = 0 in `base_link`.
 2. The table edges seen in the colour image must lie on the known edge lines.
-3. (Cross-check) The tag positions measured by `tag_recorder` should be consistent
-   across views and with the cube geometry.
+3. (Cross-check) The tag positions seen from different views should be consistent
+   with each other and with the cube geometry.
 
 The corners are the most useful feature because an edge pair pins down position along
 both x and y, and the far corners are viewed at the extreme of the arm's reach, which is
@@ -56,16 +56,15 @@ where kinematic error would show up most.
 - `pixi run calib-sweep` (`calib_sweep.py`): 24 stationary views, 6 at each table corner
   (2 heights, 3 look targets). Saves colour image, median depth, base→tool pose,
   tool→camera pose and both intrinsics per view to `$CALIB_DIR`.
-- `pixi run sweep-tags` (`tag_sweep.py` + `tag_recorder`): visits each tag and re-records its
-  position into `config/tag_map.yaml`.
-- `pixi run scan-table` (`tag_sweep.py` + `table_finder`): same sweep, fitting the table plane
-  and edges from depth.
+- `calibrate_camera.py <view dir> [out.yaml]` fits the camera parameters to those views, using
+  `table_finder.py` to find the table plane and edges in depth.
+- `pixi run find-table` / `pixi run view-depth`: live table finder and depth viewer.
 - `camera_publisher.py` publishes aligned depth (640×360, mm) alongside the colour image,
   with the IR dot projector on so the black tabletop has texture for stereo.
 
 ## Success criteria
 
-- Tag positions from `tag_recorder` agree with hand-measured cube positions to <0.5 mm
+- Tag positions seen by the camera agree with hand-measured cube positions to <0.5 mm
   (first target), then <0.1 mm.
 - Table plane from depth lies at z = 0 within <0.5 mm, with no systematic tilt.
 - Table edges re-projected from the fitted model land on the detected edges within
