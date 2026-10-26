@@ -247,7 +247,9 @@ def analyze(view):
     calibration, so the solver has fixed measurements to work with.
     """
     rotation, translation = view.camera_pose()
-    result = fit_table(view.depth_mm / 1000.0, view.depth_k, rotation, translation)
+    result = fit_table(
+        view.depth_mm / 1000.0, view.depth_k, rotation, translation, dropouts=True
+    )
     if result is None:
         return False
     view.table_mask = result["mask"]
