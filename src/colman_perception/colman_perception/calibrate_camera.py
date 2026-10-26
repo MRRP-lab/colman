@@ -25,7 +25,6 @@ FAR_X_M = 0.63
 HALF_WIDTH_M = 0.5625
 
 
-
 def table_edges(half_width, far_x):
     """
     The tabletop's edges in the table frame, as (point, direction, span axis,

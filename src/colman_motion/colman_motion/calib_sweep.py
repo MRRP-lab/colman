@@ -64,7 +64,6 @@ STREAM_RECOVERY_S = 30.0
 MAX_IMAGE_AGE_S = 1.0
 
 
-
 class SweepError(Exception):
     """
     Something went wrong that makes the rest of the sweep pointless.
@@ -446,7 +445,9 @@ def main():
     try:
         run()
     except SweepError as error:
-        rclpy.logging.get_logger("moveit_py.calib_sweep").error(f"SWEEP FAILED: {error}")
+        rclpy.logging.get_logger("moveit_py.calib_sweep").error(
+            f"SWEEP FAILED: {error}"
+        )
         raise SystemExit(1)
     finally:
         rclpy.shutdown()
