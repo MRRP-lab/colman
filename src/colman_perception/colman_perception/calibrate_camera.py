@@ -58,6 +58,23 @@ MIN_EDGE_KEEP = 0.6
 MIN_EDGE_POINTS = 30
 
 
+def depth_intrinsics(k):
+    """
+    The depth camera's intrinsics, given the color camera's. Pixel centers sit
+    at half-integer coordinates, so the principal point scales as
+    (c + 0.5) / n - 0.5, not c / n.
+    """
+    kd = np.array(k, dtype=np.float64)
+    kd[:2, :2] /= DEPTH_SCALE_DOWN
+    kd[:2, 2] = (kd[:2, 2] + 0.5) / DEPTH_SCALE_DOWN - 0.5
+    return kd
+
+
+def depth_to_color_pixels(pixels):
+    """Where depth image pixels fall in the color image."""
+    return (np.asarray(pixels, dtype=np.float64) + 0.5) * DEPTH_SCALE_DOWN - 0.5
+
+
 def to_matrix(rotation_vector, translation):
     m = np.eye(4)
     m[:3, :3] = cv2.Rodrigues(np.asarray(rotation_vector, dtype=np.float64))[0]
@@ -118,9 +135,7 @@ class View:
         self.rgb_k = data["rgb_k"]
         # The depth is aligned to the color camera and scaled down evenly, so use
         # that, not the depth intrinsics saved with the view, which are wrong.
-        self.depth_k = self.rgb_k * np.array(
-            [[1 / 3, 1, 1 / 3], [1, 1 / 3, 1 / 3], [1, 1, 1]]
-        )
+        self.depth_k = depth_intrinsics(self.rgb_k)
         self.depth_mm = data["depth"].astype(np.float32)
         self.rgb = cv2.imread(path[:-4] + "_rgb.png")
         self.plane_pixels = None
@@ -144,9 +159,10 @@ def refine_edge_in_color(gray, depth_pixels):
     Given the depth image pixels of an edge, finds the same edge in the color
     image to a fraction of a pixel, and returns points along it, or None.
     """
-    point, direction = fit_line(depth_pixels.astype(np.float32) * DEPTH_SCALE_DOWN)
+    color_pixels = depth_to_color_pixels(depth_pixels)
+    point, direction = fit_line(color_pixels.astype(np.float32))
     normal = np.array([-direction[1], direction[0]])
-    along = (depth_pixels * DEPTH_SCALE_DOWN - point) @ direction
+    along = (color_pixels - point) @ direction
     found = []
     for s in np.arange(along.min(), along.max(), STEP_PX):
         offsets = np.arange(-SEARCH_PX, SEARCH_PX + 1)
@@ -265,8 +281,7 @@ def unpack(theta):
 def residuals(theta, views, theta0, split=None):
     correction, (fx, fy, cx, cy), depth_scale, depth_offset = unpack(theta)
     k = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1.0]])
-    kd = k.copy()
-    kd[:2] /= DEPTH_SCALE_DOWN
+    kd = depth_intrinsics(k)
     planes, edges = [], []
     for view in views:
         rotation, translation = view.camera_pose(correction)

@@ -173,8 +173,12 @@ class CameraPublisher(Node):
             # amount in both directions, so its intrinsics are the color
             # camera's, scaled down. The matrix the depth packet reports has a
             # wrong vertical focal length.
-            scale = np.array([DEPTH_WIDTH / WIDTH, DEPTH_HEIGHT / HEIGHT, 1.0])[:, None]
-            k = np.array(self.info_msg.k).reshape(3, 3) * scale
+            # Pixel centers sit at half-integer coordinates, so the principal
+            # point scales as (c + 0.5) / n - 0.5.
+            k = np.array(self.info_msg.k).reshape(3, 3)
+            scale = np.array([DEPTH_WIDTH / WIDTH, DEPTH_HEIGHT / HEIGHT])
+            k[:2, :2] *= scale[:, None]
+            k[:2, 2] = (k[:2, 2] + 0.5) * scale - 0.5
             self.depth_info_msg.k = k.flatten().tolist()
             self.depth_info_msg.p = np.hstack([k, np.zeros((3, 1))]).flatten().tolist()
             self.depth_info_msg.width = depth.shape[1]
