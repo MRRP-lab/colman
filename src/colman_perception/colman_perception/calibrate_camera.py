@@ -32,12 +32,6 @@ EDGES = [
     (np.array([NEAR_X_M, 0.0]), np.array([0.0, 1.0]), 1, (-HALF_WIDTH_M, HALF_WIDTH_M)),
 ]
 
-# How far past an edge's ends a point may be and still belong to it.
-SPAN_MARGIN_M = 0.10
-
-# Points further than this from every known edge are not table edge.
-MAX_EDGE_ERROR_M = 0.05
-
 # Measurement noise, used to weigh the terms against each other.
 SIGMA_PLANE_M = 0.003
 SIGMA_EDGE_M = 0.002
@@ -47,16 +41,25 @@ PLANE_SAMPLES = 1500
 # The depth image is this many times smaller than the color image.
 DEPTH_SCALE_DOWN = 3.0
 
-# How far from the depth-found edge to look for the real one in the color image,
-# and the spacing of the points taken along it.
-SEARCH_PX = 30
-STEP_PX = 10
+# Where to look for a known edge in the color image: this many pixels either
+# side of where the factory calibration puts it, sampled every SAMPLE_M along it.
+SEARCH_PX = 40
+SAMPLE_M = 0.005
 
-# A color edge point must be this close to the fitted line to be kept.
-EDGE_FIT_PX = 2.5
-MIN_EDGE_KEEP = 0.6
+# A gradient peak must be at least this strong (gray levels per pixel) to count,
+# and at most this many of the strongest are kept per scan line.
+MIN_GRADIENT = 4.0
+PEAKS_PER_SCAN = 3
 
-MIN_EDGE_POINTS = 30
+# A found edge must be within this angle of the projected one, and its points
+# within this many pixels of the line.
+MAX_ANGLE_RAD = np.radians(5.0)
+EDGE_FIT_PX = 2.0
+LINE_ITERATIONS = 400
+
+# A found edge needs this many scan lines on it, and this share of those searched.
+MIN_EDGE_POINTS = 10
+MIN_EDGE_SHARE = 0.2
 
 EDGE_NAMES = ["y=+0.5625", "y=-0.5625", "x=0.63", "x=0.09"]
 
@@ -166,26 +169,68 @@ def fit_line(points):
     return np.array([x0, y0]), np.array([dx, dy])
 
 
-def refine_edge_in_color(gray, depth_pixels):
+def project(rotation, translation, k, points):
+    """Color image pixels of base frame points, and their depth in the camera."""
+    camera = (points - translation) @ rotation
+    z = np.where(camera[:, 2] > 1e-6, camera[:, 2], np.nan)
+    return (
+        np.column_stack(
+            [k[0, 0] * camera[:, 0] / z + k[0, 2], k[1, 1] * camera[:, 1] / z + k[1, 2]]
+        ),
+        camera[:, 2],
+    )
+
+
+def gradient_peaks(profile):
     """
-    Given the depth image pixels of an edge, finds the same edge in the color
-    image to a fraction of a pixel, and returns points along it, or None.
+    Positions, to a fraction of a sample, of the strongest local peaks in the
+    gradient magnitude of a 1D profile.
     """
-    color_pixels = depth_to_color_pixels(depth_pixels)
-    point, direction = fit_line(color_pixels.astype(np.float32))
-    normal = np.array([-direction[1], direction[0]])
-    along = (color_pixels - point) @ direction
-    found = []
-    for s in np.arange(along.min(), along.max(), STEP_PX):
-        offsets = np.arange(-SEARCH_PX, SEARCH_PX + 1)
-        samples = (point + s * direction)[None, :] + offsets[:, None] * normal[None, :]
+    gradient = np.abs(np.gradient(profile))
+    inner = gradient[1:-1]
+    is_peak = (
+        (inner >= gradient[:-2]) & (inner > gradient[2:]) & (inner >= MIN_GRADIENT)
+    )
+    index = np.flatnonzero(is_peak) + 1
+    index = index[np.argsort(gradient[index])[::-1][:PEAKS_PER_SCAN]]
+    peaks = []
+    for i in index:
+        a, b, c = gradient[i - 1], gradient[i], gradient[i + 1]
+        denominator = a - 2 * b + c
+        shift = 0.5 * (a - c) / denominator if denominator != 0 else 0.0
+        peaks.append(i + shift)
+    return peaks
+
+
+def find_color_edge(gray, rotation, translation, k, edge):
+    """
+    Looks for one known table edge in the color image, near where the factory
+    calibration projects it. Gathers the strongest gradient peaks along scan
+    lines across the projected edge and fits a line through them with RANSAC.
+    Returns the points on the line, or None.
+    """
+    origin, direction, _, (low, high) = edge
+    s = np.arange(low, high, SAMPLE_M)
+    xy = origin[None, :] + s[:, None] * direction[None, :]
+    pixels, depth = project(
+        rotation, translation, k, np.column_stack([xy, np.zeros(len(xy))])
+    )
+    height, width = gray.shape
+    offsets = np.arange(-SEARCH_PX, SEARCH_PX + 1)
+    candidates = []
+    searched = []
+    for i in range(1, len(pixels) - 1):
+        if depth[i] < 0.05 or not np.all(np.isfinite(pixels[i - 1 : i + 2])):
+            continue
+        tangent = pixels[i + 1] - pixels[i - 1]
+        length = np.linalg.norm(tangent)
+        if length < 1e-6:
+            continue
+        tangent /= length
+        normal = np.array([-tangent[1], tangent[0]])
+        samples = pixels[i][None, :] + offsets[:, None] * normal[None, :]
         u, v = samples[:, 0], samples[:, 1]
-        if (
-            u.min() < 2
-            or v.min() < 2
-            or u.max() > gray.shape[1] - 3
-            or v.max() > gray.shape[0] - 3
-        ):
+        if u.min() < 3 or v.min() < 3 or u.max() > width - 4 or v.max() > height - 4:
             continue
         profile = cv2.remap(
             gray,
@@ -193,39 +238,53 @@ def refine_edge_in_color(gray, depth_pixels):
             v.astype(np.float32)[:, None],
             cv2.INTER_LINEAR,
         )[:, 0]
-        gradient = np.abs(np.gradient(profile))
-        best = int(np.argmax(gradient))
-        if best < 2 or best > len(gradient) - 3 or gradient[best] < 3.0:
-            continue
-        # Parabola through the peak for the position to a fraction of a pixel.
-        a, b, c = gradient[best - 1], gradient[best], gradient[best + 1]
-        shift = 0.5 * (a - c) / (a - 2 * b + c) if (a - 2 * b + c) != 0 else 0.0
-        found.append(samples[best] + shift * normal)
-    if len(found) < MIN_EDGE_POINTS // 3:
+        searched.append(pixels[i])
+        for peak in gradient_peaks(profile):
+            candidates.append(
+                (pixels[i] + (peak - SEARCH_PX) * normal, len(searched) - 1)
+            )
+    if len(searched) < MIN_EDGE_POINTS or len(candidates) < MIN_EDGE_POINTS:
         return None
-    found = np.array(found)
-    point, direction = fit_line(found)
-    normal = np.array([-direction[1], direction[0]])
-    keep = np.abs((found - point) @ normal) < EDGE_FIT_PX
-    if keep.mean() < MIN_EDGE_KEEP:
-        return None
-    return found[keep]
+    searched = np.array(searched)
+    points = np.array([c[0] for c in candidates])
+    scans = np.array([c[1] for c in candidates])
+    # The projected edge's direction and middle, to compare candidate lines to.
+    centre = searched.mean(axis=0)
+    axis = np.linalg.svd(searched - centre)[2][0]
 
-
-def assign_edge(points_xy):
-    """
-    The known edge a set of base frame points most likely belongs to, or None.
-    """
-    best, best_error = None, MAX_EDGE_ERROR_M
-    for index, (origin, direction, axis, (low, high)) in enumerate(EDGES):
-        normal = np.array([-direction[1], direction[0]])
-        error = np.median(np.abs((points_xy - origin) @ normal))
-        along = points_xy[:, axis]
-        if along.min() < low - SPAN_MARGIN_M or along.max() > high + SPAN_MARGIN_M:
+    rng = np.random.default_rng(0)
+    trials = []
+    for _ in range(LINE_ITERATIONS):
+        a, b = points[rng.choice(len(points), 2, replace=False)]
+        step = b - a
+        length = np.linalg.norm(step)
+        if length < 50.0:
             continue
-        if error < best_error:
-            best, best_error = index, error
-    return best
+        step /= length
+        if abs(step[0] * axis[1] - step[1] * axis[0]) > np.sin(MAX_ANGLE_RAD):
+            continue
+        normal = np.array([-step[1], step[0]])
+        inliers = np.abs((points - a) @ normal) < EDGE_FIT_PX
+        trials.append((len(set(scans[inliers])), abs((centre - a) @ normal), a, step))
+    if not trials:
+        return None
+    best = max(t[0] for t in trials)
+    # Parallel stripes (a rail next to the table) are as good as the edge, so
+    # among the lines nearly as well supported, take the one closest to where
+    # the edge is expected.
+    _, _, a, step = min((t for t in trials if t[0] >= 0.7 * best), key=lambda t: t[1])
+    for _ in range(2):
+        normal = np.array([-step[1], step[0]])
+        inliers = np.abs((points - a) @ normal) < EDGE_FIT_PX
+        if inliers.sum() < 2:
+            return None
+        a, step = fit_line(points[inliers])
+    normal = np.array([-step[1], step[0]])
+    inliers = np.abs((points - a) @ normal) < EDGE_FIT_PX
+    count = len(set(scans[inliers]))
+    if count < MIN_EDGE_POINTS or count < MIN_EDGE_SHARE * len(searched):
+        return None
+    return points[inliers]
 
 
 def ray_on_table(rotation, translation, k, pixels):
@@ -275,13 +334,9 @@ def analyze(view):
     )
     gray = cv2.GaussianBlur(cv2.cvtColor(view.rgb, cv2.COLOR_BGR2GRAY), (0, 0), 1.2)
     gray = gray.astype(np.float32)
-    for edge in result["edges"]:
-        points = refine_edge_in_color(gray, edge["pixels"])
+    for index, edge in enumerate(EDGES):
+        points = find_color_edge(gray, rotation, translation, view.rgb_k, edge)
         if points is None:
-            continue
-        xy, _ = ray_on_table(rotation, translation, view.rgb_k, points)
-        index = assign_edge(xy[:, :2])
-        if index is None:
             continue
         view.edge_pixels.append(points)
         view.edge_ids.append(index)
