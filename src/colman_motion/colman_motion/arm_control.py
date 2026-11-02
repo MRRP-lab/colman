@@ -130,15 +130,15 @@ class ArmControl(Node):
         with psm.read_only() as scene:
             return scene.is_state_valid(state, "ur_arm")
 
-    def state_from_ik(self, pose):
-        """Joint state for pose on the IK branch nearest the current state.
+    def state_from_ik(self, pose, link=TIP_LINK, seed=None):
+        """Joint state for pose on the IK branch nearest the seed state.
 
-        TRAC-IK in Distance mode is seeded with the current joint state, so it
-        stays on the same shoulder/elbow/wrist branch instead of the random one
-        OMPL's goal sampler would pick.
+        TRAC-IK in Distance mode is seeded with the seed joint state (the
+        current one by default), so it stays on the same shoulder/elbow/wrist
+        branch instead of the random one OMPL's goal sampler would pick.
         """
-        state = self.current_state()
-        if not state.set_from_ik("ur_arm", pose, TIP_LINK, IK_TIMEOUT_S):
+        state = self.current_state() if seed is None else copy.deepcopy(seed)
+        if not state.set_from_ik("ur_arm", pose, link, IK_TIMEOUT_S):
             return None
         state.update()
         return state
@@ -225,7 +225,18 @@ class ArmControl(Node):
             return False
         return self.plan_and_execute(single_plan_parameters=params, retries=retries)
 
-    def go_to_pose(self, x, y, z, qx=0.0, qy=0.0, qz=0.0, qw=1.0, params=None):
+    def go_to_pose(
+        self,
+        x,
+        y,
+        z,
+        qx=0.0,
+        qy=0.0,
+        qz=0.0,
+        qw=1.0,
+        params=None,
+        pose_link=TIP_LINK,
+    ):
         pose = Pose()
         pose.orientation.x = qx
         pose.orientation.y = qy
@@ -235,7 +246,7 @@ class ArmControl(Node):
         pose.position.y = y
         pose.position.z = z
 
-        goal_state = self.state_from_ik(pose)
+        goal_state = self.state_from_ik(pose, pose_link)
         if goal_state is None:
             self.get_logger().error("No IK solution for pose")
             return False
