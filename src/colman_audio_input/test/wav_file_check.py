@@ -25,7 +25,9 @@ from std_msgs.msg import String
 
 from colman_audio_input import speech_to_text_node as stt
 
-TRAILING_SILENCE_S = 2.0  # must exceed the node's silence_ms so the VAD closes the utterance
+TRAILING_SILENCE_S = (
+    2.0  # must exceed the node's silence_ms so the VAD closes the utterance
+)
 MAX_QUEUE = 50  # pace feeding so the node's audio queue (500) never drops blocks
 TIMEOUT_S = 120.0
 
@@ -65,19 +67,32 @@ def normalize(text):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("wav")
-    parser.add_argument("--expect", action="append", default=[],
-                        help="phrase that must appear (case/punctuation ignored); repeatable")
+    parser.add_argument(
+        "--expect",
+        action="append",
+        default=[],
+        help="phrase that must appear (case/punctuation ignored); repeatable",
+    )
     parser.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu"])
     parser.add_argument("--model", default="nemo-parakeet-tdt-0.6b-v2")
     args = parser.parse_args()
 
     audio = read_wav(args.wav)
-    audio = np.concatenate([audio, np.zeros(int(TRAILING_SILENCE_S * stt.SAMPLE_RATE), np.float32)])
+    audio = np.concatenate(
+        [audio, np.zeros(int(TRAILING_SILENCE_S * stt.SAMPLE_RATE), np.float32)]
+    )
     pad = -len(audio) % stt.BLOCK_SAMPLES
     audio = np.pad(audio, (0, pad))
 
-    rclpy.init(args=["--ros-args", "-p", f"device:={args.device}",
-                     "-p", f"model_name:={args.model}"])
+    rclpy.init(
+        args=[
+            "--ros-args",
+            "-p",
+            f"device:={args.device}",
+            "-p",
+            f"model_name:={args.model}",
+        ]
+    )
     stt.sd.InputStream = StubStream  # before the node tries to open a microphone
     node = stt.SpeechToTextNode()
 
@@ -97,7 +112,10 @@ def main():
     transcripts = []
     listener = Node("wav_check_listener")
     listener.create_subscription(
-        String, node.get_parameter("topic").value, lambda m: transcripts.append(m.data), 10
+        String,
+        node.get_parameter("topic").value,
+        lambda m: transcripts.append(m.data),
+        10,
     )
     executor = SingleThreadedExecutor()
     executor.add_node(listener)
@@ -105,7 +123,7 @@ def main():
     try:
         start = time.monotonic()
         for i in range(0, len(audio), stt.BLOCK_SAMPLES):
-            block = audio[i:i + stt.BLOCK_SAMPLES].reshape(-1, 1)
+            block = audio[i : i + stt.BLOCK_SAMPLES].reshape(-1, 1)
             node._on_audio(block, stt.BLOCK_SAMPLES, None, None)
             while node._audio_q.qsize() > MAX_QUEUE:
                 time.sleep(0.001)
@@ -113,8 +131,9 @@ def main():
 
         while time.monotonic() - start < TIMEOUT_S:
             executor.spin_once(timeout_sec=0.1)
-            drained = (node._audio_q.empty() and node._segment_q.empty()
-                       and busy["n"] == 0)
+            drained = (
+                node._audio_q.empty() and node._segment_q.empty() and busy["n"] == 0
+            )
             if drained:
                 time.sleep(0.3)  # let a segment still in the VAD thread reach the queue
                 executor.spin_once(timeout_sec=0.1)
