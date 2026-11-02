@@ -9,7 +9,7 @@ Design for adding voice-driven control to the robot. For how the rest of the rep
 - `colman_audio_input` is meant to use local Parakeet speech recognition (`onnx-asr`, `silero-vad`, `sounddevice`, all in `pixi.toml`). The current `speech_to_text_node.py` is still Azure-based until the Parakeet node replaces it.
 - `colman_interfaces` and `colman_motion` provide `MoveTo`, `Pick` and `Place` actions on `/move_to`, `/pick` and `/place`, plus `std_srvs/Trigger` services `/stop` and `/resume`. Run the server with `pixi run motion`.
 - `colman_bringup` has a driver supervisor (`pixi run driver`) that recovers the UR arm in place.
-- There is no `colman_llm` package yet.
+- `colman_llm` now exists with a single `move_arm` tool (two saved poses). The rest of this plan (pick and place, stop and resume tools) is not built yet.
 
 The `Pick` action takes a `frame` (for example `tag_3`) and reports a `stage` as feedback. The `Place` action takes a `location` frame and an optional `position`. Both return `success` and `message`.
 
