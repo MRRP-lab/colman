@@ -19,17 +19,16 @@ pixi run ros2 run colman_audio_input speech_to_text
 ```
 
 Optional parameters: `topic` (default `speech_text`), `mute_topic`
-(default `tts_speaking`, mutes the mic while the robot speaks), and
+(default `tts_speaking`, mutes the mic while the robot speaks),
+`mute_max_s` (default 60, unmutes if the speaking-done message never arrives), and
 `input_device` (sounddevice index or name; empty uses the default mic).
 
 ```bash
 pixi run ros2 run colman_audio_input speech_to_text --ros-args \
-    -p topic:=speech_text -p input_device:="'2'"
+    -p topic:=speech_text -p input_device:=2
 ```
 
-The inner quotes force ROS to treat the index as a string (the parameter is
-declared as a string). A device name works too: `-p input_device:="'USB Mic'"`.
-List available devices with:
+A device name works too: `-p input_device:="USB Mic"`. List available devices with:
 
 ```bash
 pixi run python -m sounddevice
