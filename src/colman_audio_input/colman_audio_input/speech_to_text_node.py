@@ -20,6 +20,7 @@ import rclpy
 import sounddevice as sd
 import torch
 from huggingface_hub import snapshot_download
+from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
 from silero_vad import VADIterator, load_silero_vad
@@ -46,7 +47,10 @@ class SpeechToTextNode(Node):
         self.declare_parameter("model_name", "nemo-parakeet-tdt-0.6b-v2")
         self.declare_parameter("device", "auto")  # auto | cuda | cpu
         # sounddevice index or name; '' = default
-        self.declare_parameter("input_device", "")
+        # Int index or string name; dynamic typing lets `-p input_device:=2` work.
+        self.declare_parameter(
+            "input_device", "", ParameterDescriptor(dynamic_typing=True)
+        )
         self.declare_parameter("silence_ms", 700)
         self.declare_parameter("max_utterance_s", 30.0)
         self.declare_parameter("vad_threshold", 0.5)
@@ -54,14 +58,22 @@ class SpeechToTextNode(Node):
         self.declare_parameter("mute_topic", "tts_speaking")
         # Keep the mic muted this long after speech ends (speaker/room tail).
         self.declare_parameter("mute_tail_ms", 600)
+        # Safety net: give up on a missing tts_speaking=False after this long.
+        self.declare_parameter("mute_max_s", 60.0)
 
         topic = self.get_parameter("topic").value
         model_name = self.get_parameter("model_name").value
         language = self.get_parameter("language").value
-        if model_name.endswith("-v2") and not language.lower().startswith("en"):
-            self.get_logger().warn(
-                f'{model_name} is English only but language is "{language}". '
-                "Use nemo-parakeet-tdt-0.6b-v3 for other languages."
+        if model_name.endswith("-v2"):
+            if not language.lower().startswith("en"):
+                self.get_logger().warn(
+                    f'{model_name} is English only but language is "{language}". '
+                    "Use nemo-parakeet-tdt-0.6b-v3 for other languages."
+                )
+        else:
+            self.get_logger().info(
+                f"{model_name} detects the language automatically; "
+                f'the "language" parameter ({language}) is not used.'
             )
 
         self.pub = self.create_publisher(String, topic, 10)
@@ -69,6 +81,8 @@ class SpeechToTextNode(Node):
         # Mute the mic while the robot speaks so it doesn't transcribe itself.
         self._speaking = False
         self._unmute_at = 0.0
+        self._speaking_since = 0.0
+        self._mute_max_s = float(self.get_parameter("mute_max_s").value)
         self._mute_tail_s = int(self.get_parameter("mute_tail_ms").value) / 1000.0
         mute_topic = self.get_parameter("mute_topic").value
         if mute_topic:
@@ -87,9 +101,14 @@ class SpeechToTextNode(Node):
             f"Loading {model_name} with {providers[0]} (first run downloads it)..."
         )
         # onnxruntime rejects the symlinked HF cache layout, so keep a real copy.
-        model_path = snapshot_download(
-            MODEL_REPOS[model_name], local_dir=MODEL_DIR / model_name
-        )
+        # Use the cached copy when present so startup works offline.
+        repo, local_dir = MODEL_REPOS[model_name], MODEL_DIR / model_name
+        try:
+            model_path = snapshot_download(
+                repo, local_dir=local_dir, local_files_only=True
+            )
+        except Exception:
+            model_path = snapshot_download(repo, local_dir=local_dir)
         self._asr = onnx_asr.load_model(model_name, model_path, providers=providers)
         self._check_providers(providers[0])
 
@@ -108,7 +127,7 @@ class SpeechToTextNode(Node):
         input_device = self.get_parameter("input_device").value
         if input_device == "":
             input_device = None
-        elif input_device.isdigit():
+        elif isinstance(input_device, str) and input_device.isdigit():
             input_device = int(input_device)
         try:
             self._stream = sd.InputStream(
@@ -120,7 +139,7 @@ class SpeechToTextNode(Node):
                 callback=self._on_audio,
             )
             self._stream.start()
-        except sd.PortAudioError as exc:
+        except Exception as exc:  # PortAudioError, or ValueError for a bad device
             self._shutdown_threads()
             raise RuntimeError(f"Could not open the microphone: {exc}") from exc
 
@@ -136,7 +155,11 @@ class SpeechToTextNode(Node):
 
     def _check_providers(self, wanted):
         # onnxruntime silently falls back to CPU if the CUDA libs or driver are missing.
-        active = self._asr.asr._encoder.get_providers()[0]
+        try:
+            active = self._asr.asr._encoder.get_providers()[0]
+        except AttributeError:  # onnx-asr internals changed; can't verify
+            self.get_logger().warn("Could not verify the ONNX execution provider.")
+            return
         if active == wanted:
             self.get_logger().info(f"Running on {active}.")
         elif self.get_parameter("device").value == "cuda":
@@ -149,6 +172,7 @@ class SpeechToTextNode(Node):
 
     def _on_speaking(self, msg):
         if msg.data:
+            self._speaking_since = time.monotonic()
             self._speaking = True
         else:
             self._unmute_at = time.monotonic() + self._mute_tail_s
@@ -156,15 +180,19 @@ class SpeechToTextNode(Node):
         self.get_logger().debug(f"tts_speaking={msg.data}")
 
     def _is_muted(self):
-        return self._speaking or time.monotonic() < self._unmute_at
+        now = time.monotonic()
+        if self._speaking and now - self._speaking_since < self._mute_max_s:
+            return True
+        return now < self._unmute_at
 
     def _on_audio(self, indata, frames, time_info, status):
         if status:
             self.get_logger().warn(f"Audio status: {status}", throttle_duration_sec=5.0)
-        if self._is_muted():
-            return
+        # While muted, send a None marker so the segmenter discards any
+        # utterance in progress. Muting only affects the VAD input.
+        block = None if self._is_muted() else indata[:, 0].copy()
         try:
-            self._audio_q.put_nowait(indata[:, 0].copy())
+            self._audio_q.put_nowait(block)
         except queue.Full:
             pass  # segmenter fell behind; drop rather than block the audio thread
 
@@ -186,31 +214,33 @@ class SpeechToTextNode(Node):
                 block = self._audio_q.get(timeout=0.2)
             except queue.Empty:
                 continue
+            try:
+                if block is None:
+                    # Muted: discard anything captured around the robot's own speech.
+                    pre_roll = []
+                    segment = None
+                    vad.reset_states()
+                    continue
 
-            if self._is_muted():
-                # Discard anything captured around the robot's own speech.
-                pre_roll = []
-                segment = None
-                vad.reset_states()
-                continue
+                event = vad(torch.from_numpy(block))
+                if segment is None:
+                    pre_roll.append(block)
+                    del pre_roll[:-pre_roll_blocks]
+                    if event and "start" in event:
+                        segment = list(pre_roll)
+                        n_samples = len(segment) * BLOCK_SAMPLES
+                    continue
 
-            event = vad(torch.from_numpy(block))
-            if segment is None:
-                pre_roll.append(block)
-                del pre_roll[:-pre_roll_blocks]
-                if event and "start" in event:
-                    segment = list(pre_roll)
-                    n_samples = len(segment) * BLOCK_SAMPLES
-                continue
-
-            segment.append(block)
-            n_samples += BLOCK_SAMPLES
-            ended = event is not None and "end" in event
-            if ended or n_samples >= self._max_samples:
-                self._finish_segment(segment)
-                segment = None
-                pre_roll = []
-                vad.reset_states()
+                segment.append(block)
+                n_samples += BLOCK_SAMPLES
+                ended = event is not None and "end" in event
+                if ended or n_samples >= self._max_samples:
+                    self._finish_segment(segment)
+                    segment = None
+                    pre_roll = []
+                    vad.reset_states()
+            finally:
+                self._audio_q.task_done()
 
     def _finish_segment(self, blocks):
         audio = np.concatenate(blocks)
@@ -228,10 +258,8 @@ class SpeechToTextNode(Node):
             except Exception as exc:  # keep listening after a bad utterance
                 self.get_logger().error(f"Transcription failed: {exc}")
                 continue
-            if text and self._is_muted():
-                # Segment was captured just before/while the robot started talking.
-                self.get_logger().debug(f"Dropped while muted: {text}")
-                continue
+            finally:
+                self._segment_q.task_done()
             if text:
                 msg = String()
                 msg.data = text

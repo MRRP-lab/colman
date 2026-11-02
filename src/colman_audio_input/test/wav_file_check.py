@@ -29,7 +29,6 @@ TRAILING_SILENCE_S = (
     2.0  # must exceed the node's silence_ms so the VAD closes the utterance
 )
 MAX_QUEUE = 50  # pace feeding so the node's audio queue (500) never drops blocks
-TIMEOUT_S = 120.0
 
 
 class StubStream:
@@ -96,19 +95,6 @@ def main():
     stt.sd.InputStream = StubStream  # before the node tries to open a microphone
     node = stt.SpeechToTextNode()
 
-    # Track in-flight transcription so we know when the pipeline is drained.
-    busy = {"n": 0}
-    real_transcribe = node._transcribe
-
-    def tracked_transcribe(segment):
-        busy["n"] += 1
-        try:
-            return real_transcribe(segment)
-        finally:
-            busy["n"] -= 1
-
-    node._transcribe = tracked_transcribe
-
     transcripts = []
     listener = Node("wav_check_listener")
     listener.create_subscription(
@@ -121,7 +107,6 @@ def main():
     executor.add_node(listener)
 
     try:
-        start = time.monotonic()
         for i in range(0, len(audio), stt.BLOCK_SAMPLES):
             block = audio[i : i + stt.BLOCK_SAMPLES].reshape(-1, 1)
             node._on_audio(block, stt.BLOCK_SAMPLES, None, None)
@@ -129,18 +114,12 @@ def main():
                 time.sleep(0.001)
             executor.spin_once(timeout_sec=0)
 
-        while time.monotonic() - start < TIMEOUT_S:
+        # Queue.join() is exact: the audio queue drains first (so every segment
+        # has been enqueued), then the segment queue (every transcript published).
+        node._audio_q.join()
+        node._segment_q.join()
+        for _ in range(5):
             executor.spin_once(timeout_sec=0.1)
-            drained = (
-                node._audio_q.empty() and node._segment_q.empty() and busy["n"] == 0
-            )
-            if drained:
-                time.sleep(0.3)  # let a segment still in the VAD thread reach the queue
-                executor.spin_once(timeout_sec=0.1)
-                if node._audio_q.empty() and node._segment_q.empty() and busy["n"] == 0:
-                    break
-        else:
-            print(f"Timed out after {TIMEOUT_S:.0f} s")
     finally:
         node.destroy_node()
         listener.destroy_node()
