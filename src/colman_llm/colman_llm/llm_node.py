@@ -35,6 +35,9 @@ class LlmNode(Node):
         self.declare_parameter("model", "claude-sonnet-5-5")
 
         load_env_file()
+        # The repo's .env has used this name; the SDK only reads ANTHROPIC_API_KEY.
+        if os.getenv("ANTHROPIC_API_TOKEN"):
+            os.environ.setdefault("ANTHROPIC_API_KEY", os.environ["ANTHROPIC_API_TOKEN"])
         if not os.getenv("ANTHROPIC_API_KEY"):
             raise RuntimeError(
                 "Set ANTHROPIC_API_KEY in your environment or in the .env file."
