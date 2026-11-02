@@ -13,11 +13,15 @@ MAX_EXCHANGES = 5
 MAX_TOOL_ROUNDS = 5
 
 REFUSAL_LINE = "I can't help with that."
+IGNORE_TOKEN = "IGNORE"
 FALLBACK_LINE = "I couldn't reach my brain just now."
 
 SYSTEM_PROMPT = """\
 You control a robot arm through the provided tools.
 The arm has two saved positions, "position one" and "position two".
+You are overhearing a room, so most speech is not meant for you.
+Only respond if the speech is clearly directed at you or the robot, or it answers a
+question you just asked. Otherwise reply with exactly IGNORE and nothing else.
 Only call a tool when the user clearly asks the arm to move.
 Answer in one or two short spoken sentences, with no markdown, lists or emoji.
 If a request is ambiguous or names something not in the tool's list, ask a question \
@@ -70,9 +74,12 @@ class ClaudeClient:
             self._log.warning("Tool loop hit its round limit.")
             return FALLBACK_LINE  # history would end on a tool_result, so drop it
 
+        reply = "".join(b.text for b in response.content if b.type == "text").strip()
+        if reply == IGNORE_TOKEN:
+            return ""  # not spoken to: say nothing and keep it out of the history
         self._exchanges.append(exchange)
         del self._exchanges[:-MAX_EXCHANGES]
-        return "".join(b.text for b in response.content if b.type == "text").strip()
+        return reply
 
     def _create(self, messages):
         try:

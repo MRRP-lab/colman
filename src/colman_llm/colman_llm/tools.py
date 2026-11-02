@@ -3,7 +3,7 @@
 # Spoken name -> pose name in colman_moveit_config/config/colman.srdf.
 POSITIONS = {
     "position one": "Look1",
-    "position two": "Look2",
+    "position two": "Compact",
 }
 
 MOVE_ARM = {

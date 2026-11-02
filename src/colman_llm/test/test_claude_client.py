@@ -139,3 +139,10 @@ def test_tool_loop_is_capped_and_not_remembered():
     assert len(messages.calls) == rounds
     client.say("next")
     assert len(messages.calls[-1]["messages"]) == 1
+
+
+def test_ignore_is_silent_and_not_remembered():
+    client, messages = make(reply(claude_client.IGNORE_TOKEN), reply("Hi."))
+    assert client.say("did you push the branch?") == ""
+    assert client.say("hello robot") == "Hi."
+    assert len(messages.calls[1]["messages"]) == 1
