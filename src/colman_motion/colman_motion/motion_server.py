@@ -78,7 +78,9 @@ class MotionServer(Node):
             cancel_callback=self.cancel_cb,
             callback_group=group,
         )
-        self.get_logger().info("/move_to, /move_pose, /pick and /place action servers started")
+        self.get_logger().info(
+            "/move_to, /move_pose, /pick and /place action servers started"
+        )
 
     def goal_cb(self, request):
         with self.arm.busy_lock:
