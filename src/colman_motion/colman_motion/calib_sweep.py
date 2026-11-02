@@ -16,8 +16,11 @@ from sensor_msgs.msg import CameraInfo, Image
 from tf2_ros import Buffer, TransformException, TransformListener
 
 from colman_motion.arm_control import ArmControl
-from colman_motion.click_move import level_camera_rotation, quaternion_to_matrix
-from colman_motion.demo_camera import rotation_to_quaternion
+from colman_motion.geometry import (
+    level_camera_rotation,
+    quaternion_to_matrix,
+    rotation_to_quaternion,
+)
 from colman_motion.robot_ready import wait_for_robot
 from colman_motion.scene_manager import SceneManager
 

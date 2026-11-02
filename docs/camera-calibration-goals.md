@@ -57,8 +57,7 @@ where kinematic error would show up most.
   (2 heights, 3 look targets). Saves colour image, median depth, base→tool pose,
   tool→camera pose and both intrinsics per view to `$CALIB_DIR`.
 - `calibrate_camera.py <view dir> [out.yaml]` fits the camera parameters to those views, using
-  `table_finder.py` to find the table plane and edges in depth.
-- `pixi run find-table` / `pixi run view-depth`: live table finder and depth viewer.
+  the table edges found in the colour images.
 - `camera_publisher.py` publishes aligned depth (640×360, mm) alongside the colour image,
   with the IR dot projector on so the black tabletop has texture for stereo.
 
