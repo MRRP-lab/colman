@@ -133,7 +133,9 @@ def test_tool_failure_is_reported_as_error():
 def test_tool_loop_is_capped_and_not_remembered():
     rounds = claude_client.MAX_TOOL_ROUNDS
     client, messages = make(*[tool_reply() for _ in range(rounds)], reply("ok"))
-    assert client.say("move", lambda n, a: (True, "Moved.")) == claude_client.FALLBACK_LINE
+    assert (
+        client.say("move", lambda n, a: (True, "Moved.")) == claude_client.FALLBACK_LINE
+    )
     assert len(messages.calls) == rounds
     client.say("next")
     assert len(messages.calls[-1]["messages"]) == 1

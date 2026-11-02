@@ -67,7 +67,7 @@ class ClaudeClient:
                 )
             exchange.append({"role": "user", "content": results})
         else:
-            self._log.warn("Tool loop hit its round limit.")
+            self._log.warning("Tool loop hit its round limit.")
             return FALLBACK_LINE  # history would end on a tool_result, so drop it
 
         self._exchanges.append(exchange)
