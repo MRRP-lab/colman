@@ -1,4 +1,4 @@
-z"""Anthropic SDK wrapper: one spoken turn in, spoken text out.
+"""Anthropic SDK wrapper: one spoken turn in, spoken text out.
 
 Keeps the conversation history. The history is a list of whole exchanges, so
 trimming never splits a turn and thinking blocks are replayed unchanged.

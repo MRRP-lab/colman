@@ -34,6 +34,7 @@ demo-circle = "ros2 launch colman_motion demo.launch.py demo:=demo_circle"
 demo-obstacle = "ros2 launch colman_motion demo.launch.py demo:=demo_obstacle"
 
 speak = "ros2 run colman_audio_output kokoro_tts"
+llm = "ros2 run colman_llm llm_node"
 
 stop = "ros2 service call /stop std_srvs/srv/Trigger"
 resume = "ros2 service call /resume std_srvs/srv/Trigger"
