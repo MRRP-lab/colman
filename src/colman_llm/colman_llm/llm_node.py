@@ -22,6 +22,7 @@ from std_msgs.msg import String
 
 from colman_llm.claude_client import ClaudeClient
 from colman_llm.env_file import load_env_file
+from colman_llm.executor import FakeExecutor
 
 QUEUE_SIZE = 10
 
@@ -41,6 +42,7 @@ class LlmNode(Node):
         self._claude = ClaudeClient(
             self.get_parameter("model").value, self.get_logger()
         )
+        self._executor = FakeExecutor(self.get_logger())
         self._pub = self.create_publisher(String, "llm_response", 10)
 
         self._queue = queue.Queue(maxsize=QUEUE_SIZE)
@@ -70,10 +72,15 @@ class LlmNode(Node):
             except queue.Empty:
                 continue
             self.get_logger().info(f"Heard: {text}")
-            reply = self._claude.say(text)
+            reply = self._claude.say(text, self._run_tool)
             if reply:
                 self._pub.publish(String(data=reply))
                 self.get_logger().info(f"Replied: {reply}")
+
+    def _run_tool(self, name, args):
+        # Tell the user the command was heard before a long action starts.
+        self._pub.publish(String(data="On it."))
+        return self._executor.run_tool(name, args)
 
     def destroy_node(self):
         self._stop.set()

@@ -6,10 +6,10 @@ Design for adding voice-driven control to the robot. For how the rest of the rep
 
 - `colman_audio_input` publishes recognized speech on `/speech_text` (`std_msgs/String`).
 - `colman_audio_output` subscribes to `llm_response` (`std_msgs/String`), speaks it locally with Kokoro-82M, and publishes `tts_speaking` (`std_msgs/Bool`, transient-local) while audio plays.
-- `colman_audio_input` on the `NVIDIA-Parakeet` branch is the Parakeet speech recognition node (`onnx-asr`, `silero-vad`, `sounddevice`, all in `pixi.toml`). It already mutes the microphone while `tts_speaking` is true plus a 600 ms tail (`mute_topic`, `mute_tail_ms` parameters), and `test/wav_file_check.py` runs it on a WAV file. That branch is not merged yet, and `main` still has the Azure node. Merge `NVIDIA-Parakeet` before the closed-loop test.
+- `colman_audio_input` is the Parakeet speech recognition node (`onnx-asr`, `silero-vad`, `sounddevice`, all in `pixi.toml`), merged from `NVIDIA-Parakeet`. It mutes the microphone while `tts_speaking` is true plus a 600 ms tail (`mute_topic`, `mute_tail_ms` parameters), and `test/wav_file_check.py` runs it on a WAV file.
 - `colman_interfaces` and `colman_motion` provide `MoveTo`, `Pick` and `Place` actions on `/move_to`, `/pick` and `/place`, plus `std_srvs/Trigger` services `/stop` and `/resume`. Run the server with `pixi run motion`.
 - `colman_bringup` has a driver supervisor (`pixi run driver`) that recovers the UR arm in place.
-- There is no `colman_llm` package yet.
+- `colman_llm` exists. Steps 1 and 2 of Order of work are done: the node answers `/speech_text` through Claude, and the `pick_and_place` tool runs against a fake executor that returns canned results. There are no real `/pick` or `/place` calls yet.
 
 The `Pick` action takes a `frame` (for example `tag_3`) and reports a `stage` as feedback. The `Place` action takes a `location` frame and an optional `position`. Both return `success` and `message`.
 
@@ -182,7 +182,7 @@ Details:
 
 The output node uses its defaults: `stream` mode and the `bm_daniel` voice, with a bounded queue of 5.
 
-The microphone mute is already implemented in the Parakeet node on the `NVIDIA-Parakeet` branch (see Starting point). It subscribes to `tts_speaking` with transient-local QoS, so a late-starting mic node sees the current state. Merge that branch before the closed-loop test.
+The microphone mute is implemented in the Parakeet node (see Starting point). It subscribes to `tts_speaking` with transient-local QoS, so a late-starting mic node sees the current state.
 
 Before a long action starts, the worker publishes the acknowledgement "On it." as a separate `llm_response` message, so the user knows the command was heard.
 
@@ -222,14 +222,14 @@ Kokoro speaks the response
 1. Unit tests with a fake Anthropic client: plain reply, valid tool call, unknown object, malformed arguments, refusal, API error, tool loop cap.
 2. Unit tests for the executor with a fake action client: pick fails, pick succeeds then place fails, timeout, busy rejection.
 3. Simulation: run `colman_llm` with the motion server in Gazebo and publish text on `/speech_text` directly (`ros2 topic pub`), without the microphone.
-4. Closed loop with real audio, after `NVIDIA-Parakeet` is merged so the mic mute is present.
+4. Closed loop with real audio, using the Parakeet node and its mic mute.
 
 ## Order of work
 
-1. Scaffold `colman_llm` with a node that echoes `/speech_text` to `llm_response` through a Claude call with no tools. Include the `ANTHROPIC_API_KEY` check, `package.xml` with `python3-anthropic`, and a `pixi run llm` task.
-2. Add the `pick_and_place` tool with a fake executor that returns canned results.
+1. (Done) Scaffold `colman_llm` with a node that echoes `/speech_text` to `llm_response` through a Claude call with no tools. Include the `ANTHROPIC_API_KEY` check, `package.xml` with `python3-anthropic`, and a `pixi run llm` task.
+2. (Done) Add the `pick_and_place` tool with a fake executor that returns canned results.
 3. Wire the executor to `/pick` and `/place`.
 4. Add the spoken stop fast path and the `stop_robot` tool.
 5. Add the `resume_robot` tool.
-6. Merge `NVIDIA-Parakeet` for the microphone and its mute on `tts_speaking`.
+6. (Parakeet is merged.) Check the microphone mute on `tts_speaking` in the closed loop.
 7. Tune the system prompt against a list of real spoken phrases.
