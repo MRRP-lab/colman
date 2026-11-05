@@ -3,7 +3,8 @@ Captures one still, undistorted color frame from a specific OAK camera, with
 its intrinsics, for grid calibration.
 
 Usage:
-    python capture_grid.py <device id> <output stem> [manual focus 0-255 or -1] [width height]
+    python capture_grid.py <device id> <output stem> [manual focus 0-255 or -1] \
+        [width height]
 
 Writes <stem>_rgb.png and <stem>.npz (rgb_k, device_id, focus). The default size
 is 1920x1080; the OAK-D Pro's IMX378 goes up to 4056x3040. Takes several
@@ -33,7 +34,9 @@ def main():
     device_id, stem = sys.argv[1:3]
     focus = int(sys.argv[3]) if len(sys.argv) > 3 else -1
     focus = None if focus < 0 else focus
-    width, height = (int(sys.argv[4]), int(sys.argv[5])) if len(sys.argv) > 5 else (WIDTH, HEIGHT)
+    width, height = (
+        (int(sys.argv[4]), int(sys.argv[5])) if len(sys.argv) > 5 else (WIDTH, HEIGHT)
+    )
 
     device = dai.Device(dai.DeviceInfo(device_id))
     with dai.Pipeline(device) as pipeline:
