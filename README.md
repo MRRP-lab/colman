@@ -43,7 +43,7 @@ Common tasks:
 
 Speech runs locally where possible. The pipeline is
 `microphone -> /speech_text -> LLM -> llm_response -> speaker`.
-See [`docs/plan.md`](docs/plan.md) for the LLM design. The LLM node is a scaffold: it answers with Claude but has no tools yet.
+See [`docs/plan.md`](docs/plan.md) for the LLM design. The LLM node answers with Claude and has one tool, `pick_and_place`, which sends `/pick` then `/place` goals to the motion server (`pixi run motion`). Pass `-p dry_run:=true` to `llm_node` to get canned tool results without an arm.
 
 - **Speech output** (`colman_audio_output`): `pixi run speak` starts a node that speaks
   text published on `llm_response` using [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M)
@@ -79,10 +79,10 @@ repository's `.env` file (gitignored) or in your environment:
 echo 'ANTHROPIC_API_KEY=sk-ant-...' >> .env
 ```
 
-Build once with `pixi run build`, then start all three nodes. Ctrl-C stops them all:
+Build once with `pixi run build`, then start all three nodes. `dry_run` is on, so tool calls get canned results and no arm is needed. Ctrl-C stops them all:
 
 ```
-pixi run bash -c 'trap "kill 0" EXIT; ros2 run colman_audio_output kokoro_tts & ros2 run colman_llm llm_node & ros2 run colman_audio_input speech_to_text'
+pixi run bash -c 'trap "kill 0" EXIT; ros2 run colman_audio_output kokoro_tts & ros2 run colman_llm llm_node --ros-args -p dry_run:=true & ros2 run colman_audio_input speech_to_text'
 ```
 
 Notes:

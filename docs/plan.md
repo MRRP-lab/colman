@@ -9,7 +9,7 @@ Design for adding voice-driven control to the robot. For how the rest of the rep
 - `colman_audio_input` is the Parakeet speech recognition node (`onnx-asr`, `silero-vad`, `sounddevice`, all in `pixi.toml`), merged from `NVIDIA-Parakeet`. It mutes the microphone while `tts_speaking` is true plus a 600 ms tail (`mute_topic`, `mute_tail_ms` parameters), and `test/wav_file_check.py` runs it on a WAV file.
 - `colman_interfaces` and `colman_motion` provide `MoveTo`, `Pick` and `Place` actions on `/move_to`, `/pick` and `/place`, plus `std_srvs/Trigger` services `/stop` and `/resume`. Run the server with `pixi run motion`.
 - `colman_bringup` has a driver supervisor (`pixi run driver`) that recovers the UR arm in place.
-- `colman_llm` exists. Steps 1 and 2 of Order of work are done: the node answers `/speech_text` through Claude, and the `pick_and_place` tool runs against a fake executor that returns canned results. There are no real `/pick` or `/place` calls yet.
+- `colman_llm` exists. Steps 1 to 3 of Order of work are done: the node answers `/speech_text` through Claude, and the `pick_and_place` tool sends `/pick` then `/place` goals. A `dry_run` parameter swaps in a fake executor with canned results for use without an arm. The stop fast path, `stop_robot` and `resume_robot` are not built yet.
 
 The `Pick` action takes a `frame` (for example `tag_3`) and reports a `stage` as feedback. The `Place` action takes a `location` frame and an optional `position`. Both return `success` and `message`.
 
@@ -228,7 +228,7 @@ Kokoro speaks the response
 
 1. (Done) Scaffold `colman_llm` with a node that echoes `/speech_text` to `llm_response` through a Claude call with no tools. Include the `ANTHROPIC_API_KEY` check, `package.xml` with `python3-anthropic`, and a `pixi run llm` task.
 2. (Done) Add the `pick_and_place` tool with a fake executor that returns canned results.
-3. Wire the executor to `/pick` and `/place`.
+3. (Done) Wire the executor to `/pick` and `/place`.
 4. Add the spoken stop fast path and the `stop_robot` tool.
 5. Add the `resume_robot` tool.
 6. (Parakeet is merged.) Check the microphone mute on `tts_speaking` in the closed loop.

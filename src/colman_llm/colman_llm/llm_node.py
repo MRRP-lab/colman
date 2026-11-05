@@ -3,6 +3,7 @@
 
 Subscribes:  speech_text   (std_msgs/String)  -- recognized speech
 Publishes:   llm_response  (std_msgs/String)  -- text for colman_audio_output to speak
+Actions:     pick, place   (colman_interfaces) -- the pick_and_place tool
 
 Requires ANTHROPIC_API_KEY, from the environment or from the repository's .env
 file (an exported variable wins). The node exits at startup without it.
@@ -15,14 +16,17 @@ import queue
 import threading
 
 import rclpy
+from rclpy.action import ActionClient
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from std_msgs.msg import String
 
+from colman_interfaces.action import Pick, Place
+from colman_llm.action_call import ActionCall
 from colman_llm.claude_client import ClaudeClient
 from colman_llm.env_file import load_env_file
-from colman_llm.executor import FakeExecutor
+from colman_llm.executor import FakeExecutor, PickAndPlaceExecutor
 
 QUEUE_SIZE = 10
 
@@ -32,6 +36,10 @@ class LlmNode(Node):
         super().__init__("llm_node")
 
         self.declare_parameter("model", "claude-sonnet-5-5")
+        self.declare_parameter("pick_timeout_s", 120.0)
+        self.declare_parameter("place_timeout_s", 120.0)
+        # dry_run answers tool calls with canned results and never moves the arm.
+        self.declare_parameter("dry_run", False)
 
         load_env_file()
         if not os.getenv("ANTHROPIC_API_KEY"):
@@ -42,7 +50,7 @@ class LlmNode(Node):
         self._claude = ClaudeClient(
             self.get_parameter("model").value, self.get_logger()
         )
-        self._executor = FakeExecutor(self.get_logger())
+        self._executor = self._make_executor()
         self._pub = self.create_publisher(String, "llm_response", 10)
 
         self._queue = queue.Queue(maxsize=QUEUE_SIZE)
@@ -58,6 +66,23 @@ class LlmNode(Node):
             callback_group=ReentrantCallbackGroup(),
         )
         self.get_logger().info("Listening on speech_text.")
+
+    def _make_executor(self):
+        log = self.get_logger()
+        if self.get_parameter("dry_run").value:
+            log.warn(
+                "dry_run: tool calls get canned results and the arm will not move."
+            )
+            return FakeExecutor(log)
+        pick = ActionCall(ActionClient(self, Pick, "pick"), "pick", log)
+        place = ActionCall(ActionClient(self, Place, "place"), "place", log)
+        pick_s = self.get_parameter("pick_timeout_s").value
+        place_s = self.get_parameter("place_timeout_s").value
+        return PickAndPlaceExecutor(
+            lambda frame: pick.call(Pick.Goal(frame=frame), pick_s),
+            lambda frame: place.call(Place.Goal(location=frame), place_s),
+            log,
+        )
 
     def _on_speech(self, msg):
         try:

@@ -1,8 +1,10 @@
 """Validates a tool call and runs it. The node is the safety boundary.
 
-FakeExecutor returns canned results without touching ROS. The real executor that
-sends /pick and /place goals comes in a later step.
+PickAndPlaceExecutor runs /pick then /place through the callables it is given.
+FakeExecutor returns canned results without touching ROS (the node's dry_run mode).
 """
+
+import threading
 
 from colman_llm.tools import DESTINATION_FRAMES, OBJECT_FRAMES
 
@@ -37,3 +39,39 @@ class FakeExecutor:
         )
         obj, dest = args["object"], args["destination"]
         return True, f"Picked up the {obj} and placed it in the {dest}."
+
+
+class PickAndPlaceExecutor:
+    """pick(frame) and place(frame) each return (ok, message) and may block."""
+
+    def __init__(self, pick, place, logger):
+        self._pick = pick
+        self._place = place
+        self._log = logger
+        self._busy = threading.Lock()
+
+    def run_tool(self, name, args):
+        """Return (ok, message) for a tool call."""
+        if name != "pick_and_place":
+            return False, f"Unknown tool {name}."
+        obj_frame, dest_frame, error = validate_pick_and_place(args)
+        if error:
+            self._log.warning(f"Rejected {name} {args}: {error}")
+            return False, error
+        if not self._busy.acquire(blocking=False):
+            return False, "The arm is already busy with another pick and place."
+        try:
+            obj, dest = args["object"], args["destination"]
+            self._log.info(f"{name}: {obj} ({obj_frame}) -> {dest} ({dest_frame})")
+            ok, message = self._pick(obj_frame)
+            if not ok:
+                return False, f"Could not pick up the {obj}. {message}"
+            ok, message = self._place(dest_frame)
+            if not ok:
+                return False, (
+                    f"Picked up the {obj} but could not place it in the {dest}. "
+                    f"{message}"
+                )
+            return True, f"Picked up the {obj} and placed it in the {dest}."
+        finally:
+            self._busy.release()
