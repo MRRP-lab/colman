@@ -190,7 +190,7 @@ It:
 - streams (mpv), plays (ffplay), or saves (`.wav`) the generated audio
 - processes synthesis in a worker thread so the ROS subscription callback stays short
 
-Parameters: `input_topic`, `voice` (default `af_heart`), `lang_code`, `speed`, `mode` (`stream`, `play` or `save`), `output_dir`, `max_queue`. The `kokoro`, `soundfile` and spaCy model dependencies come from `pixi.toml`; `espeak-ng` is bundled by `espeakng-loader`. Run it with:
+Parameters: `input_topic`, `voice` (default `bm_daniel`), `lang_code`, `speed`, `mode` (`stream`, `play` or `save`), `output_dir`, `max_queue`. The `kokoro`, `soundfile` and spaCy model dependencies come from `pixi.toml`; `espeak-ng` is bundled by `espeakng-loader`. Run it with:
 
 ```bash
 pixi run speak

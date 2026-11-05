@@ -180,7 +180,7 @@ Details:
 
 ## Audio loop
 
-The output node uses its defaults: `stream` mode and the `af_heart` voice, with a bounded queue of 5.
+The output node uses its defaults: `stream` mode and the `bm_daniel` voice, with a bounded queue of 5.
 
 The microphone mute is already implemented in the Parakeet node on the `NVIDIA-Parakeet` branch (see Starting point). It subscribes to `tts_speaking` with transient-local QoS, so a late-starting mic node sees the current state. Merge that branch before the closed-loop test.
 
