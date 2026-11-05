@@ -1,6 +1,7 @@
 """Validates a tool call and runs it. The node is the safety boundary.
 
-PickAndPlaceExecutor runs /pick then /place through the callables it is given.
+PickAndPlaceExecutor runs /pick then /place through the callables it is given, and
+the /stop and /resume services for the stop_robot and resume_robot tools.
 FakeExecutor returns canned results without touching ROS (the node's dry_run mode).
 """
 
@@ -27,6 +28,10 @@ class FakeExecutor:
 
     def run_tool(self, name, args):
         """Return (ok, message) for a tool call."""
+        if name == "stop_robot":
+            return True, "The arm is stopped."
+        if name == "resume_robot":
+            return True, "The arm can move again."
         if name != "pick_and_place":
             return False, f"Unknown tool {name}."
         obj_frame, dest_frame, error = validate_pick_and_place(args)
@@ -44,14 +49,33 @@ class FakeExecutor:
 class PickAndPlaceExecutor:
     """pick(frame) and place(frame) each return (ok, message) and may block."""
 
-    def __init__(self, pick, place, logger):
+    def __init__(self, pick, place, logger, stop=None, resume=None):
         self._pick = pick
         self._place = place
+        self._stop = stop
+        self._resume = resume
         self._log = logger
         self._busy = threading.Lock()
 
+    def _stop_or_resume(self, name, args):
+        """Stop and resume never wait on the busy lock: a stop must always work."""
+        if args:
+            return False, f"{name} takes no arguments."
+        call = self._stop if name == "stop_robot" else self._resume
+        if call is None:
+            return False, f"{name} is not available."
+        ok, message = call()
+        self._log.info(f"{name}: ok={ok} {message}")
+        if not ok:
+            return False, message
+        if name == "stop_robot":
+            return True, "The arm is stopped."
+        return True, "The arm can move again."
+
     def run_tool(self, name, args):
         """Return (ok, message) for a tool call."""
+        if name in ("stop_robot", "resume_robot"):
+            return self._stop_or_resume(name, args)
         if name != "pick_and_place":
             return False, f"Unknown tool {name}."
         obj_frame, dest_frame, error = validate_pick_and_place(args)

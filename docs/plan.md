@@ -9,7 +9,7 @@ Design for adding voice-driven control to the robot. For how the rest of the rep
 - `colman_audio_input` is the Parakeet speech recognition node (`onnx-asr`, `silero-vad`, `sounddevice`, all in `pixi.toml`), merged from `NVIDIA-Parakeet`. It mutes the microphone while `tts_speaking` is true plus a 600 ms tail (`mute_topic`, `mute_tail_ms` parameters), and `test/wav_file_check.py` runs it on a WAV file.
 - `colman_interfaces` and `colman_motion` provide `MoveTo`, `Pick` and `Place` actions on `/move_to`, `/pick` and `/place`, plus `std_srvs/Trigger` services `/stop` and `/resume`. Run the server with `pixi run motion`.
 - `colman_bringup` has a driver supervisor (`pixi run driver`) that recovers the UR arm in place.
-- `colman_llm` exists. Steps 1 to 3 of Order of work are done: the node answers `/speech_text` through Claude, and the `pick_and_place` tool sends `/pick` then `/place` goals. A `dry_run` parameter swaps in a fake executor with canned results for use without an arm. The stop fast path, `stop_robot` and `resume_robot` are not built yet.
+- `colman_llm` exists. Steps 1 to 5 of Order of work are done: the node answers `/speech_text` through Claude, the `pick_and_place` tool sends `/pick` then `/place` goals, a spoken stop word calls `/stop` and cancels the active goal before anything is queued, and the `stop_robot` and `resume_robot` tools call `/stop` and `/resume`. A `dry_run` parameter swaps in a fake executor with canned results for use without an arm.
 
 The `Pick` action takes a `frame` (for example `tag_3`) and reports a `stage` as feedback. The `Place` action takes a `location` frame and an optional `position`. Both return `success` and `message`.
 
@@ -57,7 +57,10 @@ src/colman_llm/
     llm_node.py        # ROS node: subscription, worker thread, publishing
     claude_client.py   # Anthropic SDK wrapper: one turn in, text or tool calls out
     tools.py           # tool schemas and allow-lists
-    executor.py        # validates a tool call and runs the ROS action
+    executor.py        # validates a tool call and runs it
+    action_call.py     # one blocking ROS action call, with cancel
+    service_call.py    # one blocking Trigger service call
+    stop_words.py      # whole-word stop/halt/freeze match
   resource/colman_llm
   package.xml
   setup.py
@@ -172,7 +175,7 @@ Details:
 
 ## Safety
 
-- **A spoken stop must interrupt a running action.** With a single blocking worker, "stop" would sit in the queue behind the pick-and-place it is meant to stop. Handle stop words in the subscription callback itself, before queueing. Match the whole words `stop`, `halt` and `freeze`, case-insensitive. This accepts false matches such as "don't stop at the red block", which is the safe direction. On a match, call `/stop`, cancel the active goal, drop the queue, and publish "Stopped." on `llm_response`. `stop_robot` also exists as a tool for stops phrased differently. A physical emergency stop remains the real safety mechanism. Voice stop is a convenience on top.
+- **A spoken stop must interrupt a running action.** With a single blocking worker, "stop" would sit in the queue behind the pick-and-place it is meant to stop. Handle stop words in the subscription callback itself, before queueing. Match the whole words `stop`, `halt` and `freeze`, case-insensitive. This accepts false matches such as "don't stop at the red block", which is the safe direction. On a match, call `/stop`, cancel the active goal, drop the queue, and publish "Stopped." on `llm_response`. The reply to any utterance that was in flight when the stop arrived is dropped, so the user hears only "Stopped.". The microphone is muted while the robot speaks, so a stop word spoken during "On it." is not heard; the physical emergency stop covers that gap. `stop_robot` also exists as a tool for stops phrased differently. A physical emergency stop remains the real safety mechanism. Voice stop is a convenience on top.
 - After `/stop` the server rejects goals until `/resume`. Resuming works both ways: spoken, through the `resume_robot` tool, and manual, with `pixi run resume`. The spoken reply to a rejected goal says the arm is stopped and must be resumed.
 - Speech is not ignored while the arm moves. Goals are serialized by the single worker, and a tool call while the arm reports busy returns a `tool_result` error with `is_error: true`.
 - Rate-limit tool calls (at most one pick-and-place at a time) and log each tool call with its validated arguments.
@@ -229,7 +232,7 @@ Kokoro speaks the response
 1. (Done) Scaffold `colman_llm` with a node that echoes `/speech_text` to `llm_response` through a Claude call with no tools. Include the `ANTHROPIC_API_KEY` check, `package.xml` with `python3-anthropic`, and a `pixi run llm` task.
 2. (Done) Add the `pick_and_place` tool with a fake executor that returns canned results.
 3. (Done) Wire the executor to `/pick` and `/place`.
-4. Add the spoken stop fast path and the `stop_robot` tool.
-5. Add the `resume_robot` tool.
+4. (Done) Add the spoken stop fast path and the `stop_robot` tool.
+5. (Done) Add the `resume_robot` tool.
 6. (Parakeet is merged.) Check the microphone mute on `tts_speaking` in the closed loop.
 7. Tune the system prompt against a list of real spoken phrases.

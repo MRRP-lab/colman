@@ -33,7 +33,34 @@ PICK_AND_PLACE = {
     },
 }
 
-TOOLS = [PICK_AND_PLACE]
+STOP_ROBOT = {
+    "name": "stop_robot",
+    "description": "Stop the arm immediately. Use it whenever the user wants a stop.",
+    "strict": True,
+    "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": False,
+    },
+}
+
+RESUME_ROBOT = {
+    "name": "resume_robot",
+    "description": (
+        "Let the arm accept commands again after it was stopped. Only use it when the "
+        "user clearly asks to resume."
+    ),
+    "strict": True,
+    "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": False,
+    },
+}
+
+TOOLS = [PICK_AND_PLACE, STOP_ROBOT, RESUME_ROBOT]
 
 
 def known_things_prompt():

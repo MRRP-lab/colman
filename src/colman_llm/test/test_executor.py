@@ -92,3 +92,64 @@ def test_second_pick_and_place_while_busy_is_rejected():
     assert ok
     second_ok, second_message = holder["second"]
     assert not second_ok and "busy" in second_message
+
+
+def make_with_stop(stop=(True, "Stopped"), resume=(True, "Resumed")):
+    calls = []
+
+    def do_stop():
+        calls.append("stop")
+        return stop
+
+    def do_resume():
+        calls.append("resume")
+        return resume
+
+    executor = PickAndPlaceExecutor(
+        lambda f: (True, "p"),
+        lambda f: (True, "p"),
+        LOG,
+        stop=do_stop,
+        resume=do_resume,
+    )
+    return executor, calls
+
+
+def test_stop_and_resume_tools_call_the_services():
+    executor, calls = make_with_stop()
+    assert executor.run_tool("stop_robot", {})[0]
+    assert executor.run_tool("resume_robot", {})[0]
+    assert calls == ["stop", "resume"]
+
+
+def test_service_failure_is_an_error():
+    executor, _ = make_with_stop(stop=(False, "no service"))
+    ok, message = executor.run_tool("stop_robot", {})
+    assert not ok and message == "no service"
+
+
+def test_stop_takes_no_arguments():
+    executor, calls = make_with_stop()
+    ok, _ = executor.run_tool("stop_robot", {"force": True})
+    assert not ok and calls == []
+
+
+def test_stop_works_while_a_pick_and_place_holds_the_lock():
+    holder = {}
+
+    def pick(frame):
+        holder["stop"] = holder["executor"].run_tool("stop_robot", {})
+        return True, "picked"
+
+    executor = PickAndPlaceExecutor(
+        pick, lambda f: (True, "ok"), LOG, stop=lambda: (True, "Stopped")
+    )
+    holder["executor"] = executor
+    executor.run_tool("pick_and_place", GOOD)
+    assert holder["stop"][0]
+
+
+def test_fake_executor_handles_stop_and_resume():
+    fake = FakeExecutor(LOG)
+    assert fake.run_tool("stop_robot", {})[0]
+    assert fake.run_tool("resume_robot", {})[0]

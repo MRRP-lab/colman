@@ -43,7 +43,7 @@ Common tasks:
 
 Speech runs locally where possible. The pipeline is
 `microphone -> /speech_text -> LLM -> llm_response -> speaker`.
-See [`docs/plan.md`](docs/plan.md) for the LLM design. The LLM node answers with Claude and has one tool, `pick_and_place`, which sends `/pick` then `/place` goals to the motion server (`pixi run motion`). Pass `-p dry_run:=true` to `llm_node` to get canned tool results without an arm.
+See [`docs/plan.md`](docs/plan.md) for the LLM design. The LLM node answers with Claude and has one tool, `pick_and_place`, which sends `/pick` then `/place` goals to the motion server (`pixi run motion`). Pass `-p dry_run:=true` to `llm_node` to get canned tool results without an arm. Saying "stop", "halt" or "freeze" stops the arm at once (`/stop`) and cancels the running goal. Say "resume" to let it move again. A physical emergency stop remains the real safety mechanism.
 
 - **Speech output** (`colman_audio_output`): `pixi run speak` starts a node that speaks
   text published on `llm_response` using [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M)

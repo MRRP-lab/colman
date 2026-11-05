@@ -163,3 +163,14 @@ def test_tool_loop_is_capped_and_not_remembered():
     assert len(messages.calls) == rounds
     client.say("next")
     assert len(messages.calls[-1]["messages"]) == 1
+
+
+def test_all_three_tools_are_strict_and_sent():
+    client, messages = make(reply("Hi."))
+    client.say("hello", lambda n, a: (True, "ok"))
+    tools = {t["name"]: t for t in messages.calls[0]["tools"]}
+    assert set(tools) == {"pick_and_place", "stop_robot", "resume_robot"}
+    for tool in tools.values():
+        assert tool["strict"] is True
+        assert tool["input_schema"]["additionalProperties"] is False
+    assert tools["stop_robot"]["input_schema"]["properties"] == {}

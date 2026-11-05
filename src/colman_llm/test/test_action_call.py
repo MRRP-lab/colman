@@ -91,3 +91,51 @@ def test_timeout_cancels_the_goal():
     ok, message = make(FakeClient(handle)).call("goal", 0.05)
     assert not ok and "too long" in message
     assert handle.cancelled
+
+
+class SlowHandle(Handle):
+    """A goal that stays active until the test cancels it."""
+
+    def __init__(self):
+        super().__init__()
+        self.result_callback = None
+
+    def get_result_async(self):
+        outer = self
+
+        class Pending:
+            def add_done_callback(self, callback):
+                outer.result_callback = callback
+
+        return Pending()
+
+    def cancel_goal_async(self):
+        super().cancel_goal_async()
+        cancelled = SimpleNamespace(
+            status=5, result=SimpleNamespace(success=False, message="")
+        )
+        self.result_callback(Future(cancelled))
+
+
+def test_cancel_active_cancels_the_running_goal():
+    import threading
+    import time
+
+    handle = SlowHandle()
+    action = make(FakeClient(handle))
+    out = {}
+    thread = threading.Thread(target=lambda: out.update(r=action.call("goal", 5)))
+    thread.start()
+    for _ in range(100):
+        if action._active is not None:
+            break
+        time.sleep(0.01)
+    action.cancel_active()
+    thread.join(timeout=2)
+    assert handle.cancelled
+    ok, message = out["r"]
+    assert not ok and "cancelled" in message
+
+
+def test_cancel_with_nothing_running_is_harmless():
+    make(FakeClient(Handle())).cancel_active()
