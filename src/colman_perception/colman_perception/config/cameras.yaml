@@ -1,0 +1,10 @@
+# Which physical OAK-D Pro is which. The camera has no name of its own, so the
+# serial (MX ID) is the only stable handle. Find it with:
+#   ros2 run colman_perception list_cameras
+cameras:
+  wrist:
+    mxid: 14442C10E1DCC4D600
+    mount: on the UR3e wrist (eye-in-hand)
+  overhead:
+    mxid: 14442C1091CCC4D600
+    mount: fixed about 1.83 m above the table, looking down

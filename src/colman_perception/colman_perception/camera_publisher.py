@@ -6,24 +6,38 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import CameraInfo, Image
 
-FRAME_ID = "oakd_pro_camera_rgb_optical_frame_wrist"
+from colman_perception.camera_names import device_info
+
 WIDTH = 1280
 HEIGHT = 720
+
+# Topic prefix and frame for each named camera (names are in config/cameras.yaml).
+# The wrist camera keeps the names the rest of the stack already uses.
+CAMERAS = {
+    "wrist": ("/oakd_pro", "oakd_pro_camera_rgb_optical_frame_wrist"),
+    "overhead": ("/overhead", "overhead_camera_optical_frame"),
+}
 
 
 class CameraPublisher(Node):
     def __init__(self):
         super().__init__("camera_publisher")
 
+        self.declare_parameter("camera", "wrist")  # a name from config/cameras.yaml
+        camera = self.get_parameter("camera").value
+        if camera not in CAMERAS:
+            raise ValueError(f"no topics set up for camera '{camera}'")
+        prefix, self.frame_id = CAMERAS[camera]
+
         self.image_pub = self.create_publisher(
-            Image, "/oakd_pro/rgb/image", qos_profile_sensor_data
+            Image, f"{prefix}/rgb/image", qos_profile_sensor_data
         )
         self.info_pub = self.create_publisher(
-            CameraInfo, "/oakd_pro/rgb/camera_info", qos_profile_sensor_data
+            CameraInfo, f"{prefix}/rgb/camera_info", qos_profile_sensor_data
         )
         self.bridge = CvBridge()
 
-        self.device = dai.Device()
+        self.device = dai.Device(device_info(camera))
         self.pipeline = dai.Pipeline(self.device)
         pipeline = self.pipeline
         cam = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
@@ -34,7 +48,7 @@ class CameraPublisher(Node):
 
         # Frame metadata for downstream nodes
         self.info_msg = CameraInfo()
-        self.info_msg.header.frame_id = FRAME_ID
+        self.info_msg.header.frame_id = self.frame_id
         self.info_msg.width = WIDTH
         self.info_msg.height = HEIGHT
         self.info_msg.distortion_model = "plumb_bob"
@@ -43,7 +57,7 @@ class CameraPublisher(Node):
 
         pipeline.start()
         self.create_timer(1.0 / 30.0, self.timer_callback)
-        self.get_logger().info("publishing images")
+        self.get_logger().info(f"publishing images from the {camera} camera")
 
     def timer_callback(self):
         packet = self.queue.tryGet()
@@ -60,7 +74,7 @@ class CameraPublisher(Node):
 
         msg = self.bridge.cv2_to_imgmsg(frame, encoding="bgr8")
         msg.header.stamp = stamp
-        msg.header.frame_id = FRAME_ID
+        msg.header.frame_id = self.frame_id
 
         self.info_msg.header.stamp = stamp
 
