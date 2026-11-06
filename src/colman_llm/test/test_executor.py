@@ -153,3 +153,93 @@ def test_fake_executor_handles_stop_and_resume():
     fake = FakeExecutor(LOG)
     assert fake.run_tool("stop_robot", {})[0]
     assert fake.run_tool("resume_robot", {})[0]
+
+
+def make_stacker(pick_results=None, place_results=None):
+    """Executor whose pick and place results come from lists (default: success)."""
+    calls = []
+    picks = list(pick_results or [])
+    places = list(place_results or [])
+
+    def pick(frame):
+        calls.append(("pick", frame))
+        return picks.pop(0) if picks else (True, "ok")
+
+    def place(frame):
+        calls.append(("place", frame))
+        return places.pop(0) if places else (True, "ok")
+
+    return PickAndPlaceExecutor(pick, place, LOG), calls
+
+
+def test_stack_three_white_cubes_builds_the_tower_in_order():
+    executor, calls = make_stacker()
+    ok, message = executor.run_tool("stack_cube", {"color": "white", "count": 3})
+    assert ok and "Stacked 3 white cubes" in message
+    assert calls == [
+        ("pick", "tag_2"),
+        ("place", "tag_1"),
+        ("pick", "tag_3"),
+        ("place", "tag_2"),
+        ("pick", "tag_4"),
+        ("place", "tag_3"),
+    ]
+
+
+def test_stacking_continues_from_the_current_top_across_calls():
+    executor, calls = make_stacker()
+    executor.run_tool("stack_cube", {"color": "blue", "count": 1})
+    executor.run_tool("stack_cube", {"color": "blue", "count": 1})
+    assert calls[-2:] == [("pick", "tag_7"), ("place", "tag_6")]
+
+
+def test_asking_for_more_than_fits_stops_when_full():
+    executor, calls = make_stacker()
+    executor.run_tool("stack_cube", {"color": "white", "count": 2})
+    ok, message = executor.run_tool("stack_cube", {"color": "white", "count": 2})
+    assert ok and "Stacked 1 white cube." in message and "full" in message
+    ok, message = executor.run_tool("stack_cube", {"color": "white", "count": 1})
+    assert not ok and "already full" in message
+
+
+def test_failed_pick_stops_the_run_and_reports_progress():
+    executor, calls = make_stacker(pick_results=[(True, "ok"), (False, "not visible")])
+    ok, message = executor.run_tool("stack_cube", {"color": "white", "count": 3})
+    assert not ok
+    assert "Stacked 1 of 3" in message and "white cube 3" in message
+    assert "not visible" in message and "1 on top" in message
+    assert calls[-1] == ("pick", "tag_3")
+
+
+def test_failed_place_does_not_count_the_cube_as_stacked():
+    executor, calls = make_stacker(place_results=[(False, "tag_1 not visible")])
+    ok, message = executor.run_tool("stack_cube", {"color": "white", "count": 1})
+    assert not ok and "0 on top" in message
+    # The retry targets the same cube and the same spot.
+    executor.run_tool("stack_cube", {"color": "white", "count": 1})
+    assert calls[-2:] == [("pick", "tag_2"), ("place", "tag_1")]
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        {"color": "red", "count": 1},
+        {"color": "white", "count": 0},
+        {"color": "white", "count": 4},
+        {"color": "white", "count": 1.5},
+        {"color": "white", "count": True},
+        {"color": "white"},
+        {"color": "white", "count": 1, "extra": 1},
+        "white",
+    ],
+)
+def test_bad_stack_arguments_never_reach_the_arm(args):
+    executor, calls = make_stacker()
+    ok, _ = executor.run_tool("stack_cube", args)
+    assert not ok and calls == []
+
+
+def test_fake_executor_stacks_without_an_arm():
+    fake = FakeExecutor(LOG)
+    ok, message = fake.run_tool("stack_cube", {"color": "blue", "count": 2})
+    assert ok and "Stacked 2 blue cubes" in message

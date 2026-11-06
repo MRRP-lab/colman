@@ -9,7 +9,7 @@ Design for adding voice-driven control to the robot. For how the rest of the rep
 - `colman_audio_input` is the Parakeet speech recognition node (`onnx-asr`, `silero-vad`, `sounddevice`, all in `pixi.toml`), merged from `NVIDIA-Parakeet`. It mutes the microphone while `tts_speaking` is true plus a 600 ms tail (`mute_topic`, `mute_tail_ms` parameters), and `test/wav_file_check.py` runs it on a WAV file.
 - `colman_interfaces` and `colman_motion` provide `MoveTo`, `Pick` and `Place` actions on `/move_to`, `/pick` and `/place`, plus `std_srvs/Trigger` services `/stop` and `/resume`. Run the server with `pixi run motion`.
 - `colman_bringup` has a driver supervisor (`pixi run driver`) that recovers the UR arm in place.
-- `colman_llm` exists. Steps 1 to 5 of Order of work are done: the node answers `/speech_text` through Claude, the `pick_and_place` tool sends `/pick` then `/place` goals, a spoken stop word calls `/stop` and cancels the active goal before anything is queued, and the `stop_robot` and `resume_robot` tools call `/stop` and `/resume`. A `dry_run` parameter swaps in a fake executor with canned results for use without an arm.
+- `colman_llm` exists. Steps 1 to 5 of Order of work are done: the node answers `/speech_text` through Claude, the `pick_and_place` tool sends `/pick` then `/place` goals, a spoken stop word calls `/stop` and cancels the active goal before anything is queued, and the `stop_robot` and `resume_robot` tools call `/stop` and `/resume`. A `dry_run` parameter swaps in a fake executor with canned results for use without an arm. The demo offers Claude `stack_cube`, `stop_robot` and `resume_robot`; see Cube stacking demo.
 
 The `Pick` action takes a `frame` (for example `tag_3`) and reports a `stage` as feedback. The `Place` action takes a `location` frame and an optional `position`. Both return `success` and `message`.
 
@@ -61,6 +61,7 @@ src/colman_llm/
     action_call.py     # one blocking ROS action call, with cancel
     service_call.py    # one blocking Trigger service call
     stop_words.py      # whole-word stop/halt/freeze match
+    stack_state.py     # which cubes are stacked (held by the node, not by Claude)
   resource/colman_llm
   package.xml
   setup.py
@@ -142,6 +143,19 @@ Never let Claude supply arbitrary joint positions, Cartesian coordinates, ROS to
 `stop_robot` calls `/stop` and takes no arguments. `resume_robot` calls `/resume` and takes no arguments. Both are added after `pick_and_place`, each in its own step. A spoken stop must always work (see Safety).
 
 Parse `tool_use.input` as already-decoded JSON from the SDK. Do not string-match the serialized form.
+
+## Cube stacking demo
+
+The demo uses tagged cubes instead of `pick_and_place`. Tags 1 to 4 are white cubes and tags 5 to 8 are blue cubes. Cube 1 of each colour (`tag_1`, `tag_5`) is the base of that colour's stack and never moves. The other three are loose, and the detector config (`colman_perception/config/apriltag.yaml`) registers IDs 1 to 8 at 39 mm.
+
+Claude gets one tool, `stack_cube(color, count)`, with `color` in `white` or `blue` and `count` from 1 to 3. The node, not Claude, decides which cube moves where:
+
+- `stack_state.py` keeps the stacks. The next loose cube of that colour is picked with `/pick`, and placed with `/place` on the top of the stack: the base for the first cube, then the previously placed cube. `/place` with a `location` already drops 50 mm above the tag, which is one cube height, so the cube lands on top of the cube carrying that tag.
+- A count above what fits stops when the stack is full and says so. A failed pick or place, or a spoken stop, ends the run and reports how many were stacked. A failed cube is not counted, so a retry targets the same cube and spot.
+- The state is in memory. Restarting the node resets it, so every run starts with empty stacks and loose cubes.
+- `pick_and_place` stays in the code but is not offered to Claude, so it cannot disturb the stack state.
+
+If a place fails after a successful pick, the vacuum still holds the cube and the next pick fails with "Already holding". Release it with `ros2 service call /release std_srvs/srv/Trigger`.
 
 ## Pick and place: two actions, one tool
 

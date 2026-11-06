@@ -3,7 +3,7 @@
 
 Subscribes:  speech_text   (std_msgs/String)  -- recognized speech
 Publishes:   llm_response  (std_msgs/String)  -- text for colman_audio_output to speak
-Actions:     pick, place   (colman_interfaces) -- the pick_and_place tool
+Actions:     pick, place   (colman_interfaces) -- the stack_cube tool
 Services:    stop, resume  (std_srvs/Trigger)  -- spoken stop and the stop/resume tools
 
 Requires ANTHROPIC_API_KEY, from the environment or from the repository's .env
@@ -146,7 +146,7 @@ class LlmNode(Node):
 
     def _run_tool(self, name, args):
         # Tell the user the command was heard before a long action starts.
-        if name == "pick_and_place":
+        if name in ("pick_and_place", "stack_cube"):
             self._pub.publish(String(data="On it."))
         return self._executor.run_tool(name, args)
 

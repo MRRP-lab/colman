@@ -108,8 +108,8 @@ def test_tools_and_known_names_are_sent():
     client, messages = make(reply("Hi."))
     client.say("hello", lambda name, args: (True, "ok"))
     call = messages.calls[0]
-    assert call["tools"][0]["name"] == "pick_and_place"
-    assert "red block" in call["system"] and "left tray" in call["system"]
+    assert call["tools"][0]["name"] == "stack_cube"
+    assert "white cube" in call["system"] and "blue cube" in call["system"]
 
 
 def test_tool_call_runs_and_result_goes_back_to_claude():
@@ -165,12 +165,21 @@ def test_tool_loop_is_capped_and_not_remembered():
     assert len(messages.calls[-1]["messages"]) == 1
 
 
-def test_all_three_tools_are_strict_and_sent():
+def test_demo_tools_are_strict_and_sent():
     client, messages = make(reply("Hi."))
     client.say("hello", lambda n, a: (True, "ok"))
     tools = {t["name"]: t for t in messages.calls[0]["tools"]}
-    assert set(tools) == {"pick_and_place", "stop_robot", "resume_robot"}
+    assert set(tools) == {"stack_cube", "stop_robot", "resume_robot"}
     for tool in tools.values():
         assert tool["strict"] is True
         assert tool["input_schema"]["additionalProperties"] is False
     assert tools["stop_robot"]["input_schema"]["properties"] == {}
+    assert tools["stack_cube"]["input_schema"]["properties"]["count"]["enum"] == [
+        1,
+        2,
+        3,
+    ]
+    assert tools["stack_cube"]["input_schema"]["properties"]["color"]["enum"] == [
+        "white",
+        "blue",
+    ]
