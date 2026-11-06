@@ -1,0 +1,47 @@
+child_frame: overhead_camera_optical_frame
+device_mxid: 14442C1091CCC4D600
+fit:
+  edge_rms_px: 0.37091107967012854
+  mm_per_px: 1.2527560585835213
+intrinsics:
+  cx: 962.377685546875
+  cy: 547.1397094726562
+  fx: 1460.4989013671875
+  fy: 1459.8614501953125
+  height: 1080
+  width: 1920
+parent_frame: base_link
+quaternion_xyzw:
+- 0.7081317339046121
+- -0.7051455851548667
+- -0.028953224581593214
+- 0.021928564936543715
+rotation_matrix:
+- - 0.003862829045857441
+  - -0.9974021264110766
+  - -0.07193105575775771
+- - -0.9999417370725159
+  - -0.004577683552848932
+  - 0.009775851558306455
+- - -0.010079732742615262
+  - 0.07188910240052479
+  - -0.9973616976523032
+static_transform_args:
+- '0.34294'
+- '0.06051'
+- '1.82965'
+- '0.70813'
+- '-0.70515'
+- '-0.02895'
+- '0.02193'
+- base_link
+- overhead_camera_optical_frame
+table_model:
+  far_edge_x_m: 0.6327484630922643
+  half_width_m: 0.5581921103627906
+  note: near edge x=0.09 never seen by the wrist camera
+  source: /home/macnean2/Desktop/colman-processing/calib_data_20261026_1156/calibration.yaml
+translation_m:
+- 0.3429422281960572
+- 0.060511313827756534
+- 1.829648847242321
