@@ -39,6 +39,11 @@ HELD_CUBE_TOUCH_LINKS = [
 ]
 # Joint-space moves are checked at this many points before they are planned.
 PATH_CHECK_STEPS = 60
+# Straight-line (Pilz LIN) moves are planned at these speed/acceleration scalings,
+# fastest first, using the first the planner accepts. At 0.7 every such move is
+# rejected for exceeding a joint acceleration limit; 0.3 works for all but the highest
+# stack, which needs 0.2.
+LINEAR_SCALINGS = (0.3, 0.2, 0.1)
 
 
 class ArmControl(Node):
@@ -273,25 +278,36 @@ class ArmControl(Node):
         """Move the tip in a straight line to (x, y, z), keeping the orientation.
 
         Pilz LIN follows the line in Cartesian space and checks collisions along it,
-        so the arm stays on one IK branch. There is no fallback: if the line is not
-        clear the move fails and the caller reports it.
+        so the arm stays on one IK branch. It also rejects a line whose joint motion
+        would exceed a joint acceleration limit, so the speed is capped at
+        LINEAR_SCALINGS and lowered until the planner accepts it. There is no other
+        fallback: if no line is accepted the move fails and the caller reports it.
         """
         if self.stop_event.is_set():
             return False
         params = params or self.slow
+        requested = min(
+            params.max_velocity_scaling_factor, params.max_acceleration_scaling_factor
+        )
+        scalings = [s for s in LINEAR_SCALINGS if s <= requested]
         goal = PoseStamped()
         goal.header.frame_id = "base_link"
         goal.pose = self.pose_at(x, y, z, orientation)
-        self.arm.set_start_state(robot_state=self.current_state())
-        if not self.arm.set_goal_state(pose_stamped_msg=goal, pose_link=TIP_LINK):
-            return False
-        lin = self.pilz_params(params)
-        lin.planner_id = "LIN"
-        result = self.arm.plan(single_plan_parameters=lin)
-        if not result:
-            self.get_logger().error("Straight-line plan failed")
-            return False
-        return self.execute(result.trajectory)
+        start = self.current_state()
+        for scaling in scalings or [LINEAR_SCALINGS[-1]]:
+            self.arm.set_start_state(robot_state=start)
+            if not self.arm.set_goal_state(pose_stamped_msg=goal, pose_link=TIP_LINK):
+                return False
+            lin = self.pilz_params(params)
+            lin.planner_id = "LIN"
+            lin.max_velocity_scaling_factor = scaling
+            lin.max_acceleration_scaling_factor = scaling
+            result = self.arm.plan(single_plan_parameters=lin)
+            if result:
+                return self.execute(result.trajectory)
+            self.get_logger().warn(f"Straight-line plan failed at scaling {scaling}")
+        self.get_logger().error("Straight-line plan failed")
+        return False
 
     def state_from_joints(self, joint_values):
         state = self.current_state()
