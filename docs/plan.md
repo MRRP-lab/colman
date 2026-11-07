@@ -248,5 +248,5 @@ Kokoro speaks the response
 3. (Done) Wire the executor to `/pick` and `/place`.
 4. (Done) Add the spoken stop fast path and the `stop_robot` tool.
 5. (Done) Add the `resume_robot` tool.
-6. (Parakeet is merged.) Check the microphone mute on `tts_speaking` in the closed loop.
+6. (Done) Check the microphone mute on `tts_speaking` in the closed loop. Parakeet is merged and mutes on `tts_speaking`. Checked live: with muting on, the robot's own sentence was not transcribed; with the mute topic pointed at an unused topic, the mic transcribed it.
 7. Tune the system prompt against a list of real spoken phrases.

@@ -120,6 +120,8 @@ For other nodes, `motion_server.py` (`pixi run motion`) exposes the same behavio
 - actions `/move_to` (`MoveTo`: `pose_name`), `/pick` (`Pick`: `frame`) and `/place` (`Place`: `location`, optional `position`), each returning `success` and `message` and reporting a `stage` as feedback
 - services `/stop` and `/resume` (`std_srvs/Trigger`)
 
+`Pick` and `Place` look for their tag from the scan poses in `colman_motion/poses.py` (`scan_for_cubes_right`, then `scan_for_cubes_left`). One pose cannot see the whole table, so a tag that is not visible from the first is looked for from the next; the pose that last saw a tag is tried first (`scan.py`). While it waits for a tag, the motion server asks the wrist camera to refocus (`/oakd_pro/refocus`). The scan poses are in `colman_moveit_config/srdf/arm.srdf.xacro`, with the arm upright (shoulder straight up, elbow straight) and only wrist 1, wrist 2 and wrist 3 aiming the camera. The left scan pose has wrist 1 at about 191 degrees, past half a turn.
+
 It accepts one goal at a time and rejects goals while stopped. `pixi run driver` starts the driver supervisor, which restarts the UR driver and recovers the arm without restarting the rest of the stack.
 
 ## Perception
