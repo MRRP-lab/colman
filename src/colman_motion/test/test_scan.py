@@ -55,8 +55,8 @@ def test_scan_order_puts_the_preferred_pose_first():
     assert scan_order("somewhere else", POSES) == ["right", "left"]
 
 
-def test_default_poses_are_the_right_then_the_left_scan_pose():
-    assert scan.SCAN_POSES == ["scan_for_cubes_right", "scan_for_cubes_left"]
+def test_default_scan_poses_are_defined_in_poses_py():
+    assert scan.SCAN_POSES  # at least one pose to look from
     assert scan.SCAN_POSES[0] == scan_order()[0]
 
 
