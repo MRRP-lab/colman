@@ -13,11 +13,11 @@ from rclpy.utilities import remove_ros_args
 
 from colman_interfaces.action import MoveTo, Pick, Place
 from colman_motion.patterns import PATTERNS
+from colman_motion.poses import SCAN_POSES
 from colman_motion.tag_lookup import TagLookup
 
 TAG_PATTERN = ["tag_1", "tag_3", "tag_5", "tag_6"]
 DEFAULT_PATTERN = "left_to_right"
-LOOK_POSE = "Look3"
 SERVER_WAIT_S = 10.0
 CANCEL_WAIT_S = 2.0
 SIGNALS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
@@ -88,17 +88,21 @@ def main():
                 logger.error("Action servers not available")
                 return
 
-        response = run_goal(move_client, MoveTo.Goal(pose_name=LOOK_POSE))
-        if response is None or not response.result.success:
-            logger.error("Look move failed")
-            return
-
+        # One scan pose cannot see the whole table, so look from each and merge what is
+        # seen. Each position is read in the base frame at the moment the tag is seen.
         tags = {}
-        for tag_frame in TAG_PATTERN:
-            tag_pose = tag.get_tag_pose(tag_frame)
-            if tag_pose is not None:
-                translation = tag_pose.translation
-                tags[tag_frame] = (translation.x, translation.y, translation.z)
+        for pose_name in SCAN_POSES:
+            response = run_goal(move_client, MoveTo.Goal(pose_name=pose_name))
+            if response is None or not response.result.success:
+                logger.error(f"Look move to {pose_name} failed")
+                return
+            for tag_frame in TAG_PATTERN:
+                if tag_frame in tags:
+                    continue
+                tag_pose = tag.get_tag_pose(tag_frame)
+                if tag_pose is not None:
+                    translation = tag_pose.translation
+                    tags[tag_frame] = (translation.x, translation.y, translation.z)
         logger.info(f"Visible tags: {sorted(tags)}")
 
         if len(tags) < 2:

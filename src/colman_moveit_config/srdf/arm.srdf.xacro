@@ -19,37 +19,21 @@
         <joint name="wrist_2_joint" value="1.59"/>
         <joint name="wrist_3_joint" value="0"/>
     </group_state>
-    <group_state name="Look1" group="ur_arm">
-        <joint name="elbow_joint" value="-0.6769"/>
-        <joint name="shoulder_lift_joint" value="-1.4927"/>
-        <joint name="shoulder_pan_joint" value="0"/>
-        <joint name="wrist_1_joint" value="-2.3952"/>
-        <joint name="wrist_2_joint" value="1.6315"/>
-        <joint name="wrist_3_joint" value="0"/>
+    <group_state name="scan_for_cubes_right" group="ur_arm">
+        <joint name="elbow_joint" value="-1e-05"/>
+        <joint name="shoulder_lift_joint" value="-1.57081"/>
+        <joint name="shoulder_pan_joint" value="-1.57079"/>
+        <joint name="wrist_1_joint" value="-0.1885"/>
+        <joint name="wrist_2_joint" value="-1.3217"/>
+        <joint name="wrist_3_joint" value="-1.4556"/>
     </group_state>
-    <group_state name="Look2" group="ur_arm">
-        <joint name="elbow_joint" value="-0.6769"/>
-        <joint name="shoulder_lift_joint" value="-1.4927"/>
-        <joint name="shoulder_pan_joint" value="${pi/2}"/>
-        <joint name="wrist_1_joint" value="-2.3952"/>
-        <joint name="wrist_2_joint" value="1.6315"/>
-        <joint name="wrist_3_joint" value="0"/>
-    </group_state>
-    <group_state name="Look3" group="ur_arm">
-        <joint name="elbow_joint" value="-0.6769"/>
-        <joint name="shoulder_lift_joint" value="-1.4927"/>
-        <joint name="shoulder_pan_joint" value="${-pi}"/>
-        <joint name="wrist_1_joint" value="-2.3952"/>
-        <joint name="wrist_2_joint" value="1.6315"/>
-        <joint name="wrist_3_joint" value="0"/>
-    </group_state>
-    <group_state name="Look4" group="ur_arm">
-        <joint name="elbow_joint" value="-0.6769"/>
-        <joint name="shoulder_lift_joint" value="-1.4927"/>
-        <joint name="shoulder_pan_joint" value="${-pi/2}"/>
-        <joint name="wrist_1_joint" value="-2.3952"/>
-        <joint name="wrist_2_joint" value="1.6315"/>
-        <joint name="wrist_3_joint" value="0"/>
+    <group_state name="scan_for_cubes_left" group="ur_arm">
+        <joint name="elbow_joint" value="2e-05"/>
+        <joint name="shoulder_lift_joint" value="-1.57079"/>
+        <joint name="shoulder_pan_joint" value="-1.57079"/>
+        <joint name="wrist_1_joint" value="3.33495"/>
+        <joint name="wrist_2_joint" value="1.3225"/>
+        <joint name="wrist_3_joint" value="1.4518"/>
     </group_state>
     <group_state name="Compact" group="ur_arm">
         <joint name="elbow_joint" value="-2.2043"/>

@@ -6,6 +6,7 @@ from rclpy.executors import MultiThreadedExecutor
 
 from colman_motion.arm_control import ArmControl
 from colman_motion.robot_ready import wait_for_robot
+from colman_motion.scan import look_for_tag
 from colman_motion.scene_manager import SceneManager
 from colman_motion.tag_lookup import TagLookup
 from colman_motion.vacuum_control import VacuumControl
@@ -72,12 +73,12 @@ def main():
                     logger.warn("continue 1\n\n\n")
                     continue
                 tag_frame = tag_name
-                if not arm.go_to_configured_pose("Look3", fast):
+                tag_pose = look_for_tag(
+                    arm, tag, tag_frame, fast, stopped=stop_event.is_set
+                ).tag_pose
+                if tag_pose is None:
                     logger.warn("Stopping")
                     return
-                tag_pose = None
-                while tag_pose is None:
-                    tag_pose = tag.get_tag_pose(tag_frame)
 
                 tag_translation = tag_pose.translation
                 pick_translation = (
@@ -107,13 +108,12 @@ def main():
 
                 tag_frame = old
 
-                if not arm.go_to_configured_pose("Look3", fast):
+                drop_pose = look_for_tag(
+                    arm, tag, tag_frame, fast, stopped=stop_event.is_set
+                ).tag_pose
+                if drop_pose is None:
                     logger.warn("Stopping")
                     return
-
-                drop_pose = None
-                while drop_pose is None:
-                    drop_pose = tag.get_tag_pose(tag_frame)
 
                 drop_off = (
                     drop_pose.translation.x,

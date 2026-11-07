@@ -68,9 +68,10 @@ joint_limits:
     has_position_limits: true
     has_velocity_limits: true
     max_effort: 9.0
-    # one turn is enough; the second turn only holds duplicate IK solutions
-    min_position: -3.141592653589793
-    max_position: 3.141592653589793
+    # +-200 degrees: a little past half a turn each way, enough to look at the table's
+    # left edge from the wrist-flipped pose; the second turn only holds duplicate IK solutions
+    min_position: -3.490658503988659
+    max_position: 3.490658503988659
     max_velocity:  6.283185307179586
   wrist_2_joint:
     # acceleration limits are not publicly available
