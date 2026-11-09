@@ -13,6 +13,14 @@ WIDTH = 1280
 HEIGHT = 720
 CONTINUOUS_AF = dai.CameraControl.AutoFocusMode.CONTINUOUS_VIDEO
 
+# How often to retry while no camera is connected.
+RECONNECT_S = 2.0
+
+# A camera that stops delivering frames this long is treated as unplugged. The camera
+# can drop off USB mid-run, and without this the node keeps running and publishes
+# nothing.
+STALL_S = 3.0
+
 # Topic prefix and frame for each named camera (names are in config/cameras.yaml).
 # The wrist camera keeps the names the rest of the stack already uses.
 CAMERAS = {
@@ -26,10 +34,10 @@ class CameraPublisher(Node):
         super().__init__("camera_publisher")
 
         self.declare_parameter("camera", "wrist")  # a name from config/cameras.yaml
-        camera = self.get_parameter("camera").value
-        if camera not in CAMERAS:
-            raise ValueError(f"no topics set up for camera '{camera}'")
-        prefix, self.frame_id = CAMERAS[camera]
+        self.camera = self.get_parameter("camera").value
+        if self.camera not in CAMERAS:
+            raise ValueError(f"no topics set up for camera '{self.camera}'")
+        prefix, self.frame_id = CAMERAS[self.camera]
 
         self.image_pub = self.create_publisher(
             Image, f"{prefix}/rgb/image", qos_profile_sensor_data
@@ -38,22 +46,7 @@ class CameraPublisher(Node):
             CameraInfo, f"{prefix}/rgb/camera_info", qos_profile_sensor_data
         )
         self.bridge = CvBridge()
-
-        self.device = dai.Device(device_info(camera))
-        self.pipeline = dai.Pipeline(self.device)
-        pipeline = self.pipeline
-        cam = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
-        # Autofocus and autoexposure are set explicitly, so they never depend on the
-        # camera's defaults. Both keep adjusting as the arm moves and the view changes.
-        cam.initialControl.setAutoFocusMode(CONTINUOUS_AF)
-        cam.initialControl.setAutoExposureEnable()
-        self.control_queue = cam.inputControl.createInputQueue()
-        self.last_meta = None
-        out = cam.requestOutput((WIDTH, HEIGHT), enableUndistortion=True, fps=15.0)
-        self.queue = out.createOutputQueue(maxSize=4, blocking=False)
         self.create_service(Trigger, f"{prefix}/refocus", self.on_refocus)
-
-        self._info_ready = False
 
         # Frame metadata for downstream nodes
         self.info_msg = CameraInfo()
@@ -64,9 +57,73 @@ class CameraPublisher(Node):
         self.info_msg.d = [0.0, 0.0, 0.0, 0.0, 0.0]
         self.info_msg.r = np.eye(3).flatten().tolist()
 
-        pipeline.start()
+        self.device = None
+        self.pipeline = None
+        self.queue = None
+        self.control_queue = None
+        self.last_meta = None
+        self.last_frame = self.get_clock().now()
+        self._info_ready = False
+
+        self.connect()
         self.create_timer(1.0 / 30.0, self.timer_callback)
-        self.get_logger().info(f"publishing images from the {camera} camera")
+        self.create_timer(RECONNECT_S, self.reconnect_callback)
+
+    def open_camera(self):
+        """Open the named camera and start streaming.
+
+        Returns (device, pipeline, frame queue, control queue). Raises RuntimeError if
+        the camera is missing or busy.
+        """
+        device = dai.Device(device_info(self.camera))
+        pipeline = dai.Pipeline(device)
+        cam = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
+        # Autofocus and autoexposure are set explicitly, so they never depend on the
+        # camera's defaults. Both keep adjusting as the arm moves and the view changes.
+        cam.initialControl.setAutoFocusMode(CONTINUOUS_AF)
+        cam.initialControl.setAutoExposureEnable()
+        control_queue = cam.inputControl.createInputQueue()
+        out = cam.requestOutput((WIDTH, HEIGHT), enableUndistortion=True, fps=15.0)
+        queue = out.createOutputQueue(maxSize=4, blocking=False)
+        pipeline.start()
+        return device, pipeline, queue, control_queue
+
+    def connect(self):
+        try:
+            self.device, self.pipeline, self.queue, self.control_queue = (
+                self.open_camera()
+            )
+        except RuntimeError as e:
+            self.get_logger().warn(
+                f"No {self.camera} camera yet ({e}), retrying",
+                throttle_duration_sec=30.0,
+            )
+            self.disconnect()
+            return
+        self._info_ready = False
+        self.last_frame = self.get_clock().now()
+        self.get_logger().info(f"publishing images from the {self.camera} camera")
+
+    def disconnect(self):
+        """Close whatever is open and forget it, so the next retry starts clean."""
+        pipeline, device = self.pipeline, self.device
+        self.queue = None
+        self.control_queue = None
+        self.pipeline = None
+        self.device = None
+        for closer in (
+            getattr(pipeline, "stop", None),
+            getattr(device, "close", None),
+        ):
+            try:
+                if closer is not None:
+                    closer()
+            except Exception:  # noqa: BLE001 - the device may already be gone
+                pass
+
+    def reconnect_callback(self):
+        if self.device is None:
+            self.connect()
 
     def on_refocus(self, request, response):
         """Start a fresh autofocus scan and re-run autoexposure.
@@ -74,26 +131,51 @@ class CameraPublisher(Node):
         Called when the arm arrives at a new pose and is about to look for a tag, so the
         image settles in a moment instead of after the next slow drift.
         """
+        if self.control_queue is None:
+            response.success = False
+            response.message = f"{self.camera} camera is not connected"
+            return response
         ctrl = dai.CameraControl()
         ctrl.setAutoFocusMode(CONTINUOUS_AF)
         ctrl.setAutoFocusTrigger()
         ctrl.setAutoExposureEnable()
-        self.control_queue.send(ctrl)
+        try:
+            self.control_queue.send(ctrl)
+        except RuntimeError as e:
+            response.success = False
+            response.message = f"refocus failed: {e}"
+            return response
         response.success = True
         response.message = f"refocus requested; last frame {self.last_meta}"
         return response
 
     def timer_callback(self):
-        packet = self.queue.tryGet()
-        if packet is None:
+        if self.device is None:
             return
+        try:
+            if self.device.isClosed():
+                raise RuntimeError("device closed")
+            packet = self.queue.tryGet()
+        except RuntimeError as e:
+            self.get_logger().warn(f"Camera lost ({e}), reconnecting")
+            self.disconnect()
+            return
+
+        now = self.get_clock().now()
+        if packet is None:
+            if (now - self.last_frame).nanoseconds > STALL_S * 1e9:
+                self.get_logger().warn("Camera stalled, reconnecting")
+                self.disconnect()
+            return
+        self.last_frame = now
+
         frame = packet.getCvFrame()
         self.last_meta = (
             f"lens {packet.getLensPosition()}, "
             f"exposure {packet.getExposureTime().total_seconds() * 1e6:.0f} us, "
             f"iso {packet.getSensitivity()}"
         )
-        stamp = self.get_clock().now().to_msg()
+        stamp = now.to_msg()
 
         if not self._info_ready:
             k = np.array(packet.getTransformation().getIntrinsicMatrix())
@@ -119,7 +201,7 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        node.device.close()
+        node.disconnect()
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
