@@ -49,12 +49,12 @@
         <joint name="servotodrivegear" value="0.06"/>
     </group_state>
     <group_state name="scan_for_cubes_right" group="ur_arm">
-        <joint name="elbow_joint" value="-2e-05"/>
-        <joint name="shoulder_lift_joint" value="-1.57082"/>
-        <joint name="shoulder_pan_joint" value="3.14159265"/>
-        <joint name="wrist_1_joint" value="-2.84244"/>
-        <joint name="wrist_2_joint" value="1.45141"/>
-        <joint name="wrist_3_joint" value="0.04406"/>
+        <joint name="elbow_joint" value="0.00023"/>
+        <joint name="shoulder_lift_joint" value="-2.0943"/>
+        <joint name="shoulder_pan_joint" value="4e-05"/>
+        <joint name="wrist_1_joint" value="-0.02469"/>
+        <joint name="wrist_2_joint" value="-1.89216"/>
+        <joint name="wrist_3_joint" value="-0.12828"/>
     </group_state>
     <group_state name="scan_for_cubes_left" group="ur_arm">
         <joint name="elbow_joint" value="8e-05"/>
