@@ -197,7 +197,7 @@ Details:
 
 ## Audio loop
 
-The output node uses its defaults: `stream` mode and the `bm_daniel` voice, with a bounded queue of 5.
+The output node uses its defaults: `stream` mode and the `am_echo` voice, with a bounded queue of 5.
 
 The microphone mute is implemented in the Parakeet node (see Starting point). It subscribes to `tts_speaking` with transient-local QoS, so a late-starting mic node sees the current state.
 
