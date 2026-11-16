@@ -1,0 +1,60 @@
+child_frame: overhead_camera_optical_frame
+device_mxid: 14442C1091CCC4D600
+fit:
+  edge_rms_px: 0.37091107967012854
+  mm_per_px: 1.2527560585835213
+grid_fit:
+  height_change_mm: 3.348751199853083
+  note: tilt and height fit to grids; camera x, y and yaw from the start pose, x,
+    y re-anchored to the grids average position
+  placements:
+  - grid_data/oh_topleft
+  - grid_data/oh_farright
+  - grid_data/oh_nearleft2
+  - grid_data/oh_nearright
+  - grid_data/overhead
+  - grid_data/oh_midrot
+  tilt_x_deg: 0.2619460783413704
+  tilt_y_deg: -0.3802070724645084
+intrinsics:
+  cx: 962.377685546875
+  cy: 547.1397094726562
+  fx: 1460.4989013671875
+  fy: 1459.8614501953125
+  height: 1080
+  width: 1920
+parent_frame: base_link
+quaternion_xyzw:
+- 0.708080048002394
+- -0.7052788030857188
+- -0.02969062107202894
+- 0.017970046154722818
+rotation_matrix:
+- - 0.0034005538762104763
+  - -0.9977206138264176
+  - -0.06739445807462001
+- - -0.9998547811505246
+  - -0.004517774717890866
+  - 0.016431869097439208
+- - -0.016698887501027885
+  - 0.06732879367280468
+  - -0.9975910889231082
+static_transform_args:
+- '0.34294'
+- '0.06051'
+- '1.82965'
+- '0.70813'
+- '-0.70515'
+- '-0.02895'
+- '0.02193'
+- base_link
+- overhead_camera_optical_frame
+table_model:
+  far_edge_x_m: 0.6327484630922643
+  half_width_m: 0.5581921103627906
+  note: near edge x=0.09 never seen by the wrist camera
+  source: /home/macnean2/Desktop/colman-processing/calib_data_20261026_1156/calibration.yaml
+translation_m:
+- 0.33459088372979295
+- 0.04806763122651014
+- 1.832997598442174
