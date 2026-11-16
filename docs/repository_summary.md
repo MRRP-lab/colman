@@ -8,13 +8,12 @@ This repository is a ROS 2 Jazzy workspace for a simulated or real UR3e robot wi
 - OAK-D camera support
 - AprilTag and YOLO perception
 - Local Parakeet speech-to-text input (via `onnx-asr`)
-- A partially implemented voice/LLM architecture
+- Local Kokoro-82M speech output
+- A voice/LLM pipeline: speech, Claude with tool calls, the arm, and spoken replies
 
-The workspace builds successfully, but the LLM/voice-command portion is incomplete. The local Kokoro-82M speech-output node lives in the `colman_audio_output` package. The custom `MoveTo`, `Pick` and `Place` actions (`colman_interfaces`) and the motion action server (`colman_motion`) are merged (PR #14). A driver supervisor in `colman_bringup` recovers the UR arm in place (PR #13). There is still no `colman_llm` package.
+The workspace builds and the whole voice pipeline exists. The `colman_audio_input` package holds the Parakeet speech node, which mutes the microphone while the robot speaks. The local Kokoro-82M speech-output node lives in `colman_audio_output`. The custom `MoveTo`, `Pick` and `Place` actions (`colman_interfaces`) and the motion action server (`colman_motion`) are merged (PR #14), and so is a driver supervisor in `colman_bringup` that recovers the UR arm in place (PR #13). The `colman_llm` package turns recognised speech into validated arm commands with Claude Sonnet 5.5 (see section 1, "LLM node"). The `llm` branch carries `colman_llm`, which is not yet merged into `main`; `main` has only its scaffold.
 
-Dependencies for local Parakeet speech recognition (`onnx-asr`, `onnxruntime-gpu`, `silero-vad`, `sounddevice`, `huggingface_hub`, plus `portaudio`) are in `pixi.toml`, but no node uses them yet. `speech_to_text_node.py` still uses Azure and is to be replaced by a Parakeet node.
-
-The architecture diagram in `docs/architecture/architecture.svg` describes the planned voice pipeline: speech recognition, a text topic, an AI model with tool calls, a response text topic, and local Kokoro-82M speech synthesis. It also identifies the arm command server as the boundary between AI tool calls and MoveIt. The design for the LLM node is in [`plan.md`](plan.md).
+The architecture diagram in `docs/architecture/architecture.svg` describes the voice pipeline: speech recognition, a text topic, an AI model with tool calls, a response text topic, and local Kokoro-82M speech synthesis. It also identifies the arm command server as the boundary between AI tool calls and MoveIt. The design for the LLM node is in [`plan.md`](plan.md).
 
 ---
 
@@ -120,7 +119,7 @@ For other nodes, `motion_server.py` (`pixi run motion`) exposes the same behavio
 - actions `/move_to` (`MoveTo`: `pose_name`), `/pick` (`Pick`: `frame`) and `/place` (`Place`: `location`, optional `position`), each returning `success` and `message` and reporting a `stage` as feedback
 - services `/stop` and `/resume` (`std_srvs/Trigger`)
 
-`Pick` and `Place` look for their tag from the scan poses in `colman_motion/poses.py` (`scan_for_cubes_right`, then `scan_for_cubes_left`). One pose cannot see the whole table, so a tag that is not visible from the first is looked for from the next; the pose that last saw a tag is tried first (`scan.py`). While it waits for a tag, the motion server asks the wrist camera to refocus (`/oakd_pro/refocus`). The scan poses are in `colman_moveit_config/srdf/arm.srdf.xacro`, with the arm upright (shoulder straight up, elbow straight) and only wrist 1, wrist 2 and wrist 3 aiming the camera. The left scan pose has wrist 1 at about 191 degrees, past half a turn.
+`Pick` and `Place` look for their tag from the scan poses in `colman_motion/poses.py` (`scan_for_cubes_right`, then `scan_for_cubes_left`). One pose cannot see the whole table, so a tag that is not visible from the first is looked for from the next; the pose that last saw a tag is tried first (`scan.py`). A failed move to a scan pose ends the scan at once with `Look move failed`, and the other side is not tried. On the real arm this has aborted picks and places that a retry then completed, so a robust scan would continue to the next pose after a failed move. While it waits for a tag, the motion server asks the wrist camera to refocus (`/oakd_pro/refocus`). The scan poses are in `colman_moveit_config/srdf/arm.srdf.xacro`, with the arm upright (shoulder straight up, elbow straight) and only wrist 1, wrist 2 and wrist 3 aiming the camera. The left scan pose has wrist 1 at about 191 degrees, past half a turn.
 
 It accepts one goal at a time and rejects goals while stopped. `pixi run driver` starts the driver supervisor, which restarts the UR driver and recovers the arm without restarting the rest of the stack.
 
@@ -147,24 +146,29 @@ AprilTag detection is provided by the external `apriltag_ros` package. The April
 
 - `apriltag.launch.py`
 
-The motion code then finds objects by TF frame names such as:
+The detector config (`colman_perception/config/apriltag.yaml`) registers tag IDs 1 to 8 at 39 mm. The motion code finds objects by TF frame names such as:
 
 ```text
-tag_1
-tag_3
-tag_5
-tag_6
+tag_1   white cube 1 (base of the white stack)
+tag_2   white cube 2
+tag_3   white cube 3
+tag_4   white cube 4
+tag_5   blue cube 1 (base of the blue stack)
+tag_6   blue cube 2
+tag_7   blue cube 3
+tag_8   blue cube 4
 ```
 
 That is important for the LLM design: the LLM should map natural language like “the red block” to a known object/frame name. It should not directly invent arbitrary coordinates.
 
 ## Voice input and output
 
-The speech input node (`speech_to_text_node.py`, currently Azure-based and to be replaced by a local Parakeet node):
+The speech input node (`speech_to_text_node.py`) runs NVIDIA Parakeet TDT 0.6B locally through `onnx-asr`, with `silero-vad` for voice activity detection, and needs no API key:
 
 - listens to the microphone
 - converts speech to text
 - publishes `std_msgs/msg/String`
+- mutes the microphone while `tts_speaking` is true, plus a tail, so the robot does not hear itself
 
 By default it publishes on:
 
@@ -172,11 +176,9 @@ By default it publishes on:
 /speech_text
 ```
 
-The relevant input code is:
+Parameters include `topic`, `model_name`, `device` (`auto`, `cuda` or `cpu`), `silence_ms`, `max_utterance_s`, `vad_threshold`, `mute_topic` and `mute_tail_ms`. See `src/colman_audio_input/README.md`. `test/wav_file_check.py` runs the node on a WAV file.
 
-- `speech_to_text_node.py`
-
-It is not currently included in the main bringup launch file, so it must be started separately:
+It is not included in the main bringup launch file, so it must be started separately:
 
 ```bash
 ros2 run colman_audio_input speech_to_text
@@ -197,6 +199,25 @@ Parameters: `input_topic`, `voice` (default `am_echo`), `lang_code`, `speed`, `m
 ```bash
 pixi run speak
 ```
+
+## LLM node
+
+`colman_llm` (`pixi run llm`) subscribes to `/speech_text`, sends each utterance to Claude Sonnet 5.5 (`claude-sonnet-5-5`), and publishes the reply on `llm_response`. It needs `ANTHROPIC_API_KEY`, from the environment or the repository's `.env`, and exits at startup without it. Claude chooses tools, but never talks to ROS. The node validates each call against allow-lists and turns it into an action goal or service call, so it is the safety boundary. Claude never supplies a tag, a coordinate or a topic name.
+
+Tools:
+
+- `stack_cube(color, count)`: build a stack of `white` or `blue` cubes, 1 to 3 on top of that colour's base cube. The node, not Claude, picks which cube moves where.
+- `pick_and_place(object, destination)`: move one loose cube onto any cube. Bases never move.
+- `go_to_pose(pose)`: `scan right`, `scan left`, `upright` or `compact`, through `/move_to`.
+- `release_cube`: vacuum off, through `/release`.
+- `report_state`: stacks, loose cubes, what the arm holds, and whether it is stopped. It never moves the arm.
+- `stop_robot` and `resume_robot`: `/stop` and `/resume`.
+
+Saying "stop", "halt" or "freeze" stops the arm immediately, before anything is queued: the node calls `/stop`, cancels the active goal and drops the queue. Parameters: `model`, `pick_timeout_s`, `place_timeout_s`, `move_timeout_s` and `dry_run`. With `dry_run:=true` a fake executor returns canned results, so it runs without an arm. Stack state is held in memory by `stack_state.py` and resets when the node restarts. Details are in [`plan.md`](plan.md).
+
+## Operating the real arm
+
+The real-arm stack is several separate processes, each its own pixi task, started in this order: `driver`, `motion`, `detect` (camera and AprilTag), then optionally `image-view`. Only one driver may hold the robot, because a second one fails with `speed_slider_mask is currently controlled by another RTDE client`. `pixi run kill-all` stops every process started from this checkout (including the driver), then removes stale DDS shared-memory files and stops the ROS 2 daemon. For a manual pick, send `ros2 action send_goal --feedback /pick colman_interfaces/action/Pick "{frame: tag_1}"`, then `/place` or `/release`. A pick that succeeds leaves the cube held, and the next pick is refused until it is placed or released.
 
 ---
 
