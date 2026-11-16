@@ -9,7 +9,7 @@ Design for adding voice-driven control to the robot. For how the rest of the rep
 - `colman_audio_input` is the Parakeet speech recognition node (`onnx-asr`, `silero-vad`, `sounddevice`, all in `pixi.toml`), merged from `NVIDIA-Parakeet`. It mutes the microphone while `tts_speaking` is true plus a 600 ms tail (`mute_topic`, `mute_tail_ms` parameters), and `test/wav_file_check.py` runs it on a WAV file.
 - `colman_interfaces` and `colman_motion` provide `MoveTo`, `Pick` and `Place` actions on `/move_to`, `/pick` and `/place`, plus `std_srvs/Trigger` services `/stop` and `/resume`. Run the server with `pixi run motion`.
 - `colman_bringup` has a driver supervisor (`pixi run driver`) that recovers the UR arm in place.
-- `colman_llm` exists. Steps 1 to 5 of Order of work are done: the node answers `/speech_text` through Claude, the `pick_and_place` tool sends `/pick` then `/place` goals, a spoken stop word calls `/stop` and cancels the active goal before anything is queued, and the `stop_robot` and `resume_robot` tools call `/stop` and `/resume`. A `dry_run` parameter swaps in a fake executor with canned results for use without an arm. The demo offers Claude `stack_cube`, `stop_robot` and `resume_robot`; see Cube stacking demo.
+- `colman_llm` exists. Steps 1 to 5 of Order of work are done: the node answers `/speech_text` through Claude, the `pick_and_place` tool sends `/pick` then `/place` goals, a spoken stop word calls `/stop` and cancels the active goal before anything is queued, and the `stop_robot` and `resume_robot` tools call `/stop` and `/resume`. A `dry_run` parameter swaps in a fake executor with canned results for use without an arm. The demo offers Claude `stack_cube`, `pick_and_place`, `go_to_pose`, `release_cube`, `report_state`, `stop_robot` and `resume_robot`; see Cube stacking demo.
 
 The `Pick` action takes a `frame` (for example `tag_3`) and reports a `stage` as feedback. The `Place` action takes a `location` frame and an optional `position`. Both return `success` and `message`.
 
@@ -124,21 +124,28 @@ PICK_AND_PLACE = {
 The enum values are human names. The node maps them to frames, so Claude never sees or sends a raw frame name:
 
 ```python
-# Placeholder tag names. Replace them when the real tags are named.
-OBJECT_FRAMES = {
-    "red block": "tag_3",
-    "blue block": "tag_5",
-}
+# The eight tagged cubes: tags 1 to 4 are white cubes 1 to 4, tags 5 to 8 blue cubes 1 to 4.
+# Cube 1 of each colour is a base and never moves.
+CUBE_NAMES = {"white cube 1": "tag_1", "white cube 2": "tag_2", ..., "blue cube 4": "tag_8"}
 
-DESTINATION_FRAMES = {
-    "left tray": "tag_1",
-    "right tray": "tag_6",
-}
+OBJECT_FRAMES = {n: f for n, f in CUBE_NAMES.items() if f not in BASE_FRAMES}  # 6 loose cubes
+DESTINATION_FRAMES = dict(CUBE_NAMES)                                           # any of the 8
+
+POSES = {"scan right": "scan_for_cubes_right", "scan left": "scan_for_cubes_left",
+         "upright": "Up", "compact": "Compact"}
 ```
+
+`pick_and_place(object, destination)` picks one loose cube and places it on top of any cube. Claude never names a tag; the node maps the spoken names above to frames. The node also checks the move against `stack_state.py` before the arm moves, and refuses with a plain-language reason if the cube is a base, already has a cube on top, is already on the destination, or the destination is covered or already 3 cubes high.
 
 Even with `strict: true` the executor re-checks every value against these dicts before sending a goal, because the node is the safety boundary.
 
 Never let Claude supply arbitrary joint positions, Cartesian coordinates, ROS topic, service or action names, or code.
+
+The other tools:
+
+- `release_cube` calls `/release` (vacuum off) and takes no arguments. It is refused while the arm is busy moving. If the node believed the arm was holding a cube, that cube is recorded as loose on the table.
+- `go_to_pose(pose)` calls the `/move_to` action with one of the named poses in `POSES`. It is refused while the arm is busy or holding a cube. `Zero` is left out on purpose, and raw joint or Cartesian targets are never accepted.
+- `report_state` takes no arguments and never moves the arm. It reports the stacks, the loose cubes, what the node believes the arm is holding, and whether it is stopped. The stopped flag follows `stop_robot`, `resume_robot` and a spoken stop; a manual `pixi run resume` is not seen by the node.
 
 `stop_robot` calls `/stop` and takes no arguments. `resume_robot` calls `/resume` and takes no arguments. Both are added after `pick_and_place`, each in its own step. A spoken stop must always work (see Safety).
 
@@ -146,14 +153,14 @@ Parse `tool_use.input` as already-decoded JSON from the SDK. Do not string-match
 
 ## Cube stacking demo
 
-The demo uses tagged cubes instead of `pick_and_place`. Tags 1 to 4 are white cubes and tags 5 to 8 are blue cubes. Cube 1 of each colour (`tag_1`, `tag_5`) is the base of that colour's stack and never moves. The other three are loose, and the detector config (`colman_perception/config/apriltag.yaml`) registers IDs 1 to 8 at 39 mm.
+The demo uses tagged cubes. Tags 1 to 4 are white cubes and tags 5 to 8 are blue cubes. Cube 1 of each colour (`tag_1`, `tag_5`) is the base of that colour's stack and never moves. The other three are loose, and the detector config (`colman_perception/config/apriltag.yaml`) registers IDs 1 to 8 at 39 mm.
 
-Claude gets one tool, `stack_cube(color, count)`, with `color` in `white` or `blue` and `count` from 1 to 3. The node, not Claude, decides which cube moves where:
+Claude gets `stack_cube(color, count)` for building a stack, with `color` in `white` or `blue` and `count` from 1 to 3, and `pick_and_place`, `go_to_pose`, `release_cube`, `report_state`, `stop_robot` and `resume_robot` (see Tool definitions). The node, not Claude, decides which cube moves where:
 
 - `stack_state.py` keeps the stacks. The next loose cube of that colour is picked with `/pick`, and placed with `/place` on the top of the stack: the base for the first cube, then the previously placed cube. `/place` with a `location` already drops 50 mm above the tag, which is one cube height, so the cube lands on top of the cube carrying that tag.
 - A count above what fits stops when the stack is full and says so. A failed pick or place, or a spoken stop, ends the run and reports how many were stacked. A failed cube is not counted, so a retry targets the same cube and spot.
 - The state is in memory. Restarting the node resets it, so every run starts with empty stacks and loose cubes.
-- `pick_and_place` stays in the code but is not offered to Claude, so it cannot disturb the stack state.
+- `pick_and_place` and `stack_cube` share one model of which cube sits on which, so a cube moved by one is where the other expects it. A cube left in the gripper after a failed place blocks every other arm tool until `release_cube`.
 
 If a place fails after a successful pick, the vacuum still holds the cube and the next pick fails with "Already holding". Release it with `ros2 service call /release std_srvs/srv/Trigger`.
 
@@ -206,22 +213,22 @@ Before a long action starts, the worker publishes the acknowledgement "On it." a
 The speech loop:
 
 ```text
-User: "Pick up the red block and put it in the left tray."
+User: "Put white cube three on blue cube one."
     |
     v
 /speech_text
     |
     v
-Claude returns tool_use: pick_and_place(object="red block", destination="left tray")
+Claude returns tool_use: pick_and_place(object="white cube 3", destination="blue cube 1")
     |
     v
-node validates -> /pick tag_3 -> /place tag_1
+node validates -> /pick tag_3 -> /place tag_5
     |
     v
 Claude receives success/failure as tool_result
     |
     v
-/llm_response: "I picked up the red block and placed it in the left tray."
+/llm_response: "I picked up white cube 3 and placed it on blue cube 1."
     |
     v
 Kokoro speaks the response
