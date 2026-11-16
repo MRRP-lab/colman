@@ -23,3 +23,7 @@ __pycache__/
 calib_samples.npz
 # api keys
 .env
+
+# calibration captures
+*.npz
+*.png
