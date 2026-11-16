@@ -4,25 +4,26 @@ import pytest
 from colman_llm.executor import FakeExecutor, PickAndPlaceExecutor
 
 LOG = logging.getLogger("test")
-GOOD = {"object": "red block", "destination": "left tray"}
+GOOD = {"object": "white cube 3", "destination": "white cube 2"}
 
 
 def test_valid_call_gets_canned_success():
     ok, message = FakeExecutor(LOG).run_tool("pick_and_place", GOOD)
     assert ok
-    assert "red block" in message and "left tray" in message
+    assert "white cube 3" in message and "white cube 2" in message
 
 
 @pytest.mark.parametrize(
     "args",
     [
-        {"object": "green block", "destination": "left tray"},
-        {"object": "red block", "destination": "kitchen"},
-        {"object": "red block"},
+        {"object": "green cube 2", "destination": "white cube 2"},
+        {"object": "white cube 3", "destination": "kitchen"},
+        {"object": "white cube 3"},
         {**GOOD, "extra": "x"},
         {"object": "tag_3", "destination": "tag_1"},
-        {"object": 3, "destination": ["left tray"]},
-        "red block",
+        {"object": 3, "destination": ["white cube 2"]},
+        {"object": "white cube 1", "destination": "white cube 2"},  # a base never moves
+        "white cube 3",
     ],
 )
 def test_unknown_or_malformed_arguments_are_rejected(args):
@@ -52,8 +53,8 @@ def make_executor(pick=(True, "picked"), place=(True, "placed")):
 def test_pick_then_place_with_mapped_frames():
     executor, calls = make_executor()
     ok, message = executor.run_tool("pick_and_place", GOOD)
-    assert ok and "red block" in message
-    assert calls == [("pick", "tag_3"), ("place", "tag_1")]
+    assert ok and "white cube 3" in message
+    assert calls == [("pick", "tag_3"), ("place", "tag_2")]
 
 
 def test_pick_failure_aborts_before_place():
@@ -64,10 +65,10 @@ def test_pick_failure_aborts_before_place():
 
 
 def test_place_failure_is_reported_after_a_successful_pick():
-    executor, calls = make_executor(place=(False, "tag_1 not visible"))
+    executor, calls = make_executor(place=(False, "tag_2 not visible"))
     ok, message = executor.run_tool("pick_and_place", GOOD)
     assert not ok
-    assert "Picked up the red block" in message and "tag_1 not visible" in message
+    assert "Picked up the white cube 3" in message and "tag_2 not visible" in message
     assert [c[0] for c in calls] == ["pick", "place"]
 
 

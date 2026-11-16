@@ -169,11 +169,30 @@ def test_demo_tools_are_strict_and_sent():
     client, messages = make(reply("Hi."))
     client.say("hello", lambda n, a: (True, "ok"))
     tools = {t["name"]: t for t in messages.calls[0]["tools"]}
-    assert set(tools) == {"stack_cube", "stop_robot", "resume_robot"}
+    assert set(tools) == {
+        "stack_cube",
+        "pick_and_place",
+        "go_to_pose",
+        "release_cube",
+        "report_state",
+        "stop_robot",
+        "resume_robot",
+    }
     for tool in tools.values():
         assert tool["strict"] is True
         assert tool["input_schema"]["additionalProperties"] is False
-    assert tools["stop_robot"]["input_schema"]["properties"] == {}
+    for name in ("stop_robot", "release_cube", "report_state"):
+        assert tools[name]["input_schema"]["properties"] == {}
+    assert tools["go_to_pose"]["input_schema"]["properties"]["pose"]["enum"] == [
+        "scan right",
+        "scan left",
+        "upright",
+        "compact",
+    ]
+    pick = tools["pick_and_place"]["input_schema"]["properties"]
+    assert "white cube 1" not in pick["object"]["enum"]  # a base never moves
+    assert "white cube 1" in pick["destination"]["enum"]
+    assert len(pick["object"]["enum"]) == 6 and len(pick["destination"]["enum"]) == 8
     assert tools["stack_cube"]["input_schema"]["properties"]["count"]["enum"] == [
         1,
         2,

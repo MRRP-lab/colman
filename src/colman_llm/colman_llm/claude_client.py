@@ -18,6 +18,10 @@ FALLBACK_LINE = "I couldn't reach my brain just now."
 SYSTEM_PROMPT = """\
 You control a robot arm through the provided tools.
 Only call a tool when the user clearly asks the arm to do something.
+Use stack_cube to stack several cubes of one colour and pick_and_place to move one
+named cube onto another. Use go_to_pose only for the named poses, release_cube only
+when the user asks to drop or let go of the cube, and report_state to answer questions
+about the cubes or the arm instead of answering from memory.
 Use stop_robot whenever the user wants the arm stopped. After a stop the arm ignores
 commands until resume_robot is called, which you only call when asked to resume.
 Answer in one or two short spoken sentences, with no markdown, lists or emoji.

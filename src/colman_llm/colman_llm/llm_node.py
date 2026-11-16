@@ -3,8 +3,10 @@
 
 Subscribes:  speech_text   (std_msgs/String)  -- recognized speech
 Publishes:   llm_response  (std_msgs/String)  -- text for colman_audio_output to speak
-Actions:     pick, place   (colman_interfaces) -- the stack_cube tool
+Actions:     pick, place   (colman_interfaces) -- stack_cube and pick_and_place
+             move_to       (colman_interfaces) -- go_to_pose
 Services:    stop, resume  (std_srvs/Trigger)  -- spoken stop and the stop/resume tools
+             release       (std_srvs/Trigger)  -- release_cube
 
 Requires ANTHROPIC_API_KEY, from the environment or from the repository's .env
 file (an exported variable wins). The node exits at startup without it.
@@ -15,6 +17,7 @@ utterance at a time.
 import os
 import queue
 import threading
+import traceback
 
 import rclpy
 from rclpy.action import ActionClient
@@ -24,7 +27,7 @@ from rclpy.node import Node
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 
-from colman_interfaces.action import Pick, Place
+from colman_interfaces.action import MoveTo, Pick, Place
 from colman_llm.action_call import ActionCall
 from colman_llm.claude_client import ClaudeClient
 from colman_llm.env_file import load_env_file
@@ -33,6 +36,7 @@ from colman_llm.service_call import ServiceCall
 from colman_llm.stop_words import is_stop_command
 
 QUEUE_SIZE = 10
+ERROR_LINE = "Sorry, something went wrong with that."
 
 
 class LlmNode(Node):
@@ -42,6 +46,7 @@ class LlmNode(Node):
         self.declare_parameter("model", "claude-sonnet-5-5")
         self.declare_parameter("pick_timeout_s", 120.0)
         self.declare_parameter("place_timeout_s", 120.0)
+        self.declare_parameter("move_timeout_s", 60.0)
         # dry_run answers tool calls with canned results and never moves the arm.
         self.declare_parameter("dry_run", False)
 
@@ -54,7 +59,7 @@ class LlmNode(Node):
         self._claude = ClaudeClient(
             self.get_parameter("model").value, self.get_logger()
         )
-        self._pick = self._place = self._stop_call = None
+        self._pick = self._place = self._move = self._stop_call = None
         self._stop_generation = 0  # bumped by a spoken stop; drops in-flight replies
         self._executor = self._make_executor()
         self._pub = self.create_publisher(String, "llm_response", 10)
@@ -90,14 +95,23 @@ class LlmNode(Node):
         resume = ServiceCall(
             self.create_client(Trigger, "resume"), Trigger.Request(), "resume", log
         )
+        release = ServiceCall(
+            self.create_client(Trigger, "release"), Trigger.Request(), "release", log
+        )
+        move = self._move = ActionCall(
+            ActionClient(self, MoveTo, "move_to"), "move", log
+        )
         pick_s = self.get_parameter("pick_timeout_s").value
         place_s = self.get_parameter("place_timeout_s").value
+        move_s = self.get_parameter("move_timeout_s").value
         return PickAndPlaceExecutor(
             lambda frame: pick.call(Pick.Goal(frame=frame), pick_s),
             lambda frame: place.call(Place.Goal(location=frame), place_s),
             log,
             stop=stop.call,
             resume=resume.call,
+            release=release.call,
+            move_to=lambda pose: move.call(MoveTo.Goal(pose_name=pose), move_s),
         )
 
     def _on_speech(self, msg):
@@ -114,10 +128,12 @@ class LlmNode(Node):
         log = self.get_logger()
         log.warn(f"Stop word heard: {text}")
         self._stop_generation += 1
+        self._executor.set_stopped(True)
         if self._stop_call is not None:
             self._stop_call.call_async()  # the server rejects goals until /resume
             self._pick.cancel_active()
             self._place.cancel_active()
+            self._move.cancel_active()
         dropped = 0
         while True:
             try:
@@ -137,7 +153,11 @@ class LlmNode(Node):
                 continue
             self.get_logger().info(f"Heard: {text}")
             generation = self._stop_generation
-            reply = self._claude.say(text, self._run_tool)
+            try:
+                reply = self._claude.say(text, self._run_tool)
+            except Exception:  # noqa: BLE001 - one bad tool call must not end the worker
+                self.get_logger().error(f"Failed on {text!r}\n{traceback.format_exc()}")
+                reply = ERROR_LINE
             if generation != self._stop_generation:
                 self.get_logger().info("Stopped while working: reply dropped.")
             elif reply:
@@ -146,7 +166,7 @@ class LlmNode(Node):
 
     def _run_tool(self, name, args):
         # Tell the user the command was heard before a long action starts.
-        if name in ("pick_and_place", "stack_cube"):
+        if name in ("pick_and_place", "stack_cube", "go_to_pose"):
             self._pub.publish(String(data="On it."))
         return self._executor.run_tool(name, args)
 

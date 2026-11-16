@@ -12,23 +12,36 @@ STACKS = {
 }
 MAX_STACK = 3  # cubes on top of a base
 
-# pick_and_place is kept in the code but is not offered to Claude in the cube demo,
-# so it cannot disturb the stack state. Placeholder tag names, not on the table.
-OBJECT_FRAMES = {
-    "red block": "tag_3",
-    "blue block": "tag_5",
+# Every cube by its spoken name; "white cube 1" is the base of the white stack.
+CUBE_NAMES = {
+    f"{color} cube {number}": frame
+    for color, stack in STACKS.items()
+    for number, frame in enumerate([stack["base"], *stack["cubes"]], start=1)
 }
+BASE_FRAMES = {stack["base"] for stack in STACKS.values()}
 
-DESTINATION_FRAMES = {
-    "left tray": "tag_1",
-    "right tray": "tag_6",
+# pick_and_place moves one loose cube (a base never moves) onto any cube.
+OBJECT_FRAMES = {n: f for n, f in CUBE_NAMES.items() if f not in BASE_FRAMES}
+DESTINATION_FRAMES = dict(CUBE_NAMES)
+
+# Named arm poses go_to_pose may use, by spoken name. The values are the pose names in
+# colman_moveit_config/srdf/arm.srdf.xacro. "Zero" is left out on purpose: the arm
+# cannot reach it from most poses without a long sweep.
+POSES = {
+    "scan right": "scan_for_cubes_right",
+    "scan left": "scan_for_cubes_left",
+    "upright": "Up",
+    "compact": "Compact",
 }
 
 PICK_AND_PLACE = {
     "name": "pick_and_place",
     "description": (
-        "Pick up one known object with the arm and place it at a known "
-        "destination. Takes about a minute and blocks other arm commands."
+        "Pick up one loose cube and place it on top of another cube. Cube 1 of each "
+        "colour is a base and cannot be picked up. A cube with another on top, or a "
+        f"stack already {MAX_STACK} high, cannot be built on. To stack several cubes "
+        "of one colour use stack_cube instead. Takes about a minute and blocks other "
+        "arm commands."
     ),
     "strict": True,
     "input_schema": {
@@ -38,6 +51,24 @@ PICK_AND_PLACE = {
             "destination": {"type": "string", "enum": list(DESTINATION_FRAMES)},
         },
         "required": ["object", "destination"],
+        "additionalProperties": False,
+    },
+}
+
+GO_TO_POSE = {
+    "name": "go_to_pose",
+    "description": (
+        "Move the empty arm to a named pose: "
+        + ", ".join(POSES)
+        + ". 'scan right' and 'scan left' look at the cubes from each side, "
+        "'upright' stands the arm straight up, 'compact' folds it. It refuses while "
+        "the arm is holding a cube or busy."
+    ),
+    "strict": True,
+    "input_schema": {
+        "type": "object",
+        "properties": {"pose": {"type": "string", "enum": list(POSES)}},
+        "required": ["pose"],
         "additionalProperties": False,
     },
 }
@@ -88,13 +119,62 @@ RESUME_ROBOT = {
     },
 }
 
-TOOLS = [STACK_CUBE, STOP_ROBOT, RESUME_ROBOT]
+RELEASE_CUBE = {
+    "name": "release_cube",
+    "description": (
+        "Let go of the cube the arm is holding, where it is, by turning the vacuum "
+        "off. Only use it when the user asks to drop or release the cube, for example "
+        "after a failed placement. It refuses while the arm is busy moving."
+    ),
+    "strict": True,
+    "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": False,
+    },
+}
+
+REPORT_STATE = {
+    "name": "report_state",
+    "description": (
+        "Report which cubes are stacked or loose, what the arm is holding, and whether "
+        "it is stopped. It never moves the arm. Use it to answer questions about the "
+        "table or the arm instead of answering from memory."
+    ),
+    "strict": True,
+    "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": False,
+    },
+}
+
+TOOLS = [
+    STACK_CUBE,
+    PICK_AND_PLACE,
+    GO_TO_POSE,
+    RELEASE_CUBE,
+    REPORT_STATE,
+    STOP_ROBOT,
+    RESUME_ROBOT,
+]
 
 
 def known_things_prompt():
     """Describe the allow-lists for the system prompt so the two never drift apart."""
-    colors = " and ".join(f"{c} cube" for c in STACKS)
-    return (
-        f"Known cubes: {colors}. Each colour has a base cube, and the arm can stack "
-        f"up to {MAX_STACK} more cubes of that colour on it.\n"
+    lines = []
+    for color, stack in STACKS.items():
+        names = [
+            n for n, f in CUBE_NAMES.items() if f in [stack["base"], *stack["cubes"]]
+        ]
+        lines.append(
+            f"The {color} cubes are {', '.join(names)}; {names[0]} is the base."
+        )
+    lines.append(
+        f"A base never moves. Any stack can be built up to {MAX_STACK} cubes on top of "
+        "its first cube."
     )
+    lines.append("Named poses for go_to_pose: " + ", ".join(POSES) + ".")
+    return "\n".join(lines) + "\n"
