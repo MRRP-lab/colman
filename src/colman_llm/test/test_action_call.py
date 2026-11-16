@@ -21,9 +21,11 @@ class Handle:
     def __init__(self, accepted=True, success=True, message="done"):
         self.accepted = accepted
         self.cancelled = False
-        self._result = SimpleNamespace(
-            result=SimpleNamespace(success=success, message=message)
-        )
+        # message=None models an action whose result has no message field (MoveTo).
+        fields = {"success": success}
+        if message is not None:
+            fields["message"] = message
+        self._result = SimpleNamespace(result=SimpleNamespace(**fields))
 
     def get_result_async(self):
         return Future(self._result)
@@ -139,3 +141,15 @@ def test_cancel_active_cancels_the_running_goal():
 
 def test_cancel_with_nothing_running_is_harmless():
     make(FakeClient(Handle())).cancel_active()
+
+
+def test_a_result_without_a_message_field_still_works():
+    """MoveTo's result has only `success`; reading .message used to crash the worker."""
+    ok, message = ActionCall(FakeClient(Handle(message=None)), "move", LOG).call(
+        object(), 1.0
+    )
+    assert ok and message == "The move succeeded."
+    ok, message = ActionCall(
+        FakeClient(Handle(success=False, message=None)), "move", LOG
+    ).call(object(), 1.0)
+    assert not ok and message == "The move failed."

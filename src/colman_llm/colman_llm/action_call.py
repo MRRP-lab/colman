@@ -76,6 +76,8 @@ class ActionCall:
         if getattr(box["result"], "status", None) == STATUS_CANCELED:
             return False, f"The {self._name} was cancelled."
         result = box["result"].result
+        # Not every action result has a message; MoveTo returns only success.
+        message = getattr(result, "message", "")
         if not result.success:
-            return False, result.message or f"The {self._name} failed."
-        return True, result.message or f"The {self._name} succeeded."
+            return False, message or f"The {self._name} failed."
+        return True, message or f"The {self._name} succeeded."
