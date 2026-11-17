@@ -16,14 +16,12 @@ from std_srvs.srv import Trigger
 
 from colman_interfaces.action import MovePose, MoveTo, Pick, Place
 from colman_motion.arm_control import ArmControl
-from colman_motion.poses import SCAN_POSES
 from colman_motion.robot_ready import wait_for_robot
-from colman_motion.scan import FOUND, LOOK_FAILED, STOPPED, look_for_tag
+from colman_motion.scan import FOUND, NOT_VISIBLE, STOPPED, locate_tag
 from colman_motion.scene_manager import SceneManager
 from colman_motion.tag_lookup import TagLookup
 from colman_motion.vacuum_control import VacuumControl
 
-DETECT_TIMEOUT_S = 10.0  # wait at the last scan pose; earlier poses wait less
 REFOCUS_SERVICE = "/oakd_pro/refocus"
 APPROACH_OFFSET_M = 0.1
 EE_OFFSET_M = 0.01
@@ -48,8 +46,6 @@ class MotionServer(Node):
         self.vacuum = vacuum
         # Asks the wrist camera for a fresh autofocus and autoexposure pass.
         self.refocus = self.create_client(Trigger, REFOCUS_SERVICE)
-        self.last_scan = {}  # tag frame -> the scan pose that last saw it
-        self.last_pose = SCAN_POSES[0]  # the scan pose the arm last looked from
 
         group = ReentrantCallbackGroup()
         self.move_server = ActionServer(
@@ -150,32 +146,34 @@ class MotionServer(Node):
             self.refocus.call_async(Trigger.Request())
 
     def find_tag(self, goal_handle, feedback, tag_frame):
-        """Look for tag_frame from each scan pose. Return (tag_pose, error_message)."""
+        """Find tag_frame without a scan pose. Return (tag_pose, error_message).
 
-        def on_detect(pose):
+        The wrist camera is tried first, then the overhead camera. An overhead find is
+        only good to about 1 cm, so the arm moves over it and the pose comes from the
+        wrist camera; if that fails there is an error and no pick from the estimate.
+        """
+
+        def on_detect():
             self.stage(goal_handle, feedback, "detecting")
             self.request_refocus()
 
-        scan = look_for_tag(
+        scan = locate_tag(
             self.arm,
             self.tag,
             tag_frame,
             self.arm.fast,
+            orientation=EE_DOWN,
             stopped=self.arm.stop_event.is_set,
-            prefer=self.last_scan.get(tag_frame),
-            on_look=lambda pose: self.stage(goal_handle, feedback, "looking"),
+            on_look=lambda: self.stage(goal_handle, feedback, "looking"),
             on_detect=on_detect,
-            last_timeout_s=DETECT_TIMEOUT_S,
         )
         if scan.status == FOUND:
-            self.last_scan[tag_frame] = scan.pose
-            self.last_pose = scan.pose
             return scan.tag_pose, None
-        if scan.status == LOOK_FAILED:
-            return None, "Look move failed"
         if scan.status == STOPPED:
             return None, "Stopped during detect"
-        return None, f"{tag_frame} not visible from any scan pose"
+        if scan.status == NOT_VISIBLE:
+            return None, f"{tag_frame} not visible"
+        return None, scan.message
 
     def move_cb(self, goal_handle):
         result = MoveTo.Result()
@@ -185,6 +183,11 @@ class MotionServer(Node):
                 goal_handle.request.pose_name, self.arm.fast
             )
             canceled = not result.success and self.cancel_requested(goal_handle)
+            if not result.success and not canceled:
+                # The result has no message field, so say why in the log.
+                self.get_logger().error(
+                    f"Move to {goal_handle.request.pose_name} failed"
+                )
             self.finish()
             if result.success:
                 goal_handle.succeed(result)
@@ -265,7 +268,6 @@ class MotionServer(Node):
                 pick_translation[2],
                 approach_translation[2],
                 EE_DOWN,
-                seed_pose=self.last_scan[tag_frame],
             )
             if pair is None:
                 return self.fail(
@@ -312,7 +314,7 @@ class MotionServer(Node):
             if not self.vacuum.holding:
                 return self.fail(goal_handle, result, "Not holding anything")
             # The cube is part of the arm from here until it is released, including
-            # the move back to the scan pose.
+            # any move over the drop tag to read it.
             self.arm.attach_cube()
 
             if location:
@@ -341,7 +343,6 @@ class MotionServer(Node):
                 drop_off[2],
                 drop_off_approach[2],
                 EE_DOWN,
-                seed_pose=self.last_scan[location] if location else self.last_pose,
             )
             if pair is None:
                 return self.fail(goal_handle, result, "No safe arm pose to place there")

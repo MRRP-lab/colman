@@ -10,7 +10,7 @@ from rclpy.node import Node
 from shape_msgs.msg import SolidPrimitive
 from std_srvs.srv import Trigger
 
-from colman_motion.poses import SCAN_POSES
+from colman_motion.poses import ARM_JOINTS
 
 FAST_SCALING = 0.7
 SLOW_SCALING = 0.3
@@ -170,20 +170,16 @@ class ArmControl(Node):
         state.update()
         return state
 
-    def vertical_pair(self, x, y, z_low, z_high, orientation, seed_pose):
+    def vertical_pair(self, x, y, z_low, z_high, orientation):
         """(state at z_high, state at z_low) over (x, y), on one IK branch.
 
-        The low state is solved first, seeded by seed_pose (the scan pose the arm last
-        looked from, so the right pose for a tag on the right and the left pose for one
-        on the left), and the high state is solved from it. Solving the high one first
-        and the low one from that can land on a different branch, and the straight drop
-        between them then swings the arm through a large sweep (up to 3 rad). Returns
-        None if either has no solution or is in collision.
+        The low state is solved first, seeded by the arm's current joints so it stays on
+        the branch the arm is on, and the high state is solved from it. Solving the high
+        one first and the low one from that can land on a different branch, and the
+        straight drop between them then swings the arm through a large sweep (up to 3
+        rad). Returns None if either has no solution or is in collision.
         """
-        seed = self.scan_state(seed_pose)
-        if seed is None:
-            return None
-        low = self.state_from_ik(self.pose_at(x, y, z_low, orientation), seed)
+        low = self.state_from_ik(self.pose_at(x, y, z_low, orientation))
         if low is None:
             self.get_logger().error(f"No IK solution at z={z_low:.3f}")
             return None
@@ -208,21 +204,13 @@ class ArmControl(Node):
         ) = orientation
         return pose
 
-    def scan_state(self, pose_name):
-        joint_values = self.arm.get_named_target_state_values(pose_name)
-        if not joint_values:
-            self.get_logger().error(f"Unknown pose {pose_name}")
-            return None
-        return self.state_from_joints(joint_values)
-
     def path_clear(self, start, goal):
         """True if the straight joint-space path from start to goal is collision free.
 
         Pilz PTP follows exactly this path and rejects it with an error when it is
         blocked, so checking first avoids ever asking for a plan that is invalid.
         """
-        # Any named pose lists the arm's joints, in order.
-        names = list(self.arm.get_named_target_state_values(SCAN_POSES[0]))
+        names = ARM_JOINTS
         a = np.array([start.joint_positions[n] for n in names])
         b = np.array([goal.joint_positions[n] for n in names])
         psm = self.moveit.get_planning_scene_monitor()

@@ -11,9 +11,9 @@ from rclpy.node import Node
 from rclpy.signals import SignalHandlerOptions
 from rclpy.utilities import remove_ros_args
 
-from colman_interfaces.action import MoveTo, Pick, Place
+from colman_interfaces.action import Pick, Place
 from colman_motion.patterns import PATTERNS
-from colman_motion.poses import SCAN_POSES
+from colman_motion.scan import FOUND, look_for_tag
 from colman_motion.tag_lookup import TagLookup
 
 TAG_PATTERN = ["tag_1", "tag_3", "tag_5", "tag_6"]
@@ -37,7 +37,6 @@ def main():
     spin_thread = threading.Thread(target=executor.spin, daemon=True)
     spin_thread.start()
 
-    move_client = ActionClient(node, MoveTo, "move_to")
     pick_client = ActionClient(node, Pick, "pick")
     place_client = ActionClient(node, Place, "place")
 
@@ -83,26 +82,20 @@ def main():
             logger.error(f"Unknown pattern {pattern}")
             return
 
-        for client in (move_client, pick_client, place_client):
+        for client in (pick_client, place_client):
             if not client.wait_for_server(timeout_sec=SERVER_WAIT_S):
                 logger.error("Action servers not available")
                 return
 
-        # One scan pose cannot see the whole table, so look from each and merge what is
-        # seen. Each position is read in the base frame at the moment the tag is seen.
+        # Read each tag where it is seen, from the wrist camera if the arm happens to be
+        # looking at it and otherwise from the overhead one. Only the order of the
+        # tags is taken from these positions, and the pick refines each tag itself.
         tags = {}
-        for pose_name in SCAN_POSES:
-            response = run_goal(move_client, MoveTo.Goal(pose_name=pose_name))
-            if response is None or not response.result.success:
-                logger.error(f"Look move to {pose_name} failed")
-                return
-            for tag_frame in TAG_PATTERN:
-                if tag_frame in tags:
-                    continue
-                tag_pose = tag.get_tag_pose(tag_frame)
-                if tag_pose is not None:
-                    translation = tag_pose.translation
-                    tags[tag_frame] = (translation.x, translation.y, translation.z)
+        for tag_frame in TAG_PATTERN:
+            scan = look_for_tag(tag, tag_frame, wrist_timeout_s=0.0)
+            if scan.status == FOUND:
+                translation = scan.tag_pose.translation
+                tags[tag_frame] = (translation.x, translation.y, translation.z)
         logger.info(f"Visible tags: {sorted(tags)}")
 
         if len(tags) < 2:
