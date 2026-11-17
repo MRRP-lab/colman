@@ -1,14 +1,22 @@
-"""Publish AprilTag-style TF for tag_1..tag_8 so the motion server sees cubes.
+"""Publish fake AprilTag TF for tag_1..tag_8, the way the two real cameras would.
 
-Runs as a script from the integration test. The detector publishes a fresh stamp every
-frame and TagLookup rejects a pose whose stamp has not changed, so the tags have to be
-dynamic TF, not static.
+Runs as a script from the integration test.
+
+- The overhead camera sees every tag all the time, but only to about 1 cm: it publishes
+  ovh_tag_N with a small fixed error.
+- The wrist camera is exact but only sees a tag when the tool is held over it: it
+  publishes tag_N only while the tool tip is within WRIST_RADIUS_M of the tag
+  horizontally and between WRIST_MIN_M and WRIST_MAX_M above it.
+
+Each frame gets a new stamp every publish, because TagLookup rejects a pose whose stamp
+has not changed.
 """
 
 import rclpy
 from geometry_msgs.msg import TransformStamped
 from rclpy.node import Node
-from tf2_ros import TransformBroadcaster
+from rclpy.time import Time
+from tf2_ros import Buffer, TransformBroadcaster, TransformException, TransformListener
 
 # tag_n -> (x, y) in base_link. The tag is on top of a 39 mm cube standing on the table.
 TAG_XY = {
@@ -22,26 +30,54 @@ TAG_XY = {
     8: (0.40, -0.10),
 }
 TAG_Z = 0.039
+OVERHEAD_ERROR_M = (0.008, -0.006, 0.004)  # what "good to about 1 cm" looks like
+TOOL_FRAME = "vacuum_tip_link"
+WRIST_RADIUS_M = 0.08
+WRIST_MIN_M = 0.10
+WRIST_MAX_M = 0.50
 
 
 class FakeTags(Node):
     def __init__(self):
         super().__init__("fake_tags")
         self.broadcaster = TransformBroadcaster(self)
+        self.buffer = Buffer()
+        self.listener = TransformListener(self.buffer, self)
         self.create_timer(0.05, self.publish)
+
+    def tool_position(self):
+        try:
+            tf = self.buffer.lookup_transform("base_link", TOOL_FRAME, Time())
+        except TransformException:
+            return None
+        return tf.transform.translation
+
+    def wrist_sees(self, tool, x, y):
+        if tool is None:
+            return False
+        above = tool.z - TAG_Z
+        near = abs(tool.x - x) < WRIST_RADIUS_M and abs(tool.y - y) < WRIST_RADIUS_M
+        return near and WRIST_MIN_M < above < WRIST_MAX_M
+
+    def send(self, stamp, child, x, y, z):
+        tf = TransformStamped()
+        tf.header.stamp = stamp
+        tf.header.frame_id = "base_link"
+        tf.child_frame_id = child
+        tf.transform.translation.x = x
+        tf.transform.translation.y = y
+        tf.transform.translation.z = z
+        tf.transform.rotation.w = 1.0
+        self.broadcaster.sendTransform(tf)
 
     def publish(self):
         now = self.get_clock().now().to_msg()
+        tool = self.tool_position()
+        ex, ey, ez = OVERHEAD_ERROR_M
         for number, (x, y) in TAG_XY.items():
-            tf = TransformStamped()
-            tf.header.stamp = now
-            tf.header.frame_id = "base_link"
-            tf.child_frame_id = f"tag_{number}"
-            tf.transform.translation.x = x
-            tf.transform.translation.y = y
-            tf.transform.translation.z = TAG_Z
-            tf.transform.rotation.w = 1.0
-            self.broadcaster.sendTransform(tf)
+            self.send(now, f"ovh_tag_{number}", x + ex, y + ey, TAG_Z + ez)
+            if self.wrist_sees(tool, x, y):
+                self.send(now, f"tag_{number}", x, y, TAG_Z)
 
 
 def main():
