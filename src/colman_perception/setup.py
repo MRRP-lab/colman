@@ -34,6 +34,7 @@ setup(
             "camera_info_republisher = colman_perception.camera_info_republisher:main",
             "camera_publisher = colman_perception.camera_publisher:main",
             "list_cameras = colman_perception.camera_names:main",
+            "print_tags = colman_perception.print_tags:main",
         ],
     },
 )

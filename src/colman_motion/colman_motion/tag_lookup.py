@@ -28,7 +28,7 @@ class TagLookup(Node):
         self.buffer = Buffer()
         self.listener = TransformListener(self.buffer, self)
 
-    def lookup(self, tag_frame, base_frame):
+    def lookup(self, tag_frame, base_frame, timeout_s=LOOKUP_TIMEOUT_S):
         """
         Given the tag and the base of the arm,
         returns the latest transform between them, or None.
@@ -38,10 +38,15 @@ class TagLookup(Node):
                 base_frame,
                 tag_frame,
                 Time(),
-                Duration(seconds=LOOKUP_TIMEOUT_S),
+                Duration(seconds=timeout_s),
             )
         except TransformException:
             return None
+
+    def peek(self, tag_frame, base_frame=BASE_FRAME):
+        """The latest transform to the tag right now, without waiting, or None."""
+        found = self.lookup(tag_frame, base_frame, timeout_s=0.0)
+        return None if found is None else found.transform
 
     def get_tag_pose(self, tag_frame=TAG_FRAME, base_frame=BASE_FRAME):
         """
