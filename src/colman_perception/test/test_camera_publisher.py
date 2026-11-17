@@ -144,3 +144,9 @@ def test_refocus_works_when_connected():
     node = FakeCameraPublisher([[]])
     response = node.on_refocus(None, type("R", (), {})())
     assert response.success is True
+
+
+def test_overhead_camera_runs_at_4k():
+    assert camera_publisher.CAMERAS["overhead"][2] == (3840, 2160)
+    node = FakeCameraPublisher([[]])
+    assert (node.info_msg.width, node.info_msg.height) == (1280, 720)  # wrist default

@@ -9,11 +9,6 @@ from std_srvs.srv import Trigger
 
 from colman_perception.camera_names import device_info
 
-WIDTH = 1280
-HEIGHT = 720
-# The overhead camera is 1.8 m from the table and sees 39 mm tags about 30 px wide at
-# 1080p (about 20 px at 720p), and its calibration is for 1080p.
-OVERHEAD_SIZE = (1920, 1080)
 CONTINUOUS_AF = dai.CameraControl.AutoFocusMode.CONTINUOUS_VIDEO
 
 # How often to retry while no camera is connected.
@@ -24,12 +19,19 @@ RECONNECT_S = 2.0
 # nothing.
 STALL_S = 3.0
 
-# Topic prefix, frame and image size for each named camera (names are in
+# Topic prefix, frame, image size and frame rate for each named camera (names are in
 # config/cameras.yaml). The wrist camera keeps the names the rest of the stack already
-# uses.
+# uses. The overhead camera is 1.83 m from the table, where a 39 mm tag is only ~30 px
+# wide at 1080p, so it runs at 4K. A 4K BGR frame is ~25 MB, so the rate is kept low to
+# stay inside USB3 bandwidth; the cubes are static.
 CAMERAS = {
-    "wrist": ("/oakd_pro", "oakd_pro_camera_rgb_optical_frame_wrist", (WIDTH, HEIGHT)),
-    "overhead": ("/overhead", "overhead_camera_optical_frame", OVERHEAD_SIZE),
+    "wrist": (
+        "/oakd_pro",
+        "oakd_pro_camera_rgb_optical_frame_wrist",
+        (1280, 720),
+        15.0,
+    ),
+    "overhead": ("/overhead", "overhead_camera_optical_frame", (3840, 2160), 5.0),
 }
 
 
@@ -41,7 +43,7 @@ class CameraPublisher(Node):
         self.camera = self.get_parameter("camera").value
         if self.camera not in CAMERAS:
             raise ValueError(f"no topics set up for camera '{self.camera}'")
-        prefix, self.frame_id, self.size = CAMERAS[self.camera]
+        prefix, self.frame_id, self.size, self.fps = CAMERAS[self.camera]
 
         self.image_pub = self.create_publisher(
             Image, f"{prefix}/rgb/image", qos_profile_sensor_data
@@ -86,7 +88,7 @@ class CameraPublisher(Node):
         cam.initialControl.setAutoFocusMode(CONTINUOUS_AF)
         cam.initialControl.setAutoExposureEnable()
         control_queue = cam.inputControl.createInputQueue()
-        out = cam.requestOutput(self.size, enableUndistortion=True, fps=15.0)
+        out = cam.requestOutput(self.size, enableUndistortion=True, fps=self.fps)
         queue = out.createOutputQueue(maxSize=4, blocking=False)
         pipeline.start()
         return device, pipeline, queue, control_queue
