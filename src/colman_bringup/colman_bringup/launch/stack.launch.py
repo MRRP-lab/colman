@@ -1,8 +1,8 @@
 """Start everything for the voice-controlled cube stacking demo.
 
-Arm driver, camera, AprilTag detector, motion server, speech in, LLM and speech out.
-Run with `pixi run stack`. Pass `dry_run:=true` for canned LLM tool results (no arm
-moves) or `driver:=false` if the arm driver is already running.
+Arm driver, wrist and overhead cameras, AprilTag detectors, motion server, speech in,
+LLM and speech out. Run with `pixi run stack`. Pass `dry_run:=true` for canned LLM tool
+results (no arm moves) or `driver:=false` if the arm driver is already running.
 """
 
 from ament_index_python.packages import get_package_share_directory
@@ -48,6 +48,7 @@ def generate_launch_description():
                 output="screen",
             ),
             include("colman_bringup", "launch", "apriltag.launch.py"),
+            include("colman_bringup", "launch", "overhead.launch.py"),
             # Motion server, after the driver has had time to come up
             TimerAction(
                 period=10.0,
