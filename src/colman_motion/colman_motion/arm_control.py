@@ -10,7 +10,7 @@ from rclpy.node import Node
 from shape_msgs.msg import SolidPrimitive
 from std_srvs.srv import Trigger
 
-from colman_motion.poses import ARM_JOINTS
+from colman_motion.poses import ARM_JOINTS, HOME_POSE
 
 FAST_SCALING = 0.7
 SLOW_SCALING = 0.3
@@ -179,7 +179,12 @@ class ArmControl(Node):
         straight drop between them then swings the arm through a large sweep (up to 3
         rad). Returns None if either has no solution or is in collision.
         """
-        low = self.state_from_ik(self.pose_at(x, y, z_low, orientation))
+        # Seed from where the arm is, so it stays on its branch. If that has no
+        # solution (the arm can be in an awkward pose), seed from the home pose.
+        low_pose = self.pose_at(x, y, z_low, orientation)
+        low = self.state_from_ik(low_pose)
+        if low is None:
+            low = self.state_from_ik(low_pose, self.state_from_joints(HOME_POSE))
         if low is None:
             self.get_logger().error(f"No IK solution at z={z_low:.3f}")
             return None
