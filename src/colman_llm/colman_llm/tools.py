@@ -25,10 +25,9 @@ OBJECT_FRAMES = {n: f for n, f in CUBE_NAMES.items() if f not in BASE_FRAMES}
 DESTINATION_FRAMES = dict(CUBE_NAMES)
 
 # Named arm poses go_to_pose may use, by spoken name. The values are the pose names in
-# colman_moveit_config/srdf/arm.srdf.xacro. "Zero" is left out on purpose: the arm
-# cannot reach it from most poses without a long sweep.
+# colman_moveit_config/srdf/arm.srdf.xacro.
 POSES = {
-    "upright": "Up",
+    "home": "home",
     "compact": "Compact",
 }
 
@@ -58,8 +57,8 @@ GO_TO_POSE = {
     "description": (
         "Move the empty arm to a named pose: "
         + ", ".join(POSES)
-        + ". 'upright' stands the arm straight up, 'compact' folds it. It refuses "
-        "while the arm is holding a cube or busy."
+        + ". 'home' stands the arm up with the forearm level, 'compact' folds it. "
+        "It refuses while the arm is holding a cube or busy."
     ),
     "strict": True,
     "input_schema": {
