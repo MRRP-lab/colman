@@ -1,0 +1,21 @@
+# The overhead camera's detector. Its tags are named ovh_tag_N so they do not collide
+# with the wrist camera's tag_N; the wrist camera is the accurate one, and an overhead
+# pose is only used to decide where to look from.
+apriltag_overhead:
+  ros__parameters:
+    image_transport: raw
+    family: 36h11
+    size: 0.039
+    max_hamming: 0
+    detector:
+      threads: 2
+      decimate: 1.0  # the tags are only about 30 px wide, so never decimate
+      blur: 0.0
+      refine: true
+      sharpening: 0.25
+      debug: false
+    pose_estimation_method: "pnp"
+    tag:
+      ids:    [1, 2, 3, 4, 5, 6, 7, 8]
+      frames: ["ovh_tag_1", "ovh_tag_2", "ovh_tag_3", "ovh_tag_4", "ovh_tag_5", "ovh_tag_6", "ovh_tag_7", "ovh_tag_8"]
+      sizes:  [0.039, 0.039, 0.039, 0.039, 0.039, 0.039, 0.039, 0.039]

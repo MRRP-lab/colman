@@ -24,6 +24,7 @@ mock = "ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur3e robot_ip:
 driver = "ros2 run colman_bringup driver_supervisor --ros-args -p robot_ip:=192.168.56.101"
 
 detect = "ros2 run colman_perception camera_publisher & ros2 launch colman_bringup apriltag.launch.py"
+overhead = "ros2 launch colman_bringup overhead.launch.py"
 calibrate = "ros2 run colman_motion eye_in_hand"
 solve = "python src/colman_motion/colman_motion/hand_eye_solve.py"
 motion = "ros2 launch colman_motion motion_server.launch.py gripper_type:=vacuum"
