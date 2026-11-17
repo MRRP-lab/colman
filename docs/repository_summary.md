@@ -119,7 +119,7 @@ For other nodes, `motion_server.py` (`pixi run motion`) exposes the same behavio
 - actions `/move_to` (`MoveTo`: `pose_name`), `/pick` (`Pick`: `frame`) and `/place` (`Place`: `location`, optional `position`), each returning `success` and `message` and reporting a `stage` as feedback
 - services `/stop` and `/resume` (`std_srvs/Trigger`)
 
-`Pick` and `Place` look for their tag from the scan poses in `colman_motion/poses.py` (`scan_for_cubes_right`, then `scan_for_cubes_left`). One pose cannot see the whole table, so a tag that is not visible from the first is looked for from the next; the pose that last saw a tag is tried first (`scan.py`). A failed move to a scan pose ends the scan at once with `Look move failed`, and the other side is not tried. On the real arm this has aborted picks and places that a retry then completed, so a robust scan would continue to the next pose after a failed move. While it waits for a tag, the motion server asks the wrist camera to refocus (`/oakd_pro/refocus`). The scan poses are in `colman_moveit_config/srdf/arm.srdf.xacro`, with the arm upright (shoulder straight up, elbow straight) and only wrist 1, wrist 2 and wrist 3 aiming the camera. The left scan pose has wrist 1 at about 191 degrees, past half a turn.
+`Pick` and `Place` find their tag without a scan pose (`scan.py`). The wrist camera gets one look at once, from wherever the arm is. If it does not see the tag, the overhead camera is used (`ovh_tag_N`), and its pose is picked and placed from directly. If neither sees it the arm may be blocking the overhead view, so it moves to `HOME_POSE` (`[0, -90°, 0, -90°, 0, 0]`, in `poses.py`) and the overhead camera is tried again for up to 4 s; if it is still not seen the goal fails with `<tag> not visible`. Inverse kinematics is seeded from the arm's current joints, so the arm stays on its current branch. The demos use `locate_tag`, which does the same.
 
 It accepts one goal at a time and rejects goals while stopped. `pixi run driver` starts the driver supervisor, which restarts the UR driver and recovers the arm without restarting the rest of the stack.
 
@@ -144,7 +144,8 @@ The relevant code is in:
 
 AprilTag detection is provided by the external `apriltag_ros` package. The AprilTag launch file remaps the camera input:
 
-- `apriltag.launch.py`
+- `apriltag.launch.py`: takes `camera:=wrist` (default, node `apriltag`, `apriltag.yaml`, `/oakd_pro` topics) or `camera:=overhead` (node `apriltag_overhead`, `apriltag_overhead.yaml`, `/overhead` topics)
+- `overhead.launch.py` (`pixi run overhead`): runs `camera_publisher` with `camera:=overhead` at 1080p, publishes the `base_link` to `overhead_camera_optical_frame` static transform from `colman_perception/config/overhead_camera.yaml` (the merged calibration), and starts the overhead detector. Its tags are named `ovh_tag_N`. At 1.8 m a 39 mm tag is about 30 px wide at 1080p; all eight tags are detected.
 
 The detector config (`colman_perception/config/apriltag.yaml`) registers tag IDs 1 to 8 at 39 mm. The motion code finds objects by TF frame names such as:
 
@@ -208,7 +209,7 @@ Tools:
 
 - `stack_cube(color, count)`: build a stack of `white` or `blue` cubes, 1 to 3 on top of that colour's base cube. The node, not Claude, picks which cube moves where.
 - `pick_and_place(object, destination)`: move one loose cube onto any cube. Bases never move.
-- `go_to_pose(pose)`: `scan right`, `scan left`, `upright` or `compact`, through `/move_to`.
+- `go_to_pose(pose)`: `upright` or `compact`, through `/move_to`.
 - `release_cube`: vacuum off, through `/release`.
 - `report_state`: stacks, loose cubes, what the arm holds, and whether it is stopped. It never moves the arm.
 - `stop_robot` and `resume_robot`: `/stop` and `/resume`.

@@ -112,7 +112,7 @@ def test_failed_place_leaves_the_cube_held_until_released():
     # Nothing else may move while the cube is still in the gripper.
     ok, message = pap(executor, "white cube 3", "white cube 1")
     assert not ok and "still holding the white cube 2" in message
-    ok, message = executor.run_tool("go_to_pose", {"pose": "upright"})
+    ok, message = executor.run_tool("go_to_pose", {"pose": "home"})
     assert not ok and "holding" in message
     assert calls == [("pick", "tag_2"), ("place", "tag_1")]
     ok, message = executor.run_tool("release_cube", {})
@@ -184,9 +184,7 @@ def test_release_is_refused_while_the_arm_is_moving():
 @pytest.mark.parametrize(
     "pose, srdf",
     [
-        ("scan right", "scan_for_cubes_right"),
-        ("scan left", "scan_for_cubes_left"),
-        ("upright", "Up"),
+        ("home", "home"),
         ("compact", "Compact"),
     ],
 )
@@ -199,13 +197,13 @@ def test_named_poses_map_to_the_srdf_names(pose, srdf):
 @pytest.mark.parametrize(
     "args",
     [
-        {"pose": "scan_for_cubes_right"},  # the raw name is not a spoken pose
+        {"pose": "Compact"},  # the raw name is not a spoken pose
         {"pose": "zero"},
         {"pose": "Up"},
         {"pose": 3},
         {},
-        {"pose": "upright", "speed": 1},
-        "upright",
+        {"pose": "home", "speed": 1},
+        "home",
     ],
 )
 def test_unknown_poses_never_reach_the_arm(args):
@@ -224,7 +222,7 @@ def test_go_to_pose_is_refused_while_busy():
     holder = {}
 
     def pick(frame):
-        holder["pose"] = holder["executor"].run_tool("go_to_pose", {"pose": "upright"})
+        holder["pose"] = holder["executor"].run_tool("go_to_pose", {"pose": "home"})
         return True, "ok"
 
     holder["executor"] = PickAndPlaceExecutor(
@@ -275,6 +273,6 @@ def test_fake_executor_runs_every_tool():
     assert fake.run_tool(
         "pick_and_place", {"object": "blue cube 2", "destination": "blue cube 1"}
     )[0]
-    assert fake.run_tool("go_to_pose", {"pose": "scan left"})[0]
+    assert fake.run_tool("go_to_pose", {"pose": "home"})[0]
     assert fake.run_tool("release_cube", {})[0]
     assert fake.run_tool("report_state", {})[0]

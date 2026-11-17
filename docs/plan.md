@@ -131,8 +131,7 @@ CUBE_NAMES = {"white cube 1": "tag_1", "white cube 2": "tag_2", ..., "blue cube 
 OBJECT_FRAMES = {n: f for n, f in CUBE_NAMES.items() if f not in BASE_FRAMES}  # 6 loose cubes
 DESTINATION_FRAMES = dict(CUBE_NAMES)                                           # any of the 8
 
-POSES = {"scan right": "scan_for_cubes_right", "scan left": "scan_for_cubes_left",
-         "upright": "Up", "compact": "Compact"}
+POSES = {"home": "home", "compact": "Compact"}
 ```
 
 `pick_and_place(object, destination)` picks one loose cube and places it on top of any cube. Claude never names a tag; the node maps the spoken names above to frames. The node also checks the move against `stack_state.py` before the arm moves, and refuses with a plain-language reason if the cube is a base, already has a cube on top, is already on the destination, or the destination is covered or already 3 cubes high.

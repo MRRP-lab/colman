@@ -1,47 +1,46 @@
 child_frame: overhead_camera_optical_frame
-device_mxid: 14442C1091CCC4D600
 fit:
-  edge_rms_px: 0.37091107967012854
-  mm_per_px: 1.2527560585835213
-intrinsics:
-  cx: 962.377685546875
-  cy: 547.1397094726562
-  fx: 1460.4989013671875
-  fy: 1459.8614501953125
-  height: 1080
-  width: 1920
+  edges:
+  - grid_data/overhead
+  - grid_data/oh_midrot
+  grids:
+  - grid_data/oh_topleft
+  - grid_data/oh_farright
+  - grid_data/oh_nearleft2
+  - grid_data/oh_nearright
+  - grid_data/overhead
+  - grid_data/oh_midrot
+  method: table edges and grid corners, one pose
+  sigma_corner_px: 0.15
+  sigma_edge_px: 0.4
+  wrist_calibration: colman-processing/calib_data_20261026_1156/calibration.yaml
 parent_frame: base_link
 quaternion_xyzw:
-- 0.7081317339046121
-- -0.7051455851548667
-- -0.028953224581593214
-- 0.021928564936543715
+- 0.7095627096009868
+- -0.7037013428535267
+- -0.031061710913132142
+- 0.018982921929935243
 rotation_matrix:
-- - 0.003862829045857441
-  - -0.9974021264110766
-  - -0.07193105575775771
-- - -0.9999417370725159
-  - -0.004577683552848932
-  - 0.009775851558306455
-- - -0.010079732742615262
-  - 0.07188910240052479
-  - -0.9973616976523032
+- - 0.007679180362584637
+  - -0.9974611791034543
+  - -0.07079707882748736
+- - -0.9998197472365512
+  - -0.00888813748229067
+  - 0.016777188320300573
+- - -0.01736384821397098
+  - 0.07065548240329596
+  - -0.997349637580302
 static_transform_args:
-- '0.34294'
-- '0.06051'
-- '1.82965'
-- '0.70813'
-- '-0.70515'
-- '-0.02895'
-- '0.02193'
+- '0.34221'
+- '0.04809'
+- '1.83012'
+- '0.70956'
+- '-0.70370'
+- '-0.03106'
+- '0.01898'
 - base_link
 - overhead_camera_optical_frame
-table_model:
-  far_edge_x_m: 0.6327484630922643
-  half_width_m: 0.5581921103627906
-  note: near edge x=0.09 never seen by the wrist camera
-  source: /home/macnean2/Desktop/colman-processing/calib_data_20261026_1156/calibration.yaml
 translation_m:
-- 0.3429422281960572
-- 0.060511313827756534
-- 1.829648847242321
+- 0.342209967508181
+- 0.04808542944111356
+- 1.8301225839911397
