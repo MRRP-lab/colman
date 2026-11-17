@@ -210,3 +210,31 @@ def test_stop_during_the_clear_move():
     arm.go_to_joint_pose = go
     scan = look_with_arm(arm, FakeTags({}, arm), stopped=lambda: stop["now"])
     assert scan.status == STOPPED
+
+
+# ------------------------------------------------- wrist vs overhead disagreement
+class _P:
+    def __init__(self, x, y, z):
+        self.translation = type("T", (), {"x": x, "y": y, "z": z})()
+
+
+def test_compare_cameras_measures_the_distance():
+    from colman_motion.scan import compare_cameras
+
+    class Tags:
+        def peek(self, frame):
+            assert frame == "ovh_tag_3"
+            return _P(0.03, 0.04, 0.0)
+
+    assert abs(compare_cameras(Tags(), "tag_3", _P(0, 0, 0)) - 0.05) < 1e-9
+
+
+def test_compare_cameras_is_quiet_when_overhead_does_not_see_the_tag():
+    from colman_motion.scan import compare_cameras
+
+    class Tags:
+        def peek(self, frame):
+            return None
+
+    assert compare_cameras(Tags(), "tag_3", _P(0, 0, 0)) is None
+    assert compare_cameras(object(), "tag_3", _P(0, 0, 0)) is None

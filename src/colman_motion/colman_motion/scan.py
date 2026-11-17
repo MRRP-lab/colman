@@ -6,13 +6,22 @@ from. If neither sees the tag the arm may be blocking the overhead view, so the 
 moves to HOME_POSE and the overhead camera is tried again.
 """
 
+import math
 import time
 from collections import namedtuple
 
+from rclpy.logging import get_logger
+
 from colman_motion.poses import HOME_POSE
+
+log = get_logger("scan")
 
 WRIST_WAIT_S = 0.0  # the wrist camera only gets a look at once, it never waits
 OVERHEAD_WAIT_S = 4.0  # how long to wait for the overhead camera after clearing it
+
+# The wrist camera is the accurate one and always wins; if the overhead camera sees the
+# same tag this far from it, warn, since one of the two calibrations is off.
+DISAGREE_WARN_M = 0.010
 
 OVERHEAD_PREFIX = "ovh_"  # the overhead detector publishes tag_N as ovh_tag_N
 
@@ -34,6 +43,29 @@ def result(status, tag_pose=None, source=None, message=""):
 
 def overhead_frame(tag_frame):
     return OVERHEAD_PREFIX + tag_frame
+
+
+def compare_cameras(tag, tag_frame, wrist_pose, warn_m=DISAGREE_WARN_M):
+    """Log how far the overhead camera's pose of tag_frame is from the wrist camera's.
+
+    Does nothing if the overhead camera does not see the tag right now. Returns the
+    distance in metres, or None.
+    """
+    peek = getattr(tag, "peek", None)
+    if peek is None:
+        return None
+    overhead = peek(overhead_frame(tag_frame))
+    if overhead is None:
+        return None
+    w, o = wrist_pose.translation, overhead.translation
+    dx, dy, dz = o.x - w.x, o.y - w.y, o.z - w.z
+    dist = math.sqrt(dx * dx + dy * dy + dz * dz)
+    msg = (
+        f"{tag_frame}: overhead is {dist * 1000:.1f} mm from wrist "
+        f"(dx={dx * 1000:.1f} dy={dy * 1000:.1f} dz={dz * 1000:.1f} mm); using wrist"
+    )
+    (log.warn if dist > warn_m else log.info)(msg)
+    return dist
 
 
 def wait_for_tag(tag, tag_frame, timeout_s, *, stopped=lambda: False, clock=time.time):
@@ -82,6 +114,7 @@ def look_for_tag(
     if found == STOPPED:
         return result(STOPPED)
     if found is not None:
+        compare_cameras(tag, tag_frame, found)
         return result(FOUND, found, WRIST)
 
     overhead = overhead_frame(tag_frame)
