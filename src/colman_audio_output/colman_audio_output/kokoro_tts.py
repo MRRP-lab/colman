@@ -38,7 +38,7 @@ class KokoroTTSNode(Node):
 
         # ---- Parameters ----
         self.declare_parameter("input_topic", "llm_response")
-        self.declare_parameter("voice", "af_heart")  # Kokoro voice pack name
+        self.declare_parameter("voice", "am_echo")  # Kokoro voice pack name
         self.declare_parameter("lang_code", "a")  # 'a' = American, 'b' = British
         self.declare_parameter("speed", 1.0)
         self.declare_parameter("mode", "stream")  # stream | play | save

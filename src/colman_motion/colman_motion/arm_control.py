@@ -2,10 +2,15 @@ import copy
 import threading
 import time
 
-from geometry_msgs.msg import Pose
+import numpy as np
+from geometry_msgs.msg import Pose, PoseStamped
 from moveit.planning import PlanRequestParameters
+from moveit_msgs.msg import AttachedCollisionObject, CollisionObject
 from rclpy.node import Node
+from shape_msgs.msg import SolidPrimitive
 from std_srvs.srv import Trigger
+
+from colman_motion.poses import SCAN_POSES
 
 FAST_SCALING = 0.7
 SLOW_SCALING = 0.3
@@ -17,6 +22,28 @@ EXECUTE_ATTEMPTS = 3
 EXECUTE_RETRY_DELAY_S = 0.5
 IK_TIMEOUT_S = 0.1
 TIP_LINK = "vacuum_tip_link"
+
+# A cube held on the vacuum tip is part of the arm while it moves, so planning and
+# the collision checks have to know about it.
+HELD_CUBE_ID = "held_cube"
+HELD_CUBE_SIDE_M = 0.05
+# Margin all round the cube, for the error in where the cube sits on the tip.
+HELD_CUBE_BUFFER_M = 0.01
+HELD_CUBE_TOUCH_LINKS = [
+    "vacuum_tip_link",
+    "vacuum_nozzle_link",
+    "vacuum_mount_link",
+    "wrist_3_link",
+    "wrist_2_link",
+    "camera_adapter_link",
+]
+# Joint-space moves are checked at this many points before they are planned.
+PATH_CHECK_STEPS = 60
+# Straight-line (Pilz LIN) moves are planned at these speed/acceleration scalings,
+# fastest first, using the first the planner accepts. At 0.7 every such move is
+# rejected for exceeding a joint acceleration limit; 0.3 works for all but the highest
+# stack, which needs 0.2.
+LINEAR_SCALINGS = (0.3, 0.2, 0.1)
 
 
 class ArmControl(Node):
@@ -130,18 +157,157 @@ class ArmControl(Node):
         with psm.read_only() as scene:
             return scene.is_state_valid(state, "ur_arm")
 
-    def state_from_ik(self, pose):
-        """Joint state for pose on the IK branch nearest the current state.
+    def state_from_ik(self, pose, seed=None):
+        """Joint state for pose on the IK branch nearest the seed (default: now).
 
-        TRAC-IK in Distance mode is seeded with the current joint state, so it
-        stays on the same shoulder/elbow/wrist branch instead of the random one
-        OMPL's goal sampler would pick.
+        TRAC-IK in Distance mode is seeded with a joint state, so it stays on the
+        same shoulder/elbow/wrist branch instead of the random one OMPL's goal
+        sampler would pick.
         """
-        state = self.current_state()
+        state = copy.deepcopy(seed) if seed is not None else self.current_state()
         if not state.set_from_ik("ur_arm", pose, TIP_LINK, IK_TIMEOUT_S):
             return None
         state.update()
         return state
+
+    def vertical_pair(self, x, y, z_low, z_high, orientation, seed_pose):
+        """(state at z_high, state at z_low) over (x, y), on one IK branch.
+
+        The low state is solved first, seeded by seed_pose (the scan pose the arm last
+        looked from, so the right pose for a tag on the right and the left pose for one
+        on the left), and the high state is solved from it. Solving the high one first
+        and the low one from that can land on a different branch, and the straight drop
+        between them then swings the arm through a large sweep (up to 3 rad). Returns
+        None if either has no solution or is in collision.
+        """
+        seed = self.scan_state(seed_pose)
+        if seed is None:
+            return None
+        low = self.state_from_ik(self.pose_at(x, y, z_low, orientation), seed)
+        if low is None:
+            self.get_logger().error(f"No IK solution at z={z_low:.3f}")
+            return None
+        high = self.state_from_ik(self.pose_at(x, y, z_high, orientation), low)
+        if high is None:
+            self.get_logger().error(f"No IK solution at z={z_high:.3f}")
+            return None
+        if not (self.is_valid(low) and self.is_valid(high)):
+            self.get_logger().error("Vertical pair is in collision or out of bounds")
+            return None
+        return high, low
+
+    @staticmethod
+    def pose_at(x, y, z, orientation):
+        pose = Pose()
+        pose.position.x, pose.position.y, pose.position.z = x, y, z
+        (
+            pose.orientation.x,
+            pose.orientation.y,
+            pose.orientation.z,
+            pose.orientation.w,
+        ) = orientation
+        return pose
+
+    def scan_state(self, pose_name):
+        joint_values = self.arm.get_named_target_state_values(pose_name)
+        if not joint_values:
+            self.get_logger().error(f"Unknown pose {pose_name}")
+            return None
+        return self.state_from_joints(joint_values)
+
+    def path_clear(self, start, goal):
+        """True if the straight joint-space path from start to goal is collision free.
+
+        Pilz PTP follows exactly this path and rejects it with an error when it is
+        blocked, so checking first avoids ever asking for a plan that is invalid.
+        """
+        # Any named pose lists the arm's joints, in order.
+        names = list(self.arm.get_named_target_state_values(SCAN_POSES[0]))
+        a = np.array([start.joint_positions[n] for n in names])
+        b = np.array([goal.joint_positions[n] for n in names])
+        psm = self.moveit.get_planning_scene_monitor()
+        with psm.read_only() as scene:
+            for t in np.linspace(0.0, 1.0, PATH_CHECK_STEPS):
+                state = copy.deepcopy(start)
+                state.joint_positions = dict(zip(names, (a + t * (b - a)).tolist()))
+                state.update()
+                if not scene.is_state_valid(state, "ur_arm"):
+                    return False
+        return True
+
+    def attach_cube(self):
+        """Model the cube held on the vacuum tip, so every later plan avoids it."""
+        self._set_held_cube(True)
+
+    def detach_cube(self):
+        self._set_held_cube(False)
+
+    def _set_held_cube(self, held):
+        attached = AttachedCollisionObject()
+        attached.link_name = TIP_LINK
+        attached.touch_links = HELD_CUBE_TOUCH_LINKS
+        attached.object.id = HELD_CUBE_ID
+        attached.object.header.frame_id = TIP_LINK
+        if held:
+            box = SolidPrimitive()
+            box.type = SolidPrimitive.BOX
+            box.dimensions = [HELD_CUBE_SIDE_M + 2 * HELD_CUBE_BUFFER_M] * 3
+            pose = Pose()
+            # The cube hangs below the tip, along the tool's z axis.
+            pose.position.z = HELD_CUBE_SIDE_M / 2
+            pose.orientation.w = 1.0
+            attached.object.primitives.append(box)
+            attached.object.primitive_poses.append(pose)
+            attached.object.operation = CollisionObject.ADD
+        else:
+            attached.object.operation = CollisionObject.REMOVE
+        psm = self.moveit.get_planning_scene_monitor()
+        with psm.read_write() as scene:
+            scene.process_attached_collision_object(attached)
+            if not held:
+                # Detaching leaves the object behind in the world where it was
+                # carried, so it has to be removed from there too.
+                leftover = CollisionObject()
+                leftover.id = HELD_CUBE_ID
+                leftover.operation = CollisionObject.REMOVE
+                scene.apply_collision_object(leftover)
+            scene.current_state.update()
+        self.get_logger().info("Holding a cube" if held else "Not holding a cube")
+
+    def go_straight(self, x, y, z, orientation, params=None):
+        """Move the tip in a straight line to (x, y, z), keeping the orientation.
+
+        Pilz LIN follows the line in Cartesian space and checks collisions along it,
+        so the arm stays on one IK branch. It also rejects a line whose joint motion
+        would exceed a joint acceleration limit, so the speed is capped at
+        LINEAR_SCALINGS and lowered until the planner accepts it. There is no other
+        fallback: if no line is accepted the move fails and the caller reports it.
+        """
+        if self.stop_event.is_set():
+            return False
+        params = params or self.slow
+        requested = min(
+            params.max_velocity_scaling_factor, params.max_acceleration_scaling_factor
+        )
+        scalings = [s for s in LINEAR_SCALINGS if s <= requested]
+        goal = PoseStamped()
+        goal.header.frame_id = "base_link"
+        goal.pose = self.pose_at(x, y, z, orientation)
+        start = self.current_state()
+        for scaling in scalings or [LINEAR_SCALINGS[-1]]:
+            self.arm.set_start_state(robot_state=start)
+            if not self.arm.set_goal_state(pose_stamped_msg=goal, pose_link=TIP_LINK):
+                return False
+            lin = self.pilz_params(params)
+            lin.planner_id = "LIN"
+            lin.max_velocity_scaling_factor = scaling
+            lin.max_acceleration_scaling_factor = scaling
+            result = self.arm.plan(single_plan_parameters=lin)
+            if result:
+                return self.execute(result.trajectory)
+            self.get_logger().warn(f"Straight-line plan failed at scaling {scaling}")
+        self.get_logger().error("Straight-line plan failed")
+        return False
 
     def state_from_joints(self, joint_values):
         state = self.current_state()
@@ -191,7 +357,9 @@ class ArmControl(Node):
 
         planning_started = time.perf_counter()
         start = self.current_state()
-        trajectory = self.plan_leg(start, goal_state, params)
+        trajectory = None
+        if self.path_clear(start, goal_state):
+            trajectory = self.plan_leg(start, goal_state, params)
         if trajectory is not None:
             self.get_logger().info(
                 f"Planned Pilz PTP in "
@@ -203,7 +371,9 @@ class ArmControl(Node):
                 return False
             self.get_logger().warn("Execution failed, replanning with OMPL")
         else:
-            self.get_logger().info("Pilz PTP blocked, falling back to OMPL")
+            self.get_logger().info(
+                "Straight joint path is not clear, planning with OMPL"
+            )
         return self.plan_state_and_execute(goal_state, self.ompl_params(params))
 
     def execute(self, robot_trajectory):

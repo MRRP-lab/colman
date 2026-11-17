@@ -1,0 +1,46 @@
+child_frame: overhead_camera_optical_frame
+fit:
+  edges:
+  - /home/macnean2/Desktop/colman/worktrees/camera-calibration-grid/grid_data/overhead
+  - /home/macnean2/Desktop/colman/worktrees/camera-calibration-grid/grid_data/oh_midrot
+  grids:
+  - /home/macnean2/Desktop/colman/worktrees/camera-calibration-grid/grid_data/oh_topleft
+  - /home/macnean2/Desktop/colman/worktrees/camera-calibration-grid/grid_data/oh_farright
+  - /home/macnean2/Desktop/colman/worktrees/camera-calibration-grid/grid_data/oh_nearleft2
+  - /home/macnean2/Desktop/colman/worktrees/camera-calibration-grid/grid_data/oh_nearright
+  - /home/macnean2/Desktop/colman/worktrees/camera-calibration-grid/grid_data/overhead
+  - /home/macnean2/Desktop/colman/worktrees/camera-calibration-grid/grid_data/oh_midrot
+  method: table edges and grid corners, one pose
+  sigma_corner_px: 0.15
+  sigma_edge_px: 0.4
+  wrist_calibration: /home/macnean2/Desktop/colman-processing/calib_data_20261026_1156/calibration.yaml
+parent_frame: base_link
+quaternion_xyzw:
+- 0.7095627096009868
+- -0.7037013428535267
+- -0.031061710913132142
+- 0.018982921929935243
+rotation_matrix:
+- - 0.007679180362584637
+  - -0.9974611791034543
+  - -0.07079707882748736
+- - -0.9998197472365512
+  - -0.00888813748229067
+  - 0.016777188320300573
+- - -0.01736384821397098
+  - 0.07065548240329596
+  - -0.997349637580302
+static_transform_args:
+- '0.34221'
+- '0.04809'
+- '1.83012'
+- '0.70956'
+- '-0.70370'
+- '-0.03106'
+- '0.01898'
+- base_link
+- overhead_camera_optical_frame
+translation_m:
+- 0.342209967508181
+- 0.04808542944111356
+- 1.8301225839911397

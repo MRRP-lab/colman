@@ -12,19 +12,25 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.signals import SignalHandlerOptions
+from std_srvs.srv import Trigger
 
 from colman_interfaces.action import MovePose, MoveTo, Pick, Place
 from colman_motion.arm_control import ArmControl
+from colman_motion.poses import SCAN_POSES
 from colman_motion.robot_ready import wait_for_robot
+from colman_motion.scan import FOUND, LOOK_FAILED, STOPPED, look_for_tag
 from colman_motion.scene_manager import SceneManager
 from colman_motion.tag_lookup import TagLookup
 from colman_motion.vacuum_control import VacuumControl
 
-LOOK_POSE = "Look3"
-DETECT_TIMEOUT_S = 10.0
+DETECT_TIMEOUT_S = 10.0  # wait at the last scan pose; earlier poses wait less
+REFOCUS_SERVICE = "/oakd_pro/refocus"
 APPROACH_OFFSET_M = 0.1
 EE_OFFSET_M = 0.01
 DROP_OFFSET_M = 0.05
+# The approach above the drop point is lower than the one above a pick: with the cube
+# in hand a 0.10 m approach over the third cube of a stack is out of the arm's reach.
+PLACE_APPROACH_OFFSET_M = 0.05
 EE_DOWN = (1.0, 0.0, 0.0, 0.0)
 GRASP_DWELL_S = 0.5
 RELEASE_DWELL_S = 0.5
@@ -40,6 +46,10 @@ class MotionServer(Node):
         self.arm = arm
         self.tag = tag
         self.vacuum = vacuum
+        # Asks the wrist camera for a fresh autofocus and autoexposure pass.
+        self.refocus = self.create_client(Trigger, REFOCUS_SERVICE)
+        self.last_scan = {}  # tag frame -> the scan pose that last saw it
+        self.last_pose = SCAN_POSES[0]  # the scan pose the arm last looked from
 
         group = ReentrantCallbackGroup()
         self.move_server = ActionServer(
@@ -134,15 +144,38 @@ class MotionServer(Node):
             goal_handle.abort(result)
         return result
 
-    def detect(self, tag_frame):
-        deadline = time.time() + DETECT_TIMEOUT_S
-        while time.time() < deadline:
-            if self.arm.stop_event.is_set():
-                return None
-            tag_pose = self.tag.get_tag_pose(tag_frame)
-            if tag_pose is not None:
-                return tag_pose
-        return None
+    def request_refocus(self):
+        # The arm has just moved, so let the camera refocus and re-expose while we wait.
+        if self.refocus.service_is_ready():
+            self.refocus.call_async(Trigger.Request())
+
+    def find_tag(self, goal_handle, feedback, tag_frame):
+        """Look for tag_frame from each scan pose. Return (tag_pose, error_message)."""
+
+        def on_detect(pose):
+            self.stage(goal_handle, feedback, "detecting")
+            self.request_refocus()
+
+        scan = look_for_tag(
+            self.arm,
+            self.tag,
+            tag_frame,
+            self.arm.fast,
+            stopped=self.arm.stop_event.is_set,
+            prefer=self.last_scan.get(tag_frame),
+            on_look=lambda pose: self.stage(goal_handle, feedback, "looking"),
+            on_detect=on_detect,
+            last_timeout_s=DETECT_TIMEOUT_S,
+        )
+        if scan.status == FOUND:
+            self.last_scan[tag_frame] = scan.pose
+            self.last_pose = scan.pose
+            return scan.tag_pose, None
+        if scan.status == LOOK_FAILED:
+            return None, "Look move failed"
+        if scan.status == STOPPED:
+            return None, "Stopped during detect"
+        return None, f"{tag_frame} not visible from any scan pose"
 
     def move_cb(self, goal_handle):
         result = MoveTo.Result()
@@ -205,17 +238,12 @@ class MotionServer(Node):
             tag_frame = goal_handle.request.frame
             if self.vacuum.holding:
                 return self.fail(goal_handle, result, "Already holding, call /release")
+            # Nothing is held, so no cube is modelled while picking.
+            self.arm.detach_cube()
 
-            self.stage(goal_handle, feedback, "looking")
-            if not self.arm.go_to_configured_pose(LOOK_POSE, self.arm.fast):
-                return self.fail(goal_handle, result, "Look move failed")
-
-            self.stage(goal_handle, feedback, "detecting")
-            tag_pose = self.detect(tag_frame)
-            if tag_pose is None and self.arm.stop_event.is_set():
-                return self.fail(goal_handle, result, "Stopped during detect")
-            if tag_pose is None:
-                return self.fail(goal_handle, result, f"{tag_frame} not visible")
+            tag_pose, error = self.find_tag(goal_handle, feedback, tag_frame)
+            if error:
+                return self.fail(goal_handle, result, error)
 
             tag_translation = tag_pose.translation
             pick_translation = (
@@ -229,12 +257,28 @@ class MotionServer(Node):
                 tag_translation.z + APPROACH_OFFSET_M,
             )
 
+            # Both poses are solved on one IK branch, so the drop is a short straight
+            # move and not a large sweep of the arm.
+            pair = self.arm.vertical_pair(
+                pick_translation[0],
+                pick_translation[1],
+                pick_translation[2],
+                approach_translation[2],
+                EE_DOWN,
+                seed_pose=self.last_scan[tag_frame],
+            )
+            if pair is None:
+                return self.fail(
+                    goal_handle, result, f"No safe arm pose to reach {tag_frame}"
+                )
+            approach_state, _ = pair
+
             self.stage(goal_handle, feedback, "approaching")
-            if not self.arm.go_to_pose(*approach_translation, *EE_DOWN, self.arm.fast):
+            if not self.arm.move_to_state(approach_state, self.arm.fast):
                 return self.fail(goal_handle, result, "Approach failed")
 
             self.stage(goal_handle, feedback, "lowering")
-            if not self.arm.go_to_pose(*pick_translation, *EE_DOWN, self.arm.slow):
+            if not self.arm.go_straight(*pick_translation, EE_DOWN, self.arm.slow):
                 return self.fail(goal_handle, result, "Lower failed")
 
             self.stage(goal_handle, feedback, "grasping")
@@ -245,7 +289,7 @@ class MotionServer(Node):
             time.sleep(GRASP_DWELL_S)
 
             self.stage(goal_handle, feedback, "retreating")
-            if not self.arm.go_to_pose(*approach_translation, *EE_DOWN, self.arm.fast):
+            if not self.arm.go_straight(*approach_translation, EE_DOWN, self.arm.fast):
                 return self.fail(goal_handle, result, "Retreat failed, still holding")
 
             result.success = True
@@ -267,18 +311,14 @@ class MotionServer(Node):
                 return self.fail(goal_handle, result, "No location or position given")
             if not self.vacuum.holding:
                 return self.fail(goal_handle, result, "Not holding anything")
+            # The cube is part of the arm from here until it is released, including
+            # the move back to the scan pose.
+            self.arm.attach_cube()
 
             if location:
-                self.stage(goal_handle, feedback, "looking")
-                if not self.arm.go_to_configured_pose(LOOK_POSE, self.arm.fast):
-                    return self.fail(goal_handle, result, "Look move failed")
-
-                self.stage(goal_handle, feedback, "detecting")
-                tag_pose = self.detect(location)
-                if tag_pose is None and self.arm.stop_event.is_set():
-                    return self.fail(goal_handle, result, "Stopped during detect")
-                if tag_pose is None:
-                    return self.fail(goal_handle, result, f"{location} not visible")
+                tag_pose, error = self.find_tag(goal_handle, feedback, location)
+                if error:
+                    return self.fail(goal_handle, result, error)
                 drop_pose = tag_pose.translation
                 drop_off = (
                     drop_pose.x,
@@ -292,15 +332,27 @@ class MotionServer(Node):
             drop_off_approach = (
                 drop_off[0],
                 drop_off[1],
-                drop_off[2] + APPROACH_OFFSET_M,
+                drop_off[2] + PLACE_APPROACH_OFFSET_M,
             )
 
+            pair = self.arm.vertical_pair(
+                drop_off[0],
+                drop_off[1],
+                drop_off[2],
+                drop_off_approach[2],
+                EE_DOWN,
+                seed_pose=self.last_scan[location] if location else self.last_pose,
+            )
+            if pair is None:
+                return self.fail(goal_handle, result, "No safe arm pose to place there")
+            approach_state, _ = pair
+
             self.stage(goal_handle, feedback, "approaching")
-            if not self.arm.go_to_pose(*drop_off_approach, *EE_DOWN, self.arm.fast):
+            if not self.arm.move_to_state(approach_state, self.arm.fast):
                 return self.fail(goal_handle, result, "Approach failed")
 
             self.stage(goal_handle, feedback, "lowering")
-            if not self.arm.go_to_pose(*drop_off, *EE_DOWN, self.arm.slow):
+            if not self.arm.go_straight(*drop_off, EE_DOWN, self.arm.slow):
                 return self.fail(goal_handle, result, "Lower failed")
 
             self.stage(goal_handle, feedback, "releasing")
@@ -308,10 +360,11 @@ class MotionServer(Node):
                 return self.fail(goal_handle, result, "Stopped before release")
             if not self.vacuum.release():
                 return self.fail(goal_handle, result, "Vacuum release failed")
+            self.arm.detach_cube()
             time.sleep(RELEASE_DWELL_S)
 
             self.stage(goal_handle, feedback, "retreating")
-            if not self.arm.go_to_pose(*drop_off_approach, *EE_DOWN, self.arm.slow):
+            if not self.arm.go_straight(*drop_off_approach, EE_DOWN, self.arm.slow):
                 return self.fail(goal_handle, result, "Retreat failed")
 
             result.success = True
