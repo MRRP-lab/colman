@@ -68,6 +68,10 @@ def generate_launch_description():
                 package="colman_audio_input",
                 executable="speech_to_text",
                 output="screen",
+                # sounddevice index of the TONOR USB mic; the built-in input
+                # doesn't support 16 kHz. Indices can shift if USB audio
+                # devices are replugged.
+                parameters=[{"input_device": 10}],
             ),
             Node(
                 package="colman_llm",
