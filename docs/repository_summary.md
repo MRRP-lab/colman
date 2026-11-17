@@ -145,7 +145,7 @@ The relevant code is in:
 AprilTag detection is provided by the external `apriltag_ros` package. The AprilTag launch file remaps the camera input:
 
 - `apriltag.launch.py`: takes `camera:=wrist` (default, node `apriltag`, `apriltag.yaml`, `/oakd_pro` topics) or `camera:=overhead` (node `apriltag_overhead`, `apriltag_overhead.yaml`, `/overhead` topics)
-- `overhead.launch.py` (`pixi run overhead`): runs `camera_publisher` with `camera:=overhead` at 1080p, publishes the `base_link` to `overhead_camera_optical_frame` static transform from `colman_perception/config/overhead_camera.yaml` (the merged calibration), and starts the overhead detector. Its tags are named `ovh_tag_N`. At 1.8 m a 39 mm tag is about 30 px wide at 1080p; all eight tags are detected.
+- `overhead.launch.py` (`pixi run overhead`): runs `camera_publisher` with `camera:=overhead`, publishes the `base_link` to `overhead_camera_optical_frame` static transform from `colman_perception/config/overhead_camera.yaml` (the merged calibration), and starts the overhead detector. Its tags are named `ovh_tag_N`. Both cameras are hardcoded to 4K at 5 fps (`camera_publisher.py`); at 1.8 m a 39 mm tag is about 60 px wide. Overhead tag poses are corrected for height in `TagLookup` (`overhead_correction.py`): a linear fit of z (`0.985 z + 0.0124`) from cubes at known heights (single 0.05 m, stack of two 0.10 m, stack of three 0.15 m), and x and y are moved along the camera's line of sight to the corrected height.
 
 The detector config (`colman_perception/config/apriltag.yaml`) registers tag IDs 1 to 8 at 39 mm. The motion code finds objects by TF frame names such as:
 

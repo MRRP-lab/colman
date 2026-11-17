@@ -5,11 +5,14 @@ from rclpy.node import Node
 from rclpy.time import Time
 from tf2_ros import Buffer, TransformException, TransformListener
 
+from colman_motion.overhead_correction import correct_overhead
+
 BASE_FRAME = "base_link"
 TAG_FRAME = "tag_1"
 LOOKUP_TIMEOUT_S = 2.0
 TOLERANCE_M = 0.003
 WAIT_S = 1.0
+OVERHEAD_PREFIX = "ovh_"  # the overhead camera's tags, which need correcting
 
 
 def within_tolerance(first, second, tol):
@@ -68,4 +71,6 @@ class TagLookup(Node):
         if not within_tolerance(first_pos, second_pos, TOLERANCE_M):
             return None
 
+        if tag_frame.startswith(OVERHEAD_PREFIX):
+            return correct_overhead(second.transform)
         return second.transform
