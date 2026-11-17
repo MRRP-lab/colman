@@ -1,15 +1,13 @@
-from types import SimpleNamespace
-
+from colman_motion.poses import HOME_POSE
 from colman_motion.scan import (
+    CLEAR_FAILED,
     FOUND,
     NOT_VISIBLE,
     OVERHEAD,
-    REFINE_FAILED,
     STOPPED,
     WRIST,
     locate_tag,
     look_for_tag,
-    refine_with_wrist,
 )
 
 
@@ -17,6 +15,10 @@ class FakeArm:
     def __init__(self, ok=True):
         self.moves = []
         self.ok = ok
+
+    def go_to_joint_pose(self, joints, params):
+        self.moves.append(("joints", joints))
+        return self.ok
 
     def go_to_pose(self, x, y, z, qx, qy, qz, qw, params):
         self.moves.append((x, y, z))
@@ -46,14 +48,6 @@ class FakeTags:
             return None
         moves = len(self.arm.moves) if self.arm else 0
         return f"pose-of-{frame}" if moves >= need else None
-
-
-def pose_at(x, y, z):
-    return SimpleNamespace(x=x, y=y, z=z)
-
-
-ESTIMATE = pose_at(0.3, 0.1, 0.02)
-ESTIMATE_POSE = SimpleNamespace(translation=ESTIMATE)  # as a transform
 
 
 def look(tags, **kw):
@@ -103,7 +97,7 @@ def test_on_detect_runs_before_the_wrist_wait():
 
 def test_stop_ends_the_look():
     tags = FakeTags({})
-    scan = look(tags, stopped=lambda: len(tags.looked) >= 2)
+    scan = look(tags, stopped=lambda: len(tags.looked) >= 1)
     assert scan.status == STOPPED
 
 
@@ -122,59 +116,9 @@ def test_looking_never_moves_the_arm():
     assert arm.moves == []
 
 
-# ------------------------------------------------------------------ the refinement
-def refine(arm, tags, **kw):
-    return refine_with_wrist(
-        arm, tags, "tag_3", ESTIMATE_POSE, "fast", clock=tags.clock, **kw
-    )
-
-
-def test_refine_moves_over_the_estimate_and_returns_the_wrist_pose():
-    arm = FakeArm()
-    tags = FakeTags({"tag_3": 1}, arm)  # visible once the arm has moved
-    scan = refine(arm, tags, height_m=0.3)
-    assert (scan.status, scan.source) == (FOUND, WRIST)
-    assert scan.tag_pose == "pose-of-tag_3"
-    assert arm.moves == [(0.3, 0.1, 0.02 + 0.3)]
-
-
-def test_refine_failing_to_see_the_tag_is_an_error_not_the_estimate():
-    arm = FakeArm()
-    tags = FakeTags({"ovh_tag_3": 0}, arm)  # only the overhead camera sees it
-    scan = refine(arm, tags)
-    assert scan.status == REFINE_FAILED
-    assert scan.tag_pose is None
-    assert "tag_3" in scan.message
-    assert "ovh_tag_3" not in tags.looked
-
-
-def test_refine_failing_to_move_is_an_error():
-    arm = FakeArm(ok=False)
-    tags = FakeTags({"tag_3": 0}, arm)
-    scan = refine(arm, tags)
-    assert scan.status == REFINE_FAILED and scan.tag_pose is None
-    assert tags.looked == []
-
-
-def test_refine_stopped_before_moving():
-    arm = FakeArm()
-    scan = refine(arm, FakeTags({"tag_3": 0}, arm), stopped=lambda: True)
-    assert scan.status == STOPPED and arm.moves == []
-
-
 # ------------------------------------------------------------------- the whole find
 def locate(arm, tags, **kw):
     return locate_tag(arm, tags, "tag_3", "fast", clock=tags.clock, **kw)
-
-
-class OverheadWorld(FakeTags):
-    """The overhead camera sees the tag; the wrist one only once the arm is over it."""
-
-    def get_tag_pose(self, frame):
-        pose = super().get_tag_pose(frame)
-        if frame == "ovh_tag_3" and pose:
-            return ESTIMATE_POSE
-        return pose
 
 
 def test_wrist_find_is_used_directly_without_moving():
@@ -184,24 +128,85 @@ def test_wrist_find_is_used_directly_without_moving():
     assert arm.moves == []
 
 
-def test_overhead_find_is_refined_by_the_wrist_camera():
+def test_overhead_find_is_used_as_it_is_without_moving():
     arm = FakeArm()
-    tags = OverheadWorld({"ovh_tag_3": 0, "tag_3": 1}, arm)
-    scan = locate(arm, tags)
-    assert (scan.status, scan.source) == (FOUND, WRIST)
-    assert scan.tag_pose == "pose-of-tag_3"  # not the overhead estimate
-    assert len(arm.moves) == 1
+    scan = locate(arm, FakeTags({"ovh_tag_3": 0}, arm))
+    assert (scan.status, scan.source) == (FOUND, OVERHEAD)
+    assert scan.tag_pose == "pose-of-ovh_tag_3"
+    assert arm.moves == []
 
 
-def test_overhead_find_that_cannot_be_refined_fails():
-    arm = FakeArm()
-    tags = OverheadWorld({"ovh_tag_3": 0}, arm)
-    scan = locate(arm, tags)
-    assert scan.status == REFINE_FAILED and scan.tag_pose is None
-
-
-def test_nowhere_visible_never_moves_the_arm():
+def test_nowhere_visible_only_clears_the_view():
     arm = FakeArm()
     scan = locate(arm, FakeTags({}, arm))
     assert scan.status == NOT_VISIBLE
+    assert arm.moves == [("joints", HOME_POSE)]
+
+
+# ---------------------------------------------------- clearing the overhead view
+def look_with_arm(arm, tags, **kw):
+    return look_for_tag(tags, "tag_3", arm=arm, params="fast", clock=tags.clock, **kw)
+
+
+def test_arm_is_cleared_only_when_neither_camera_sees_the_tag():
+    arm = FakeArm()
+    tags = FakeTags({"ovh_tag_3": 1}, arm)
+    scan = look_with_arm(arm, tags)
+    assert (scan.status, scan.source) == (FOUND, OVERHEAD)
+    assert arm.moves == [("joints", HOME_POSE)]
+
+
+def test_the_clear_pose_is_shoulder_up_forearm_level():
+    assert list(HOME_POSE.values()) == [
+        0.0,
+        -1.5707963267948966,
+        0.0,
+        -1.5707963267948966,
+        0.0,
+        0.0,
+    ]
+
+
+def test_arm_stays_put_when_the_wrist_sees_the_tag():
+    arm = FakeArm()
+    scan = look_with_arm(arm, FakeTags({"tag_3": 0}, arm))
+    assert (scan.status, scan.source) == (FOUND, WRIST)
     assert arm.moves == []
+
+
+def test_arm_stays_put_when_the_overhead_sees_the_tag_at_once():
+    arm = FakeArm()
+    scan = look_with_arm(arm, FakeTags({"ovh_tag_3": 0}, arm))
+    assert (scan.status, scan.source) == (FOUND, OVERHEAD)
+    assert arm.moves == []
+
+
+def test_not_visible_after_the_arm_is_out_of_the_way():
+    arm = FakeArm()
+    tags = FakeTags({}, arm)
+    scan = look_with_arm(arm, tags)
+    assert scan.status == NOT_VISIBLE
+    assert arm.moves == [("joints", HOME_POSE)]
+    # the wrist camera is not asked again after the move
+    assert tags.looked.count("tag_3") == 1
+    assert tags.looked[-1] == "ovh_tag_3"
+
+
+def test_failed_clear_move_is_an_error():
+    arm = FakeArm(ok=False)
+    scan = look_with_arm(arm, FakeTags({}, arm))
+    assert scan.status == CLEAR_FAILED and scan.tag_pose is None
+
+
+def test_stop_during_the_clear_move():
+    arm = FakeArm(ok=False)
+    stop = {"now": False}
+    arm_go = arm.go_to_joint_pose
+
+    def go(joints, params):
+        stop["now"] = True
+        return arm_go(joints, params)
+
+    arm.go_to_joint_pose = go
+    scan = look_with_arm(arm, FakeTags({}, arm), stopped=lambda: stop["now"])
+    assert scan.status == STOPPED

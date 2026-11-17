@@ -89,7 +89,7 @@ def main():
 
         # Read each tag where it is seen, from the wrist camera if the arm happens to be
         # looking at it and otherwise from the overhead one. Only the order of the
-        # tags is taken from these positions, and the pick refines each tag itself.
+        # tags is taken from these positions.
         tags = {}
         for tag_frame in TAG_PATTERN:
             scan = look_for_tag(tag, tag_frame, wrist_timeout_s=0.0)

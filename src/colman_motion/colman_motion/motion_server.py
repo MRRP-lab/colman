@@ -148,9 +148,8 @@ class MotionServer(Node):
     def find_tag(self, goal_handle, feedback, tag_frame):
         """Find tag_frame without a scan pose. Return (tag_pose, error_message).
 
-        The wrist camera is tried first, then the overhead camera. An overhead find is
-        only good to about 1 cm, so the arm moves over it and the pose comes from the
-        wrist camera; if that fails there is an error and no pick from the estimate.
+        The wrist camera is tried first, then the overhead camera. If neither sees it
+        the arm may be in the way, so it moves clear and the overhead is tried again.
         """
 
         def on_detect():
@@ -162,7 +161,6 @@ class MotionServer(Node):
             self.tag,
             tag_frame,
             self.arm.fast,
-            orientation=EE_DOWN,
             stopped=self.arm.stop_event.is_set,
             on_look=lambda: self.stage(goal_handle, feedback, "looking"),
             on_detect=on_detect,
@@ -314,7 +312,7 @@ class MotionServer(Node):
             if not self.vacuum.holding:
                 return self.fail(goal_handle, result, "Not holding anything")
             # The cube is part of the arm from here until it is released, including
-            # any move over the drop tag to read it.
+            # a move out of the overhead camera's view.
             self.arm.attach_cube()
 
             if location:
