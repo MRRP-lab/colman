@@ -184,8 +184,6 @@ def test_release_is_refused_while_the_arm_is_moving():
 @pytest.mark.parametrize(
     "pose, srdf",
     [
-        ("scan right", "scan_for_cubes_right"),
-        ("scan left", "scan_for_cubes_left"),
         ("upright", "Up"),
         ("compact", "Compact"),
     ],
@@ -199,7 +197,7 @@ def test_named_poses_map_to_the_srdf_names(pose, srdf):
 @pytest.mark.parametrize(
     "args",
     [
-        {"pose": "scan_for_cubes_right"},  # the raw name is not a spoken pose
+        {"pose": "Compact"},  # the raw name is not a spoken pose
         {"pose": "zero"},
         {"pose": "Up"},
         {"pose": 3},
@@ -275,6 +273,6 @@ def test_fake_executor_runs_every_tool():
     assert fake.run_tool(
         "pick_and_place", {"object": "blue cube 2", "destination": "blue cube 1"}
     )[0]
-    assert fake.run_tool("go_to_pose", {"pose": "scan left"})[0]
+    assert fake.run_tool("go_to_pose", {"pose": "upright"})[0]
     assert fake.run_tool("release_cube", {})[0]
     assert fake.run_tool("report_state", {})[0]

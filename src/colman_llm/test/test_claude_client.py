@@ -184,8 +184,6 @@ def test_demo_tools_are_strict_and_sent():
     for name in ("stop_robot", "release_cube", "report_state"):
         assert tools[name]["input_schema"]["properties"] == {}
     assert tools["go_to_pose"]["input_schema"]["properties"]["pose"]["enum"] == [
-        "scan right",
-        "scan left",
         "upright",
         "compact",
     ]

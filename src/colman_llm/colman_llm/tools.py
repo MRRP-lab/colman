@@ -28,8 +28,6 @@ DESTINATION_FRAMES = dict(CUBE_NAMES)
 # colman_moveit_config/srdf/arm.srdf.xacro. "Zero" is left out on purpose: the arm
 # cannot reach it from most poses without a long sweep.
 POSES = {
-    "scan right": "scan_for_cubes_right",
-    "scan left": "scan_for_cubes_left",
     "upright": "Up",
     "compact": "Compact",
 }
@@ -60,9 +58,8 @@ GO_TO_POSE = {
     "description": (
         "Move the empty arm to a named pose: "
         + ", ".join(POSES)
-        + ". 'scan right' and 'scan left' look at the cubes from each side, "
-        "'upright' stands the arm straight up, 'compact' folds it. It refuses while "
-        "the arm is holding a cube or busy."
+        + ". 'upright' stands the arm straight up, 'compact' folds it. It refuses "
+        "while the arm is holding a cube or busy."
     ),
     "strict": True,
     "input_schema": {
