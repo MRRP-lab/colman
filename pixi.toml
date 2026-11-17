@@ -49,6 +49,7 @@ graph = "rqt_graph"
 
 fmt  = "ruff format src/"
 lint = "ruff check --fix src/"
+test-integration = "pytest -v -s --basetemp=build/integration_logs src/colman_motion/test/integration"
 clean = "rm -rf build install log"
 
 [activation.env]
