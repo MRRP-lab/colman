@@ -9,11 +9,11 @@ from std_srvs.srv import Trigger
 
 from colman_perception.camera_names import device_info
 
-WIDTH = 1280
-HEIGHT = 720
-# The overhead camera is 1.8 m from the table and sees 39 mm tags about 30 px wide at
-# 1080p (about 20 px at 720p), and its calibration is for 1080p.
-OVERHEAD_SIZE = (1920, 1080)
+# Both cameras always run at 4K. At 1.8 m a 39 mm tag is only about 31 px wide at 1080p,
+# which leaves its depth uncertain by centimetres; 4K halves that.
+WIDTH = 3840
+HEIGHT = 2160
+FPS = 5.0
 CONTINUOUS_AF = dai.CameraControl.AutoFocusMode.CONTINUOUS_VIDEO
 
 # How often to retry while no camera is connected.
@@ -24,12 +24,11 @@ RECONNECT_S = 2.0
 # nothing.
 STALL_S = 3.0
 
-# Topic prefix, frame and image size for each named camera (names are in
-# config/cameras.yaml). The wrist camera keeps the names the rest of the stack already
-# uses.
+# Topic prefix and frame for each named camera (names are in config/cameras.yaml). The
+# wrist camera keeps the names the rest of the stack already uses.
 CAMERAS = {
-    "wrist": ("/oakd_pro", "oakd_pro_camera_rgb_optical_frame_wrist", (WIDTH, HEIGHT)),
-    "overhead": ("/overhead", "overhead_camera_optical_frame", OVERHEAD_SIZE),
+    "wrist": ("/oakd_pro", "oakd_pro_camera_rgb_optical_frame_wrist"),
+    "overhead": ("/overhead", "overhead_camera_optical_frame"),
 }
 
 
@@ -41,7 +40,7 @@ class CameraPublisher(Node):
         self.camera = self.get_parameter("camera").value
         if self.camera not in CAMERAS:
             raise ValueError(f"no topics set up for camera '{self.camera}'")
-        prefix, self.frame_id, self.size = CAMERAS[self.camera]
+        prefix, self.frame_id = CAMERAS[self.camera]
 
         self.image_pub = self.create_publisher(
             Image, f"{prefix}/rgb/image", qos_profile_sensor_data
@@ -55,7 +54,8 @@ class CameraPublisher(Node):
         # Frame metadata for downstream nodes
         self.info_msg = CameraInfo()
         self.info_msg.header.frame_id = self.frame_id
-        self.info_msg.width, self.info_msg.height = self.size
+        self.info_msg.width = WIDTH
+        self.info_msg.height = HEIGHT
         self.info_msg.distortion_model = "plumb_bob"
         self.info_msg.d = [0.0, 0.0, 0.0, 0.0, 0.0]
         self.info_msg.r = np.eye(3).flatten().tolist()
@@ -86,7 +86,7 @@ class CameraPublisher(Node):
         cam.initialControl.setAutoFocusMode(CONTINUOUS_AF)
         cam.initialControl.setAutoExposureEnable()
         control_queue = cam.inputControl.createInputQueue()
-        out = cam.requestOutput(self.size, enableUndistortion=True, fps=15.0)
+        out = cam.requestOutput((WIDTH, HEIGHT), enableUndistortion=True, fps=FPS)
         queue = out.createOutputQueue(maxSize=4, blocking=False)
         pipeline.start()
         return device, pipeline, queue, control_queue
