@@ -3,23 +3,32 @@
 Arm driver, wrist and overhead cameras, AprilTag detectors, motion server, speech in,
 LLM and speech out. Run with `pixi run stack`. Pass `dry_run:=true` for canned LLM tool
 results (no arm moves) or `driver:=false` if the arm driver is already running.
+`perception:=false`, `motion:=false` and `audio:=false` leave out the cameras and
+detectors, the motion server, and the microphone and speaker, so the LLM node can run
+on a machine with none of them (the offline smoke test does this).
 """
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
+from launch.actions import (
+    DeclareLaunchArgument,
+    GroupAction,
+    IncludeLaunchDescription,
+    TimerAction,
+)
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
-def include(package, *path, **args):
+def include(package, *path, condition=None, **args):
     return IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             get_package_share_directory(package) + "/" + "/".join(path)
         ),
         launch_arguments=args.items(),
+        condition=condition,
     )
 
 
@@ -27,12 +36,18 @@ def generate_launch_description():
     dry_run = LaunchConfiguration("dry_run")
     driver = LaunchConfiguration("driver")
     robot_ip = LaunchConfiguration("robot_ip")
+    perception = IfCondition(LaunchConfiguration("perception"))
+    motion = IfCondition(LaunchConfiguration("motion"))
+    audio = IfCondition(LaunchConfiguration("audio"))
 
     return LaunchDescription(
         [
             DeclareLaunchArgument("dry_run", default_value="false"),
             DeclareLaunchArgument("driver", default_value="true"),
             DeclareLaunchArgument("robot_ip", default_value="192.168.56.101"),
+            DeclareLaunchArgument("perception", default_value="true"),
+            DeclareLaunchArgument("motion", default_value="true"),
+            DeclareLaunchArgument("audio", default_value="true"),
             # Arm
             Node(
                 package="colman_bringup",
@@ -46,24 +61,37 @@ def generate_launch_description():
                 package="colman_perception",
                 executable="camera_publisher",
                 output="screen",
+                condition=perception,
             ),
-            include("colman_bringup", "launch", "apriltag.launch.py"),
-            include("colman_bringup", "launch", "overhead.launch.py"),
+            include(
+                "colman_bringup", "launch", "apriltag.launch.py", condition=perception
+            ),
+            include(
+                "colman_bringup", "launch", "overhead.launch.py", condition=perception
+            ),
             # Motion server, after the driver has had time to come up
             TimerAction(
                 period=10.0,
                 actions=[
-                    include(
-                        "colman_motion",
-                        "launch",
-                        "motion_server.launch.py",
-                        gripper_type="vacuum",
+                    GroupAction(
+                        condition=motion,
+                        actions=[
+                            include(
+                                "colman_motion",
+                                "launch",
+                                "motion_server.launch.py",
+                                gripper_type="vacuum",
+                            )
+                        ],
                     )
                 ],
             ),
             # Voice
             Node(
-                package="colman_audio_output", executable="kokoro_tts", output="screen"
+                package="colman_audio_output",
+                executable="kokoro_tts",
+                output="screen",
+                condition=audio,
             ),
             Node(
                 package="colman_audio_input",
@@ -73,6 +101,7 @@ def generate_launch_description():
                 # doesn't support 16 kHz. Indices can shift if USB audio
                 # devices are replugged.
                 parameters=[{"input_device": 10}],
+                condition=audio,
             ),
             Node(
                 package="colman_llm",
