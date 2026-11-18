@@ -196,8 +196,13 @@ def main():
     except RuntimeError as exc:
         print(exc)
     finally:
-        if node is not None:
-            node.destroy_node()
+        # Ctrl-C reaches the node twice under `ros2 launch` (from the terminal and
+        # forwarded by launch); the second one must not abort the cleanup.
+        try:
+            if node is not None:
+                node.destroy_node()
+        except KeyboardInterrupt:
+            pass
         if rclpy.ok():
             rclpy.shutdown()
 
