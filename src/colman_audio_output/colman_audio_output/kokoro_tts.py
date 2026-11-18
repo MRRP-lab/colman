@@ -179,6 +179,13 @@ class KokoroTTSNode(Node):
         except queue.Full:
             pass  # worker is a daemon thread; it exits with the process
         self._worker.join(timeout=2.0)
+        # The worker skips its closing False while the sentinel is still queued,
+        # so release the mic ourselves; otherwise a running speech_to_text stays
+        # muted until its mute_max_s timeout after we exit mid-utterance.
+        try:
+            self._set_speaking(False)
+        except Exception as e:  # noqa: BLE001 - context may already be shut down
+            self.get_logger().warn(f"Could not publish final tts_speaking=False: {e}")
 
 
 def main(args=None):

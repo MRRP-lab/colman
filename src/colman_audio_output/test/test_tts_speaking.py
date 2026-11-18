@@ -171,7 +171,7 @@ def test_back_to_back_stay_speaking_without_gap(rig):
     assert rig.wait_idle(3)
     assert rig.pipeline.calls == ["message 0", "message 1", "message 2"]
     # One continuous True: the mic must not reopen between messages.
-    assert rig.states == [False, True, False] or rig.states.count(False) == 2
+    assert rig.states == [False, True, False]
 
 
 def test_synthesis_exception_does_not_leave_speaking_true(rig):
