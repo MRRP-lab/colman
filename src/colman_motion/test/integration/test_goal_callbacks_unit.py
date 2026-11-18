@@ -80,3 +80,19 @@ def test_a_callback_that_returns_is_left_alone():
     server, handle = Fine(), Handle()
     assert server.callback(handle) == "done"
     assert handle.aborted_with is None and not server.finished
+
+
+def test_failure_notes_carry_the_moveit_error_name():
+    from moveit_msgs.msg import MoveItErrorCodes
+
+    arm_control = pytest.importorskip("colman_motion.arm_control")
+    if not hasattr(arm_control.ArmControl, "note_failure"):
+        pytest.xfail("BUG unexplained-aborts: see the guarded-callback tests above")
+
+    class Arm(Server):
+        last_failure = ""
+
+    arm = Arm()
+    codes = MoveItErrorCodes(val=MoveItErrorCodes.PLANNING_FAILED)
+    arm_control.ArmControl.note_failure(arm, "Planning failed", codes)
+    assert "PLANNING_FAILED" in arm.last_failure and "-1" in arm.last_failure
