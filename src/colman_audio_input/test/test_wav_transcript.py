@@ -23,6 +23,7 @@ MODEL_NAME = "nemo-parakeet-tdt-0.6b-v2"
 MAX_WER = 0.15
 TRAILING_SILENCE_S = 2.0  # longer than silence_ms so the VAD closes the utterance
 
+
 def word_error_rate(reference, hypothesis):
     ref, hyp = normalize(reference).split(), normalize(hypothesis).split()
     d = list(range(len(hyp) + 1))
