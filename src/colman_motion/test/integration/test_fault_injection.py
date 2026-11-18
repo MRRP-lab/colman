@@ -98,6 +98,34 @@ def test_stop_unsticks_a_hung_controller(healthy):
     assert_recovers(healthy)
 
 
+def test_goal_while_the_driver_is_down(healthy):
+    client = healthy.client
+    healthy.stack.kill("driver")
+    run = client.move_to("Compact").wait_done(TERMINAL_S)
+    assert run.outcome in ("aborted", "canceled"), run
+    run = client.pick("tag_2").wait_done(TERMINAL_S)
+    assert_clean_failure(run)
+    healthy.restart_driver()
+    assert_recovers(healthy)
+
+
+def test_sigterm_mid_goal_aborts_the_goal_and_exits(healthy):
+    """Shutting the server down mid-pick must end the goal, halt the arm and exit."""
+    import signal
+
+    client = healthy.client
+    run = moving_pick(client)
+    healthy.stack.signal("motion_server", signal.SIGTERM)
+    run.wait_done(TERMINAL_S)
+    assert run.outcome in ("aborted", "canceled"), run
+    process = healthy.stack.procs["motion_server"]
+    wait_until(lambda: process.poll() is not None, 30, "the server to exit")
+    client.wait_arm_still()
+    # A new server comes up and works.
+    healthy.restart_server()
+    assert_recovers(healthy)
+
+
 def test_joint_states_dropped_mid_trajectory(healthy):
     client = healthy.client
     run = moving_pick(client)

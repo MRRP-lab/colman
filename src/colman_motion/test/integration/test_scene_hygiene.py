@@ -103,6 +103,7 @@ def test_failed_release_keeps_cube_and_holding_in_step(healthy):
     assert_baseline(healthy, "after the vacuum recovered")
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("cycles", [3])
 def test_repeated_cycles_do_not_accumulate_objects(healthy, cycles):
     client = healthy.client

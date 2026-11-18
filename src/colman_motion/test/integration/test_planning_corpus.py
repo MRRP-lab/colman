@@ -95,7 +95,19 @@ def test_move_pose(healthy, name):
     assert_next_goal_works(healthy)
 
 
-@pytest.mark.parametrize("name", TAG_CORPUS)
+# A pick or place takes several seconds even when it fails, so the fast subset runs
+# one case of each kind and the rest only run with the full suite.
+FAST_TAGS = {"tag_out_of_reach", "tag_with_nan_position"}
+FAST_PLACES = {"out_of_reach", "nan"}
+
+
+def only_some_fast(names, fast):
+    return [
+        pytest.param(n, marks=[] if n in fast else [pytest.mark.slow]) for n in names
+    ]
+
+
+@pytest.mark.parametrize("name", only_some_fast(TAG_CORPUS, FAST_TAGS))
 def test_pick_at_awkward_tag(healthy, name):
     pose, must_abort = TAG_CORPUS[name]
     healthy.client.set_tag(2, pose)
@@ -119,13 +131,14 @@ def test_pick_of_a_tag_that_does_not_exist(healthy):
     assert_scene_is_clean(healthy)
 
 
+@pytest.mark.slow
 def test_pick_with_no_frame(healthy):
     run = healthy.client.pick("").wait_done()
     assert_aborted_with_reason(run)
     assert_scene_is_clean(healthy)
 
 
-@pytest.mark.parametrize("name", PLACE_POSITIONS)
+@pytest.mark.parametrize("name", only_some_fast(PLACE_POSITIONS, FAST_PLACES))
 def test_place_at_awkward_position(healthy, name):
     position, must_abort = PLACE_POSITIONS[name]
     client = healthy.client
@@ -153,6 +166,7 @@ def test_place_while_not_holding(healthy):
     assert_scene_is_clean(healthy)
 
 
+@pytest.mark.slow
 def test_pick_while_already_holding(healthy):
     client = healthy.client
     assert client.pick("tag_2").wait_done().outcome == "succeeded"
