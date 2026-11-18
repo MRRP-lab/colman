@@ -78,6 +78,19 @@ def test_within_tolerance_uses_the_largest_axis():
     assert not within_tolerance(P(0, 0, 0), P(0, 0, 0.004), 0.003)
 
 
+@pytest.mark.parametrize("axis", "xyz")
+def test_a_nan_position_is_never_within_tolerance(axis):
+    """A failed pose estimate must not read as "the tag held still"."""
+
+    class P:
+        x = y = z = 0.0
+
+    bad = P()
+    setattr(bad, axis, float("nan"))
+    assert not within_tolerance(P(), bad, 0.003)
+    assert not within_tolerance(bad, bad, 0.003)
+
+
 # ------------------------------------------------------------------ missing tag
 def test_missing_tag_returns_none_within_the_timeout(lookup):
     result, took = elapsed(lookup.get_tag_pose, "tag_9")
