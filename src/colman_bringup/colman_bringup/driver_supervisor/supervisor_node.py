@@ -238,7 +238,7 @@ class DriverSupervisor(Node):
             return
         if self._machine.state == State.WAITING_FOR_LINK:
             return
-        self._driver.start()
+        self._driver.ensure_running()
 
     def _publish_state(self):
         text = self._machine.state.name

@@ -174,3 +174,112 @@ def test_driver_that_never_comes_up_gets_restart_requests():
     actions = rig.run(100)
     assert actions.count(Action.RESTART_DRIVER) >= 2
     assert rig.m.state == State.WAITING_FOR_DRIVER
+
+
+def test_driver_dying_repeatedly_is_recovered_every_time():
+    rig = ready_rig()
+    for _ in range(5):
+        rig.driver_up = False
+        rig.controller_active = None
+        rig.run(8)
+        assert rig.m.state == State.WAITING_FOR_DRIVER
+        rig.driver_up = True
+        rig.controller_active = True
+        rig.run(5)
+        assert rig.m.state == State.READY
+
+
+def test_driver_blip_shorter_than_grace_is_ignored():
+    rig = ready_rig(driver_grace=5.0)
+    for _ in range(3):
+        rig.driver_up = False
+        assert rig.run(2) == []
+        rig.driver_up = True
+        rig.run(2)
+    assert rig.m.state == State.READY
+
+
+def test_driver_that_dies_and_stays_dead_keeps_asking_for_restarts():
+    rig = ready_rig(driver_timeout=30.0)
+    rig.driver_up = False
+    actions = rig.run(200)
+    assert actions.count(Action.RESTART_DRIVER) >= 5
+    assert rig.m.state == State.WAITING_FOR_DRIVER
+    # Requests are spaced out, not one per tick.
+    assert actions.count(Action.RESTART_DRIVER) <= 200 / 30.0 + 1
+
+
+def test_dashboard_unreachable_waits_for_link_and_takes_no_actions():
+    rig = ready_rig(link_grace=5.0)
+    rig.link_up = False  # dashboard port closed; the driver itself looks fine
+    actions = rig.run(60)
+    assert rig.m.state == State.WAITING_FOR_LINK
+    assert actions == []
+
+
+def test_dashboard_back_after_long_outage_recovers_to_ready():
+    rig = ready_rig()
+    rig.link_up = False
+    rig.run(120)
+    rig.link_up = True
+    rig.run(10)
+    assert rig.m.state == State.READY
+
+
+def test_failed_power_on_is_retried_forever_at_the_retry_interval():
+    rig = ready_rig(retry_interval=5.0)
+    rig.robot_mode = 3  # IDLE: the arm refuses to power on
+    actions = rig.run(100)
+    assert rig.m.state == State.POWERING_ON
+    count = actions.count(Action.SET_MODE_RUNNING)
+    assert 100 / 5.0 - 2 <= count <= 100 / 5.0 + 1
+    rig.robot_mode = 7
+    rig.program_running = True
+    rig.run(5)
+    assert rig.m.state == State.READY
+
+
+def test_failed_program_resend_is_retried_and_does_not_skip_ahead():
+    rig = ready_rig(retry_interval=5.0)
+    rig.program_running = False
+    actions = rig.run(60)
+    assert actions.count(Action.RESEND_PROGRAM) >= 10
+    assert rig.m.state == State.STARTING_PROGRAM
+    assert Action.ACTIVATE_CONTROLLER not in actions
+
+
+def test_failed_controller_activation_is_retried_and_never_reports_ready():
+    rig = ready_rig(retry_interval=5.0)
+    rig.controller_active = False
+    actions = rig.run(60)
+    assert actions.count(Action.ACTIVATE_CONTROLLER) >= 10
+    assert rig.m.state == State.ACTIVATING_CONTROLLERS
+
+
+def test_driver_dying_during_human_required_resumes_after_release():
+    rig = ready_rig()
+    rig.safety_mode = 7  # robot emergency stop
+    rig.run(3)
+    assert rig.m.state == State.HUMAN_REQUIRED
+    rig.driver_up = False
+    rig.run(8)
+    assert rig.m.state == State.WAITING_FOR_DRIVER
+    rig.driver_up = True
+    assert rig.run(5) == []  # still e-stopped: no attempt to power the arm
+    assert rig.m.state == State.HUMAN_REQUIRED
+    rig.safety_mode = 1
+    rig.run(10)
+    assert rig.m.state == State.READY
+
+
+def test_unknown_state_after_driver_restart_never_reports_ready():
+    rig = ready_rig()
+    rig.driver_up = False
+    rig.robot_mode = None
+    rig.safety_mode = None
+    rig.program_running = None
+    rig.controller_active = None
+    rig.run(8)
+    rig.driver_up = True  # up but nothing published yet
+    rig.run(10)
+    assert rig.m.state == State.WAITING_FOR_DRIVER
