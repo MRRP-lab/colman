@@ -31,6 +31,7 @@ setup(
     entry_points={
         "console_scripts": [
             "driver_supervisor = colman_bringup.driver_supervisor.supervisor_node:main",
+            "stack_health = colman_bringup.stack_health.watchdog_node:main",
         ],
     },
 )
