@@ -2,12 +2,18 @@
 # Stop every ROS / Gazebo process started from this checkout and clean up
 # leftovers. Run with: pixi run kill-all
 #
-# Only processes whose command line points into THIS checkout's .pixi env are
-# killed, so other worktrees and unrelated programs are left alone.
+# Every process whose command line points into the .pixi env of this checkout
+# OR any worktree of this repo is killed: the robot, the cameras and the DDS
+# shared memory are shared hardware, so a stack left running from another
+# worktree would otherwise hold the OAK-D cameras (X_LINK_DEVICE_ALREADY_IN_USE).
+# Unrelated programs are left alone.
 # The [x] bracket trick keeps pkill/pgrep from matching this script itself.
 
 root="${PIXI_PROJECT_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
-env_pat="${root}/[.]pixi/envs/"
+# The main checkout is the parent of git's common dir (worktrees share it).
+main_root="$(cd "$(git -C "$root" rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd)"
+main_root="${main_root:-$root}"
+env_pat="(${root}|${main_root}|${main_root}/worktrees/[^/]+)/[.]pixi/envs/"
 
 list() {
     pgrep -af "${env_pat}|[g]z sim" | grep -v -e "kill_all" || true
