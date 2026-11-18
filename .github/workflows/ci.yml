@@ -45,7 +45,7 @@ jobs:
       - run: pixi run build
       # ruff (lint job) is the style checker; the ament flake8/pep257 template
       # tests disagree with its formatting, so skip them here.
-      - run: pixi run colcon test --event-handlers console_direct+ --pytest-args -k "not flake8 and not pep257 and not pick_place_sim"
+      - run: pixi run colcon test --event-handlers console_direct+ --pytest-args -k "not flake8 and not pep257 and not pick_place_sim and not stack_dry"
       - run: pixi run colcon test-result --verbose
       # Motion-level integration test: the real motion server and MoveIt against mock UR
       # hardware and fake tags, in its own ROS domain on localhost. No Gazebo or display.
@@ -59,4 +59,16 @@ jobs:
         with:
           name: integration-logs
           path: build/integration_logs
+          if-no-files-found: ignore
+      # Voice-stack smoke test: stack.launch.py with Claude replaced by scripted replies, no
+      # arm, camera, microphone or API key. Checks the tool calls, the spoken stop and the resume.
+      - name: Stack smoke test (scripted Claude)
+        timeout-minutes: 10
+        run: pixi run test-stack
+      - name: Upload stack logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stack-logs
+          path: build/stack_logs
           if-no-files-found: ignore

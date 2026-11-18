@@ -1,0 +1,46 @@
+{
+  "rules": [
+    {
+      "when": "stack .*blue",
+      "tool_calls": [{"name": "stack_cube", "input": {"color": "blue", "count": 2}}],
+      "text": "Stacked the blue cubes."
+    },
+    {
+      "when": "put .*white cube two",
+      "tool_calls": [
+        {
+          "name": "pick_and_place",
+          "input": {"object": "white cube 2", "destination": "white cube 3"}
+        }
+      ],
+      "text": "Moved the white cube."
+    },
+    {
+      "when": "go home",
+      "tool_calls": [{"name": "go_to_pose", "input": {"pose": "home"}}],
+      "text": "At home."
+    },
+    {
+      "when": "let go|release",
+      "tool_calls": [{"name": "release_cube", "input": {}}],
+      "text": "Released."
+    },
+    {
+      "when": "what.*(state|doing)",
+      "tool_calls": [{"name": "report_state", "input": {}}],
+      "text": "Here is the state."
+    },
+    {
+      "when": "pause",
+      "tool_calls": [{"name": "stop_robot", "input": {}}],
+      "text": "The arm is paused."
+    },
+    {
+      "when": "carry on|continue",
+      "tool_calls": [{"name": "resume_robot", "input": {}}],
+      "text": "Carrying on."
+    },
+    {"when": "hello", "text": "Hello there."}
+  ],
+  "default": "I did not understand."
+}

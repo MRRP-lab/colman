@@ -52,7 +52,8 @@ graph = "rqt_graph"
 fmt  = "ruff format src/"
 lint = "ruff check --fix src/"
 test-integration = "pytest -v -s --basetemp=build/integration_logs src/colman_motion/test/integration"
-clean = "rm -rf build install log"
+test-stack = "pytest -v -s --basetemp=build/stack_logs src/colman_bringup/test/integration"
+clean ="rm -rf build install log"
 
 [activation.env]
 # Tells gazebo to look in these directories for models.
