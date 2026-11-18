@@ -80,6 +80,8 @@ class MotionServer(Node):
         # Asks the wrist camera for a fresh autofocus and autoexposure pass.
         self.refocus = self.create_client(Trigger, REFOCUS_SERVICE)
         self.current_stage = "idle"
+        # Letting go of the cube, however that happens, takes it off the arm's model.
+        self.vacuum.on_release = self.arm.detach_cube
 
         group = ReentrantCallbackGroup()
         self.move_server = ActionServer(

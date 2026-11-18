@@ -84,6 +84,8 @@ class ArmControl(Node):
         # Set (to the reason) when MoveIt's execution manager stopped answering. It
         # cannot be recovered in this process, so the server restarts itself.
         self.wedged = None
+        # Whether the planning scene has the cube attached to the tip.
+        self.cube_attached = False
         # Why the last planning or execution step failed, for the abort message and
         # log. Reset by the server at the start of each goal.
         self.last_failure = ""
@@ -317,7 +319,8 @@ class ArmControl(Node):
         self._set_held_cube(True)
 
     def detach_cube(self):
-        self._set_held_cube(False)
+        if self.cube_attached:
+            self._set_held_cube(False)
 
     def _set_held_cube(self, held):
         attached = AttachedCollisionObject()
@@ -349,6 +352,7 @@ class ArmControl(Node):
                 leftover.operation = CollisionObject.REMOVE
                 scene.apply_collision_object(leftover)
             scene.current_state.update()
+        self.cube_attached = held
         self.get_logger().info("Holding a cube" if held else "Not holding a cube")
 
     def go_straight(self, x, y, z, orientation, params=None):

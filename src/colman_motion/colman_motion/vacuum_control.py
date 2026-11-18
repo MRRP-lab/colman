@@ -1,4 +1,5 @@
 import time
+import traceback
 
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.node import Node
@@ -12,6 +13,9 @@ class VacuumControl(Node):
     def __init__(self):
         super().__init__("vacuum_control")
         self.holding = True
+        # Called after the vacuum has been switched off, so whatever models the cube
+        # as held (the planning scene) can let go of it too.
+        self.on_release = None
         self.vacuum = self.create_client(
             SetIO,
             "/io_and_status_controller/set_io",
@@ -40,6 +44,13 @@ class VacuumControl(Node):
         released = self.set_digital_out(VACUUM_PIN, False)
         if released:
             self.holding = False
+            if self.on_release is not None:
+                try:
+                    self.on_release()
+                except Exception:
+                    self.get_logger().error(
+                        f"on_release failed: {traceback.format_exc()}"
+                    )
         return released
 
     def set_digital_out(self, pin, state):
