@@ -1,3 +1,4 @@
+import functools
 import os
 import signal
 import sys
@@ -39,6 +40,37 @@ RESULT_FLUSH_S = 0.5
 SIGNALS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
 
 
+def guarded(result_type):
+    """Turn an exception in a goal callback into an abort that says what happened.
+
+    Left alone, rclpy logs the traceback and aborts the goal with an empty result,
+    so the client sees a failure it cannot explain.
+    """
+
+    def decorate(callback):
+        @functools.wraps(callback)
+        def wrapper(self, goal_handle):
+            try:
+                return callback(self, goal_handle)
+            except Exception as error:
+                self.get_logger().error(traceback.format_exc())
+                result = result_type()
+                message = f"Internal error: {type(error).__name__}: {error}"
+                if hasattr(result, "message"):
+                    result.message = message
+                self.get_logger().error(
+                    f"Abort: {message} [{self.describe(goal_handle)}]"
+                )
+                self.finish()
+                if goal_handle.is_active:
+                    goal_handle.abort(result)
+                return result
+
+        return wrapper
+
+    return decorate
+
+
 class MotionServer(Node):
     def __init__(self, arm, tag, vacuum):
         super().__init__("motion_server")
@@ -47,6 +79,7 @@ class MotionServer(Node):
         self.vacuum = vacuum
         # Asks the wrist camera for a fresh autofocus and autoexposure pass.
         self.refocus = self.create_client(Trigger, REFOCUS_SERVICE)
+        self.current_stage = "idle"
 
         group = ReentrantCallbackGroup()
         self.move_server = ActionServer(
@@ -113,7 +146,19 @@ class MotionServer(Node):
         threading.Thread(target=self.arm.halt, daemon=True).start()
         return CancelResponse.ACCEPT
 
+    def begin(self, goal_handle):
+        """Mark the start of a goal: reset the stage and the last failure."""
+        self.arm.running = True
+        self.arm.last_failure = ""
+        self.current_stage = "starting"
+
+    def describe(self, goal_handle):
+        goal_id = bytes(goal_handle.goal_id.uuid).hex()[:8]
+        failure = self.arm.last_failure or "none"
+        return f"goal={goal_id} stage={self.current_stage} moveit={failure}"
+
     def stage(self, goal_handle, feedback, name):
+        self.current_stage = name
         feedback.stage = name
         goal_handle.publish_feedback(feedback)
 
@@ -136,7 +181,9 @@ class MotionServer(Node):
     def fail(self, goal_handle, result, message):
         if self.arm.wedged:
             message = f"{message}: {self.arm.wedged}, the motion server is restarting"
-        self.get_logger().error(message)
+        self.get_logger().error(f"Abort: {message} [{self.describe(goal_handle)}]")
+        if self.arm.last_failure:
+            message = f"{message}: {self.arm.last_failure}"
         result.message = message
         canceled = self.cancel_requested(goal_handle)
         self.finish()
@@ -179,9 +226,10 @@ class MotionServer(Node):
             return None, f"{tag_frame} not visible"
         return None, scan.message
 
+    @guarded(MoveTo.Result)
     def move_cb(self, goal_handle):
         result = MoveTo.Result()
-        self.arm.running = True
+        self.begin(goal_handle)
         try:
             result.success = self.arm.go_to_configured_pose(
                 goal_handle.request.pose_name, self.arm.fast
@@ -190,7 +238,8 @@ class MotionServer(Node):
             if not result.success and not canceled:
                 # The result has no message field, so say why in the log.
                 self.get_logger().error(
-                    f"Move to {goal_handle.request.pose_name} failed"
+                    f"Abort: move to {goal_handle.request.pose_name} failed "
+                    f"[{self.describe(goal_handle)}]"
                 )
             self.finish()
             if result.success:
@@ -204,9 +253,10 @@ class MotionServer(Node):
             if goal_handle.is_active:
                 self.finish()
 
+    @guarded(MovePose.Result)
     def move_pose_cb(self, goal_handle):
         result = MovePose.Result()
-        self.arm.running = True
+        self.begin(goal_handle)
         try:
             pose = goal_handle.request.pose
             params = self.arm.slow if goal_handle.request.slow else self.arm.fast
@@ -223,7 +273,10 @@ class MotionServer(Node):
                 params,
             )
             if not result.success:
-                result.message = "Move failed"
+                result.message = f"Move failed: {self.arm.last_failure or 'unknown'}"
+                self.get_logger().error(
+                    f"Abort: {result.message} [{self.describe(goal_handle)}]"
+                )
             canceled = not result.success and self.cancel_requested(goal_handle)
             self.finish()
             if result.success:
@@ -237,10 +290,11 @@ class MotionServer(Node):
             if goal_handle.is_active:
                 self.finish()
 
+    @guarded(Pick.Result)
     def pick_cb(self, goal_handle):
         feedback = Pick.Feedback()
         result = Pick.Result()
-        self.arm.running = True
+        self.begin(goal_handle)
         try:
             tag_frame = goal_handle.request.frame
             if self.vacuum.holding:
@@ -307,10 +361,11 @@ class MotionServer(Node):
             if goal_handle.is_active:
                 self.finish()
 
+    @guarded(Place.Result)
     def place_cb(self, goal_handle):
         feedback = Place.Feedback()
         result = Place.Result()
-        self.arm.running = True
+        self.begin(goal_handle)
         try:
             location = goal_handle.request.location
             if not location and goal_handle.request.position == Point():

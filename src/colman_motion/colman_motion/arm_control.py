@@ -5,7 +5,7 @@ import time
 import numpy as np
 from geometry_msgs.msg import Pose, PoseStamped
 from moveit.planning import PlanRequestParameters
-from moveit_msgs.msg import AttachedCollisionObject, CollisionObject
+from moveit_msgs.msg import AttachedCollisionObject, CollisionObject, MoveItErrorCodes
 from rclpy.node import Node
 from shape_msgs.msg import SolidPrimitive
 from std_srvs.srv import Trigger
@@ -55,6 +55,10 @@ PATH_CHECK_STEPS = 60
 # stack, which needs 0.2.
 LINEAR_SCALINGS = (0.3, 0.2, 0.1)
 
+# MoveIt error codes for failures found here rather than by the planner.
+NO_IK = MoveItErrorCodes(val=MoveItErrorCodes.NO_IK_SOLUTION)
+INVALID = MoveItErrorCodes(val=MoveItErrorCodes.GOAL_STATE_INVALID)
+
 
 class ArmControl(Node):
     def __init__(self, moveit):
@@ -80,9 +84,25 @@ class ArmControl(Node):
         # Set (to the reason) when MoveIt's execution manager stopped answering. It
         # cannot be recovered in this process, so the server restarts itself.
         self.wedged = None
+        # Why the last planning or execution step failed, for the abort message and
+        # log. Reset by the server at the start of each goal.
+        self.last_failure = ""
         self.create_service(Trigger, "/stop", self.stop_cb)
         self.create_service(Trigger, "/resume", self.resume_cb)
         self.get_logger().info("/stop and /resume services started")
+
+    def note_failure(self, what, error_code=None):
+        """Remember why a step failed, with MoveIt's error code when there is one."""
+        if error_code is not None:
+            names = {
+                v: k
+                for k, v in vars(MoveItErrorCodes).items()
+                if k.isupper() and isinstance(v, int)
+            }
+            code = error_code.val
+            what = f"{what} (MoveIt error {names.get(code, 'UNKNOWN')} {code})"
+        self.last_failure = what
+        self.get_logger().error(what)
 
     def stop_cb(self, request, response):
         self.get_logger().warn("Stop activated")
@@ -136,11 +156,11 @@ class ArmControl(Node):
             if self.stop_event.is_set():
                 return False
             if not tem.ensure_active_controllers_for_group("ur_arm"):
-                self.get_logger().error("No active controller for ur_arm")
+                self.note_failure("No active controller for ur_arm")
                 return False
             self.get_logger().info("Executing plan")
             if not tem.push(robot_trajectory.get_robot_trajectory_msg(), []):
-                self.get_logger().error("Trajectory push failed")
+                self.note_failure("Trajectory push failed")
                 return False
             done = threading.Event()
             tem.execute(lambda status: done.set())
@@ -150,7 +170,7 @@ class ArmControl(Node):
             return False
         status = tem.wait_for_execution()
         if not status:
-            self.get_logger().error(f"Execution {status.status}")
+            self.note_failure(f"Execution {status.status}")
         return bool(status) and not self.stop_event.is_set()
 
     def execution_limit_s(self, robot_trajectory):
@@ -208,7 +228,7 @@ class ArmControl(Node):
             if plan_result:
                 return self.execute(plan_result.trajectory)
 
-        self.get_logger().error("Planning failed")
+            self.note_failure("Planning failed", plan_result.error_code)
         return False
 
     def current_state(self):
@@ -250,14 +270,14 @@ class ArmControl(Node):
         if low is None:
             low = self.state_from_ik(low_pose, self.state_from_joints(HOME_POSE))
         if low is None:
-            self.get_logger().error(f"No IK solution at z={z_low:.3f}")
+            self.note_failure(f"No IK solution at z={z_low:.3f}", NO_IK)
             return None
         high = self.state_from_ik(self.pose_at(x, y, z_high, orientation), low)
         if high is None:
-            self.get_logger().error(f"No IK solution at z={z_high:.3f}")
+            self.note_failure(f"No IK solution at z={z_high:.3f}", NO_IK)
             return None
         if not (self.is_valid(low) and self.is_valid(high)):
-            self.get_logger().error("Vertical pair is in collision or out of bounds")
+            self.note_failure("Vertical pair is in collision or out of bounds", INVALID)
             return None
         return high, low
 
@@ -362,8 +382,9 @@ class ArmControl(Node):
             result = self.arm.plan(single_plan_parameters=lin)
             if result:
                 return self.execute(result.trajectory)
-            self.get_logger().warn(f"Straight-line plan failed at scaling {scaling}")
-        self.get_logger().error("Straight-line plan failed")
+            self.note_failure(
+                f"Straight-line plan failed at scaling {scaling}", result.error_code
+            )
         return False
 
     def state_from_joints(self, joint_values):
@@ -409,7 +430,7 @@ class ArmControl(Node):
         """
         params = params or self.fast
         if not self.is_valid(goal_state):
-            self.get_logger().error("Goal state is in collision or out of bounds")
+            self.note_failure("Goal state is in collision or out of bounds", INVALID)
             return False
 
         planning_started = time.perf_counter()
@@ -426,7 +447,9 @@ class ArmControl(Node):
                 return True
             if self.stop_event.is_set():
                 return False
-            self.get_logger().warn("Execution failed, replanning with OMPL")
+            self.get_logger().warn(
+                f"Execution failed ({self.last_failure}), replanning with OMPL"
+            )
         else:
             self.get_logger().info(
                 "Straight joint path is not clear, planning with OMPL"
@@ -441,6 +464,7 @@ class ArmControl(Node):
             if attempt:
                 time.sleep(EXECUTE_RETRY_DELAY_S)
             if self.execute_once(robot_trajectory):
+                self.last_failure = ""
                 return True
             if self.stop_event.is_set():
                 return False
@@ -464,14 +488,14 @@ class ArmControl(Node):
 
         goal_state = self.state_from_ik(pose)
         if goal_state is None:
-            self.get_logger().error("No IK solution for pose")
+            self.note_failure("No IK solution for pose", NO_IK)
             return False
         return self.move_to_state(goal_state, params)
 
     def go_to_configured_pose(self, pose_name, params=None):
         joint_values = self.arm.get_named_target_state_values(pose_name)
         if not joint_values:
-            self.get_logger().error(f"Unknown pose {pose_name}")
+            self.note_failure(f"Unknown pose {pose_name}")
             return False
         return self.move_to_state(self.state_from_joints(joint_values), params)
 
