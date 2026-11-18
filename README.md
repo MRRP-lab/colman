@@ -98,6 +98,27 @@ Notes:
 For more detail on how the packages fit together, see
 [`docs/repository_summary.md`](docs/repository_summary.md).
 
+## Crash recovery
+
+`pixi run stack` restarts crashed nodes instead of leaving them dead.
+
+- The motion server, LLM, speech input, speech output and driver supervisor run under
+  `colman_bringup.supervision.supervise`: restart after 2 s, doubling up to 30 s, and give up with a
+  loud `GIVING UP` log after 5 crashes in 60 s (a node that dies instantly every time is not fixed by
+  restarting it). The camera and tag detectors use plain launch `respawn` with a 2 s delay.
+- The UR driver restarts in place under `driver_supervisor`, now with backoff, and is stopped if the
+  supervisor itself is killed.
+- `stack_health` publishes `diagnostic_msgs/DiagnosticArray` on `/stack_health` (an overall
+  `colman/stack` entry plus one per expected node, service and action), logs `LOST` / `RECOVERED`
+  loudly and says so on `llm_response`. Parameters: `nodes`, `services`, `actions`, `grace`, `speak`,
+  `release_vacuum_on_motion_loss`, `stop_on_motion_return`.
+- Safe state: the motion server dies without turning the vacuum off if it is killed with SIGKILL, and
+  it comes back accepting goals at once. So when `motion_server` disappears the watchdog switches the
+  vacuum off through the UR IO service (this drops a held cube), and when `/stop` reappears it calls
+  `/stop`. Run `pixi run resume` or say "resume" to continue.
+
+Tests: `pixi run test-bringup` (about 3 s, offline; also part of `colcon test`).
+
 ## Coval LEM Series Vacuum Pump
 
 [Documentation](https://doc.coval.com/g/LEM/doc/lem_doc_coval_2022_v06_us.pdf)

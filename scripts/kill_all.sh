@@ -30,7 +30,13 @@ done
 
 # Cleanup: stale DDS shared-memory files cause the
 # "RTPS_TRANSPORT_SHM Error ... open_and_lock_file failed" warnings.
-rm -f /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_* 2>/dev/null
+# Skip files still held open: ROS processes from other checkouts (or anything not
+# started from this one) share /dev/shm, and deleting a live participant's
+# files breaks its shared-memory discovery.
+for f in /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_*; do
+    [ -e "$f" ] || continue
+    fuser -s "$f" 2>/dev/null || rm -f "$f"
+done
 
 # The ROS 2 daemon caches the node graph and can show dead nodes.
 ros2 daemon stop >/dev/null 2>&1 || true
@@ -41,4 +47,4 @@ if [ -n "$left" ]; then
     echo "$left" | cut -c1-140
     exit 1
 fi
-echo "All colman processes stopped; DDS shared memory cleaned."
+echo "All colman processes stopped; stale DDS shared memory cleaned."

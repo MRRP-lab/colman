@@ -52,6 +52,7 @@ graph = "rqt_graph"
 fmt  = "ruff format src/"
 lint = "ruff check --fix src/"
 test-integration = "pytest -v -s --basetemp=build/integration_logs src/colman_motion/test/integration"
+test-bringup = "pytest -v src/colman_bringup/test -k \"not flake8 and not pep257\""
 clean = "rm -rf build install log"
 
 [activation.env]
