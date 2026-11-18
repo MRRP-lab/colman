@@ -9,7 +9,8 @@ Services:    stop, resume  (std_srvs/Trigger)  -- spoken stop and the stop/resum
              release       (std_srvs/Trigger)  -- release_cube
 
 Requires ANTHROPIC_API_KEY, from the environment or from the repository's .env
-file (an exported variable wins). The node exits at startup without it.
+file (an exported variable wins). The node exits at startup without it, unless
+COLMAN_LLM_SCRIPT names a scripted-reply file (see scripted_claude.py, for tests).
 The subscription callback only enqueues. A single worker thread handles one
 utterance at a time.
 """
@@ -32,6 +33,7 @@ from colman_llm.action_call import ActionCall
 from colman_llm.claude_client import ClaudeClient
 from colman_llm.env_file import load_env_file
 from colman_llm.executor import FakeExecutor, PickAndPlaceExecutor
+from colman_llm.scripted_claude import SCRIPT_ENV, ScriptedClient
 from colman_llm.service_call import ServiceCall
 from colman_llm.stop_words import is_stop_command
 
@@ -51,13 +53,18 @@ class LlmNode(Node):
         self.declare_parameter("dry_run", False)
 
         load_env_file()
-        if not os.getenv("ANTHROPIC_API_KEY"):
+        script = os.getenv(SCRIPT_ENV)  # offline tests: scripted replies, no API key
+        if script:
+            self.get_logger().warn(f"Using scripted Claude replies from {script}.")
+        elif not os.getenv("ANTHROPIC_API_KEY"):
             raise RuntimeError(
                 "Set ANTHROPIC_API_KEY in your environment or in the .env file."
             )
 
         self._claude = ClaudeClient(
-            self.get_parameter("model").value, self.get_logger()
+            self.get_parameter("model").value,
+            self.get_logger(),
+            client=ScriptedClient.from_file(script) if script else None,
         )
         self._pick = self._place = self._move = self._stop_call = None
         self._stop_generation = 0  # bumped by a spoken stop; drops in-flight replies
