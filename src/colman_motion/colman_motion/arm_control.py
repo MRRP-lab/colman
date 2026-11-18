@@ -20,6 +20,16 @@ OMPL_PLANNER = "RRTConnectkConfigDefault"
 OMPL_PLANNING_TIME_S = 1.0
 EXECUTE_ATTEMPTS = 3
 EXECUTE_RETRY_DELAY_S = 0.5
+# MoveIt's execution manager gives a trajectory its expected duration times
+# allowed_execution_duration_scaling (plus a margin) and then cancels it. If the
+# controller has died, that cancel never returns and the manager is stuck for good, so
+# the wait for it is bounded: this long past the manager's own limit, or this long
+# after a stop was requested, the manager is declared wedged.
+EXECUTION_GRACE_S = 5.0
+STOP_GRACE_S = 5.0
+EXECUTION_POLL_S = 0.1
+EXECUTE_LOCK_WAIT_S = 5.0
+STOP_WAIT_S = 3.0
 IK_TIMEOUT_S = 0.1
 TIP_LINK = "vacuum_tip_link"
 
@@ -67,6 +77,9 @@ class ArmControl(Node):
         self.running = False
         self.busy_lock = threading.Lock()
         self.execute_lock = threading.Lock()
+        # Set (to the reason) when MoveIt's execution manager stopped answering. It
+        # cannot be recovered in this process, so the server restarts itself.
+        self.wedged = None
         self.create_service(Trigger, "/stop", self.stop_cb)
         self.create_service(Trigger, "/resume", self.resume_cb)
         self.get_logger().info("/stop and /resume services started")
@@ -75,9 +88,17 @@ class ArmControl(Node):
         self.get_logger().warn("Stop activated")
         with self.busy_lock:
             self.stopped = True
-        self.stop()
+        self.request_stop()
+        halted = threading.Thread(target=self.halt, daemon=True)
+        halted.start()
+        # Halting asks the controller to cancel, which does not return if the
+        # controller is gone, so the reply must not wait for it indefinitely.
+        halted.join(STOP_WAIT_S)
         response.success = True
-        response.message = "Successfully Stopped"
+        if halted.is_alive():
+            response.message = "Stop requested, but the arm has not confirmed it halted"
+        else:
+            response.message = "Successfully Stopped"
         return response
 
     def resume_cb(self, request, response):
@@ -105,7 +126,13 @@ class ArmControl(Node):
 
     def execute_once(self, robot_trajectory):
         tem = self.trajectory_execution_manager
-        with self.execute_lock:
+        if self.wedged:
+            return False
+        limit_s = self.execution_limit_s(robot_trajectory)
+        if not self.execute_lock.acquire(timeout=EXECUTE_LOCK_WAIT_S):
+            self.mark_wedged("the execution manager is stuck stopping a trajectory")
+            return False
+        try:
             if self.stop_event.is_set():
                 return False
             if not tem.ensure_active_controllers_for_group("ur_arm"):
@@ -117,11 +144,48 @@ class ArmControl(Node):
                 return False
             done = threading.Event()
             tem.execute(lambda status: done.set())
-        done.wait()
+        finally:
+            self.execute_lock.release()
+        if not self.wait_for_execution(done, limit_s):
+            return False
         status = tem.wait_for_execution()
         if not status:
             self.get_logger().error(f"Execution {status.status}")
         return bool(status) and not self.stop_event.is_set()
+
+    def execution_limit_s(self, robot_trajectory):
+        """How long the execution manager itself lets this trajectory run."""
+        tem = self.trajectory_execution_manager
+        return (
+            robot_trajectory.duration * tem.allowed_execution_duration_scaling()
+            + tem.allowed_goal_duration_margin()
+        )
+
+    def wait_for_execution(self, done, limit_s):
+        """Wait for the trajectory to end. False (and wedged) if it never does."""
+        now = time.monotonic()
+        deadline = now + limit_s + EXECUTION_GRACE_S
+        stop_deadline = None
+        while not done.wait(EXECUTION_POLL_S):
+            now = time.monotonic()
+            if stop_deadline is None and self.stop_event.is_set():
+                stop_deadline = now + STOP_GRACE_S
+            if now > deadline:
+                waited_s = limit_s + EXECUTION_GRACE_S
+                self.mark_wedged(f"the trajectory did not end within {waited_s:.0f}s")
+                return False
+            if stop_deadline is not None and now > stop_deadline:
+                self.mark_wedged("the trajectory did not stop when asked to")
+                return False
+        return True
+
+    def mark_wedged(self, reason):
+        self.get_logger().error(
+            f"Trajectory execution is stuck ({reason}); the controller has probably "
+            "stopped answering. The execution manager cannot recover from this, so the "
+            "motion server will restart."
+        )
+        self.wedged = reason
 
     def plan_and_execute(
         self,

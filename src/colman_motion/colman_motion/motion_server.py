@@ -1,5 +1,6 @@
 import os
 import signal
+import sys
 import threading
 import time
 import traceback
@@ -93,6 +94,9 @@ class MotionServer(Node):
             if self.arm.shutting_down:
                 self.get_logger().warn("Rejecting goal, shutting down")
                 return GoalResponse.REJECT
+            if self.arm.wedged:
+                self.get_logger().warn("Rejecting goal, restarting after a stuck move")
+                return GoalResponse.REJECT
             if self.arm.stopped:
                 self.get_logger().warn("Rejecting goal, stopped until /resume")
                 return GoalResponse.REJECT
@@ -130,6 +134,8 @@ class MotionServer(Node):
             self.arm.busy = False
 
     def fail(self, goal_handle, result, message):
+        if self.arm.wedged:
+            message = f"{message}: {self.arm.wedged}, the motion server is restarting"
         self.get_logger().error(message)
         result.message = message
         canceled = self.cancel_requested(goal_handle)
@@ -379,6 +385,33 @@ class MotionServer(Node):
                 self.finish()
 
 
+def restart_process(arm, vacuum, logger):
+    """Replace this process with a fresh motion server.
+
+    MoveIt's execution manager cannot recover once a controller stopped answering in
+    the middle of a trajectory, so the only way to take goals again is a new process.
+    The goal in flight has been answered by now; give its result a moment to be sent.
+    """
+    logger.error(f"Restarting the motion server: {arm.wedged}")
+    with arm.busy_lock:
+        arm.shutting_down = True
+    deadline = time.monotonic() + SHUTDOWN_WAIT_S
+    while arm.busy and time.monotonic() < deadline:
+        time.sleep(0.05)
+    time.sleep(RESULT_FLUSH_S)
+    vacuum.release()
+    sys.stdout.flush()
+    sys.stderr.flush()
+    # Sockets and shared memory the middleware opened are not close-on-exec.
+    for fd in os.listdir("/proc/self/fd"):
+        if int(fd) > 2:
+            try:
+                os.close(int(fd))
+            except OSError:
+                pass
+    os.execv(sys.executable, [sys.executable, *sys.orig_argv[1:]])
+
+
 def on_signal(signum, frame):
     for sig in SIGNALS:
         signal.signal(sig, signal.SIG_IGN)
@@ -428,6 +461,8 @@ def main():
         spin_thread.start()
         vacuum.release()
         while rclpy.ok() and spin_thread.is_alive():
+            if arm.wedged:
+                restart_process(arm, vacuum, motion.get_logger())
             time.sleep(0.5)
         if not spin_thread.is_alive():
             motion.get_logger().error("Executor stopped, shutting down")
