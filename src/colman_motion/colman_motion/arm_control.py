@@ -1,4 +1,5 @@
 import copy
+import math
 import threading
 import time
 
@@ -54,6 +55,9 @@ PATH_CHECK_STEPS = 60
 # rejected for exceeding a joint acceleration limit; 0.3 works for all but the highest
 # stack, which needs 0.2.
 LINEAR_SCALINGS = (0.3, 0.2, 0.1)
+
+# A quaternion shorter than this has no direction to normalise.
+MIN_QUATERNION_NORM = 1e-6
 
 # MoveIt error codes for failures found here rather than by the planner.
 NO_IK = MoveItErrorCodes(val=MoveItErrorCodes.NO_IK_SOLUTION)
@@ -481,6 +485,14 @@ class ArmControl(Node):
         return self.plan_and_execute(single_plan_parameters=params, retries=retries)
 
     def go_to_pose(self, x, y, z, qx=0.0, qy=0.0, qz=0.0, qw=1.0, params=None):
+        if not all(math.isfinite(v) for v in (x, y, z, qx, qy, qz, qw)):
+            self.note_failure("The pose has a NaN or infinite value", INVALID)
+            return False
+        norm = math.sqrt(qx * qx + qy * qy + qz * qz + qw * qw)
+        if norm < MIN_QUATERNION_NORM:
+            self.note_failure("The pose's orientation has zero length", INVALID)
+            return False
+        qx, qy, qz, qw = qx / norm, qy / norm, qz / norm, qw / norm
         pose = Pose()
         pose.orientation.x = qx
         pose.orientation.y = qy
