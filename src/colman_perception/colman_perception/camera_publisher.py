@@ -81,16 +81,26 @@ class CameraPublisher(Node):
         the camera is missing or busy.
         """
         device = dai.Device(device_info(self.camera))
-        pipeline = dai.Pipeline(device)
-        cam = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
-        # Autofocus and autoexposure are set explicitly, so they never depend on the
-        # camera's defaults. Both keep adjusting as the arm moves and the view changes.
-        cam.initialControl.setAutoFocusMode(CONTINUOUS_AF)
-        cam.initialControl.setAutoExposureEnable()
-        control_queue = cam.inputControl.createInputQueue()
-        out = cam.requestOutput(self.size, enableUndistortion=True, fps=self.fps)
-        queue = out.createOutputQueue(maxSize=4, blocking=False)
-        pipeline.start()
+        try:
+            pipeline = dai.Pipeline(device)
+            cam = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
+            # Autofocus and autoexposure are set explicitly, so they never depend on
+            # the camera's defaults. Both keep adjusting as the arm moves and the view
+            # changes.
+            cam.initialControl.setAutoFocusMode(CONTINUOUS_AF)
+            cam.initialControl.setAutoExposureEnable()
+            control_queue = cam.inputControl.createInputQueue()
+            out = cam.requestOutput(self.size, enableUndistortion=True, fps=self.fps)
+            queue = out.createOutputQueue(maxSize=4, blocking=False)
+            pipeline.start()
+        except BaseException:
+            # Nothing owns the device yet, so close it here; left open it stays busy
+            # and every retry fails with "already in use".
+            try:
+                device.close()
+            except Exception:  # noqa: BLE001 - the device may already be gone
+                pass
+            raise
         return device, pipeline, queue, control_queue
 
     def connect(self):
@@ -174,16 +184,34 @@ class CameraPublisher(Node):
             return
         self.last_frame = now
 
-        frame = packet.getCvFrame()
-        self.last_meta = (
-            f"lens {packet.getLensPosition()}, "
-            f"exposure {packet.getExposureTime().total_seconds() * 1e6:.0f} us, "
-            f"iso {packet.getSensitivity()}"
-        )
+        try:
+            frame = packet.getCvFrame()
+            meta = (
+                f"lens {packet.getLensPosition()}, "
+                f"exposure {packet.getExposureTime().total_seconds() * 1e6:.0f} us, "
+                f"iso {packet.getSensitivity()}"
+            )
+            # The size can differ from the configured one (a reconnect may come back at
+            # another resolution), and the intrinsics belong to the frame's size.
+            height, width = frame.shape[:2]
+            if (width, height) != (self.info_msg.width, self.info_msg.height):
+                self._info_ready = False
+            if not self._info_ready:
+                k = np.array(packet.getTransformation().getIntrinsicMatrix())
+        except RuntimeError as e:
+            self.get_logger().warn(f"Camera lost while reading ({e}), reconnecting")
+            self.disconnect()
+            return
+        except AttributeError:  # no frame (None) in the packet
+            self.get_logger().warn(
+                "Camera sent an empty frame", throttle_duration_sec=5
+            )
+            return
+        self.last_meta = meta
         stamp = now.to_msg()
 
         if not self._info_ready:
-            k = np.array(packet.getTransformation().getIntrinsicMatrix())
+            self.info_msg.width, self.info_msg.height = width, height
             self.info_msg.k = k.flatten().tolist()
             self.info_msg.p = np.hstack([k, np.zeros((3, 1))]).flatten().tolist()
             self._info_ready = True
