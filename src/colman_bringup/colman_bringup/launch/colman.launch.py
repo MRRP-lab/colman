@@ -3,6 +3,7 @@ from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -79,6 +80,14 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration("apriltag")),
     )
 
+    world_state = Node(
+        package="colman_perception",
+        executable="world_state",
+        output="screen",
+        parameters=[{"use_sim_time": LaunchConfiguration("sim")}],
+        condition=IfCondition(LaunchConfiguration("apriltag")),
+    )
+
     moveit = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([bringup_launch, "launch", "moveit.launch.py"])
@@ -92,5 +101,5 @@ def generate_launch_description():
     )
 
     return LaunchDescription(
-        declared_arguments + [bringup, sim, moveit, depth, yolo, apriltag]
+        declared_arguments + [bringup, sim, moveit, depth, yolo, apriltag, world_state]
     )

@@ -13,7 +13,6 @@ from rclpy.utilities import remove_ros_args
 
 from colman_interfaces.action import Pick, Place
 from colman_motion.patterns import PATTERNS
-from colman_motion.scan import FOUND, look_for_tag
 from colman_motion.tag_lookup import TagLookup
 
 TAG_PATTERN = ["tag_1", "tag_3", "tag_5", "tag_6"]
@@ -92,9 +91,9 @@ def main():
         # tags is taken from these positions.
         tags = {}
         for tag_frame in TAG_PATTERN:
-            scan = look_for_tag(tag, tag_frame, wrist_timeout_s=0.0)
-            if scan.status == FOUND:
-                translation = scan.tag_pose.translation
+            tag_pose = tag.get_tag_pose(tag_frame)
+            if tag_pose is not None:
+                translation = tag_pose.translation
                 tags[tag_frame] = (translation.x, translation.y, translation.z)
         logger.info(f"Visible tags: {sorted(tags)}")
 

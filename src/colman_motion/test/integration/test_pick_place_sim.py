@@ -168,15 +168,6 @@ def test_pick_loose_cube(node):
         release(node)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Known bug: both scan poses put the tool tip within ~1 cm of the upper arm, so "
-        "the carried-cube model (and a real 39 mm cube) collides there and the look "
-        "move before every place by tag fails with 'Look move failed'. Remove this "
-        "mark when the scan poses are fixed."
-    ),
-)
 def test_pick_then_place_on_a_tag(node):
     try:
         success, message = pick(node, "tag_2")
