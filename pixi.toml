@@ -23,7 +23,7 @@ sim-calibration = "ros2 launch colman_bringup colman.launch.py sim:=true depth:=
 mock = "ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur3e robot_ip:=0.0.0.0 use_mock_hardware:=true launch_dashboard_client:=false description_launchfile:=$(ros2 pkg prefix colman_bringup)/share/colman_bringup/launch/rsp.launch.py"
 driver = "ros2 run colman_bringup driver_supervisor --ros-args -p robot_ip:=192.168.56.101"
 
-detect = "ros2 run colman_perception camera_publisher & ros2 launch colman_bringup apriltag.launch.py"
+detect = "ros2 run colman_perception camera_publisher & ros2 run colman_perception world_state & ros2 launch colman_bringup apriltag.launch.py"
 overhead = "ros2 launch colman_bringup overhead.launch.py"
 calibrate = "ros2 run colman_motion eye_in_hand"
 solve = "python src/colman_motion/colman_motion/hand_eye_solve.py"

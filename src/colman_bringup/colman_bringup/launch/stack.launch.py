@@ -49,6 +49,11 @@ def generate_launch_description():
             ),
             include("colman_bringup", "launch", "apriltag.launch.py"),
             include("colman_bringup", "launch", "overhead.launch.py"),
+            Node(
+                package="colman_perception",
+                executable="world_state",
+                output="screen",
+            ),
             # Motion server, after the driver has had time to come up
             TimerAction(
                 period=10.0,

@@ -17,12 +17,12 @@ from std_srvs.srv import Trigger
 from colman_interfaces.action import MovePose, MoveTo, Pick, Place
 from colman_motion.arm_control import ArmControl
 from colman_motion.robot_ready import wait_for_robot
-from colman_motion.scan import FOUND, NOT_VISIBLE, STOPPED, locate_tag
 from colman_motion.scene_manager import SceneManager
 from colman_motion.tag_lookup import TagLookup
 from colman_motion.vacuum_control import VacuumControl
 
 REFOCUS_SERVICE = "/oakd_pro/refocus"
+FIND_TIMEOUT_S = 4.0
 APPROACH_OFFSET_M = 0.1
 EE_OFFSET_M = 0.01
 DROP_OFFSET_M = 0.05
@@ -151,27 +151,16 @@ class MotionServer(Node):
         The wrist camera is tried first, then the overhead camera. If neither sees it
         the arm may be in the way, so it moves clear and the overhead is tried again.
         """
-
-        def on_detect():
-            self.stage(goal_handle, feedback, "detecting")
-            self.request_refocus()
-
-        scan = locate_tag(
-            self.arm,
-            self.tag,
-            tag_frame,
-            self.arm.fast,
-            stopped=self.arm.stop_event.is_set,
-            on_look=lambda: self.stage(goal_handle, feedback, "looking"),
-            on_detect=on_detect,
-        )
-        if scan.status == FOUND:
-            return scan.tag_pose, None
-        if scan.status == STOPPED:
-            return None, "Stopped during detect"
-        if scan.status == NOT_VISIBLE:
-            return None, f"{tag_frame} not visible"
-        return None, scan.message
+        self.stage(goal_handle, feedback, "detecting")
+        self.request_refocus()
+        deadline = time.monotonic() + FIND_TIMEOUT_S
+        while not self.arm.stop_event.is_set():
+            tag_pose = self.tag.get_tag_pose(tag_frame)
+            if tag_pose is not None:
+                return tag_pose, None
+            if time.monotonic() >= deadline:
+                return None, f"{tag_frame} not visible"
+        return None, "Stopped during detect"
 
     def move_cb(self, goal_handle):
         result = MoveTo.Result()

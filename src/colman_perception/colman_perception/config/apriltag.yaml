@@ -14,5 +14,5 @@ apriltag:
     pose_estimation_method: "pnp"
     tag:
       ids:    [1, 2, 3, 4, 5, 6, 7, 8]
-      frames: ["tag_1", "tag_2", "tag_3", "tag_4", "tag_5", "tag_6", "tag_7", "tag_8"]
+      frames: ["wrist_tag_1", "wrist_tag_2", "wrist_tag_3", "wrist_tag_4", "wrist_tag_5", "wrist_tag_6", "wrist_tag_7", "wrist_tag_8"]
       sizes:  [0.039, 0.039, 0.039, 0.039, 0.039, 0.039, 0.039, 0.039]

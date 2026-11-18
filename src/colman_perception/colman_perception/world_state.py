@@ -1,0 +1,278 @@
+import math
+from collections import deque
+from pathlib import Path
+
+import rclpy
+import yaml
+from ament_index_python.packages import get_package_share_directory
+from geometry_msgs.msg import TransformStamped
+from rclpy.executors import ExternalShutdownException
+from rclpy.node import Node
+from rclpy.time import Time
+from tf2_ros import Buffer, TransformBroadcaster, TransformException, TransformListener
+from ur_msgs.msg import IOStates
+
+BASE_FRAME = "base_link"
+TIP_FRAME = "vacuum_tip_link"
+WRIST_CAMERA_FRAME = "oakd_pro_camera_rgb_optical_frame_wrist"
+APRILTAG_CONFIGS = ["apriltag.yaml", "apriltag_overhead.yaml"]
+SOURCES = ["wrist", "overhead"]
+PREFIX = {"wrist": "wrist_", "overhead": "ovh_"}
+TOLERANCE_M = 0.003
+FRESH_S = {"wrist": 0.3, "overhead": 0.6}
+SETTLE_S = 1.0
+MOVED_M = 0.02
+GRAB_M = 0.03
+DISAGREE_M = 0.010
+DISAGREE_LOG_S = 5.0
+STILL_M = 0.001
+STILL_S = 0.3
+RATE_HZ = 30.0
+IO_TOPIC = "/io_and_status_controller/io_states"
+VACUUM_PIN = 0
+
+
+def load_tag_frames():
+    config = Path(get_package_share_directory("colman_perception")) / "config"
+    ids = set()
+    for name in APRILTAG_CONFIGS:
+        for node in yaml.safe_load((config / name).read_text()).values():
+            ids.update(node["ros__parameters"]["tag"]["ids"])
+    return [f"tag_{i}" for i in sorted(ids)]
+
+
+def seconds(duration):
+    return duration.nanoseconds / 1e9
+
+
+def moved(a, b, tolerance_m):
+    return max(abs(p - q) for p, q in zip(a, b)) >= tolerance_m
+
+
+def mean(samples):
+    return [sum(s[1][i] for s in samples) / len(samples) for i in range(3)]
+
+
+def quat_mul(a, b):
+    ax, ay, az, aw = a
+    bx, by, bz, bw = b
+    return (
+        aw * bx + ax * bw + ay * bz - az * by,
+        aw * by - ax * bz + ay * bw + az * bx,
+        aw * bz + ax * by - ay * bx + az * bw,
+        aw * bw - ax * bx - ay * by - az * bz,
+    )
+
+
+def quat_conj(q):
+    return (-q[0], -q[1], -q[2], q[3])
+
+
+def rotate(q, v):
+    return quat_mul(quat_mul(q, (*v, 0.0)), quat_conj(q))[:3]
+
+
+def position_of(transform):
+    t = transform.transform.translation
+    return (t.x, t.y, t.z)
+
+
+def rotation_of(transform):
+    r = transform.transform.rotation
+    return (r.x, r.y, r.z, r.w)
+
+
+class WorldState(Node):
+    def __init__(self):
+        super().__init__("world_state")
+        self.buffer = Buffer()
+        self.listener = TransformListener(self.buffer, self)
+        self.broadcaster = TransformBroadcaster(self)
+        self.tag_frames = load_tag_frames()
+        self.since = {}
+        self.samples = {}
+        self.belief = {}
+        self.state = {}
+        self.camera_track = deque()
+        self.held = None
+        self.vacuum_on = None
+        self.create_subscription(IOStates, IO_TOPIC, self.on_io, 10)
+        self.create_timer(1.0 / RATE_HZ, self.update)
+        self.get_logger().info(f"world state tracking {', '.join(self.tag_frames)}")
+
+    def lookup(self, frame):
+        try:
+            return self.buffer.lookup_transform(BASE_FRAME, frame, Time())
+        except TransformException:
+            return None
+
+    def forget(self, key):
+        self.since.pop(key, None)
+        self.samples.pop(key, None)
+
+    def arm_still(self, now):
+        camera = self.lookup(WRIST_CAMERA_FRAME)
+        if camera is None:
+            self.camera_track.clear()
+            return False
+        position = position_of(camera)
+        track = self.camera_track
+        track.append((now, position))
+        while len(track) > 1 and seconds(now - track[1][0]) >= STILL_S:
+            track.popleft()
+        if seconds(now - track[0][0]) < STILL_S:
+            return False
+        return not any(moved(p, position, STILL_M) for _, p in track)
+
+    def observe(self, tag_frame, source, now, usable):
+        key = (tag_frame, source)
+        transform = self.lookup(PREFIX[source] + tag_frame) if usable else None
+        if transform is None:
+            self.forget(key)
+            return None, None
+        stamp = Time.from_msg(transform.header.stamp)
+        if seconds(now - stamp) > FRESH_S[source]:
+            self.forget(key)
+            return None, None
+
+        position = position_of(transform)
+        samples = self.samples.setdefault(key, deque())
+        if not samples or stamp > samples[-1][0]:
+            if samples and moved(position, mean(samples), TOLERANCE_M):
+                samples.clear()
+            if not samples:
+                self.since[key] = stamp
+            samples.append((stamp, position, rotation_of(transform)))
+            while seconds(stamp - samples[0][0]) > SETTLE_S:
+                samples.popleft()
+
+        if seconds(samples[-1][0] - self.since[key]) < SETTLE_S:
+            return position, None
+        return position, (mean(samples), samples[-1][2])
+
+    def on_io(self, msg):
+        on = next(
+            (d.state for d in msg.digital_out_states if d.pin == VACUUM_PIN), None
+        )
+        if on is None or on == self.vacuum_on:
+            return
+        self.vacuum_on = on
+        if on:
+            self.grab()
+        else:
+            self.drop()
+
+    def grab(self):
+        tip = self.lookup(TIP_FRAME)
+        if tip is None or not self.belief:
+            self.get_logger().warn("vacuum on, no cube known near the tip")
+            return
+        tip_position = position_of(tip)
+        tag_frame = min(
+            self.belief, key=lambda t: math.dist(self.belief[t][0], tip_position)
+        )
+        gap_m = math.dist(self.belief[tag_frame][0], tip_position)
+        if gap_m > GRAB_M:
+            self.get_logger().warn(
+                f"vacuum on, nearest cube {tag_frame} is {gap_m * 1000:.0f} mm away"
+            )
+            return
+        position, rotation = self.belief[tag_frame]
+        tip_inverse = quat_conj(rotation_of(tip))
+        offset = rotate(tip_inverse, [p - q for p, q in zip(position, tip_position)])
+        self.held = (tag_frame, offset, quat_mul(tip_inverse, rotation))
+        self.get_logger().info(f"holding {tag_frame}")
+
+    def drop(self):
+        if self.held is None:
+            return
+        tag_frame = self.held[0]
+        self.held = None
+        self.belief.pop(tag_frame, None)
+        for source in SOURCES:
+            self.forget((tag_frame, source))
+        self.get_logger().info(f"released {tag_frame}")
+
+    def held_pose(self):
+        tip = self.lookup(TIP_FRAME)
+        if tip is None:
+            return None
+        _, offset, rotation_offset = self.held
+        tip_rotation = rotation_of(tip)
+        shifted = rotate(tip_rotation, offset)
+        position = [p + m for p, m in zip(position_of(tip), shifted)]
+        return position, quat_mul(tip_rotation, rotation_offset)
+
+    def check_disagreement(self, tag_frame, wrist, overhead):
+        gap_m = math.dist(wrist[0], overhead[0])
+        if gap_m > DISAGREE_M:
+            self.get_logger().warn(
+                f"{tag_frame}: overhead is {gap_m * 1000:.1f} mm from wrist",
+                throttle_duration_sec=DISAGREE_LOG_S,
+            )
+
+    def track(self, tag_frame, now, wrist_usable):
+        if self.held is not None and self.held[0] == tag_frame:
+            return "held", self.held_pose()
+
+        usable = {"wrist": wrist_usable, "overhead": True}
+        fresh = {}
+        settled = {}
+        for source in SOURCES:
+            fresh[source], settled[source] = self.observe(
+                tag_frame, source, now, usable[source]
+            )
+        if settled["wrist"] is not None and settled["overhead"] is not None:
+            self.check_disagreement(tag_frame, settled["wrist"], settled["overhead"])
+
+        source = next((s for s in SOURCES if settled[s] is not None), None)
+        if source is not None:
+            self.belief[tag_frame] = settled[source]
+            return source, settled[source]
+
+        belief = self.belief.get(tag_frame)
+        if belief is None:
+            return None, None
+        if any(
+            p is not None and math.dist(p, belief[0]) > MOVED_M for p in fresh.values()
+        ):
+            del self.belief[tag_frame]
+            return None, None
+        return "remembered", belief
+
+    def publish(self, tag_frame, pose, now):
+        position, rotation = pose
+        msg = TransformStamped()
+        msg.header.stamp = now.to_msg()
+        msg.header.frame_id = BASE_FRAME
+        msg.child_frame_id = tag_frame
+        t = msg.transform.translation
+        t.x, t.y, t.z = position
+        r = msg.transform.rotation
+        r.x, r.y, r.z, r.w = rotation
+        self.broadcaster.sendTransform(msg)
+
+    def update(self):
+        now = self.get_clock().now()
+        wrist_usable = self.arm_still(now)
+        for tag_frame in self.tag_frames:
+            state, pose = self.track(tag_frame, now, wrist_usable)
+            if state != self.state.get(tag_frame):
+                self.get_logger().info(f"{tag_frame}: {state or 'unknown'}")
+                self.state[tag_frame] = state
+            if pose is not None:
+                self.publish(tag_frame, pose, now)
+
+
+def main():
+    rclpy.init()
+    try:
+        rclpy.spin(WorldState())
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
+    finally:
+        rclpy.try_shutdown()
+
+
+if __name__ == "__main__":
+    main()
