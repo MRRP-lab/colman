@@ -1,2 +1,8 @@
 [tool.ruff.lint]
 select = ["E", "F", "I"]
+
+[tool.pytest.ini_options]
+markers = [
+    "fault_injection: kills, pauses or restarts a stack process; run on demand (pixi run test-motion-faults)",
+    "slow: long randomized runs and the soak test; run on demand (pixi run test-motion-faults)",
+]

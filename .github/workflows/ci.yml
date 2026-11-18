@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  # The full fault-injection suite and the soak, which are too slow for every push.
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -11,6 +15,7 @@ concurrency:
 
 jobs:
   lint:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -25,6 +30,7 @@ jobs:
           src: src/
 
   build:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -45,10 +51,11 @@ jobs:
       - run: pixi run build
       # ruff (lint job) is the style checker; the ament flake8/pep257 template
       # tests disagree with its formatting, so skip them here.
-      - run: pixi run colcon test --event-handlers console_direct+ --pytest-args -k "not flake8 and not pep257 and not pick_place_sim"
+      - run: pixi run colcon test --event-handlers console_direct+ --pytest-args -k "not flake8 and not pep257 and not integration"
       - run: pixi run colcon test-result --verbose
-      # Motion-level integration test: the real motion server and MoveIt against mock UR
+      # Motion-level integration tests: the real motion server and MoveIt against mock UR
       # hardware and fake tags, in its own ROS domain on localhost. No Gazebo or display.
+      # Only the fast, deterministic subset (not the slow and fault_injection marks).
       # It has its own step so a failure uploads the process logs.
       - name: Integration test (mock hardware)
         timeout-minutes: 20
@@ -58,5 +65,36 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: integration-logs
+          path: build/integration_logs
+          if-no-files-found: ignore
+
+  # Nightly or on demand: the fault-injection suite, long random sequences and the soak.
+  motion-faults:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: prefix-dev/setup-pixi@v0.8.14
+        with:
+          locked: true
+          cache: false
+      - run: pixi run build
+      - name: Motion fault injection and soak
+        timeout-minutes: 100
+        env:
+          SOAK_CYCLES: "30"
+        run: pixi run test-motion-faults
+      - name: Upload fault-injection logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: motion-fault-logs
           path: build/integration_logs
           if-no-files-found: ignore
