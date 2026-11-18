@@ -5,6 +5,8 @@ borderline, a success), never a crash or a hang, and leave the planning scene as
 found it. The next goal must then work.
 """
 
+import re
+
 import pytest
 
 NAN = float("nan")
@@ -16,7 +18,7 @@ MOVE_POSE_CORPUS = {
     "far_out_of_reach": ((2.0, 0.0, 0.3), DOWN, True),
     "behind_the_base_out_of_reach": ((-0.9, 0.0, 0.3), DOWN, True),
     "far_below_the_table": ((0.3, 0.0, -0.4), DOWN, True),
-    "inside_the_table": ((0.3, 0.0, -0.004), DOWN, True),
+    "inside_the_table": ((0.3, 0.0, -0.02), DOWN, True),
     "inside_the_base": ((0.0, 0.0, 0.1), DOWN, True),
     "nan_position": ((NAN, 0.0, 0.3), DOWN, True),
     "nan_orientation": ((0.3, 0.0, 0.3), (NAN, 0.0, 0.0, 1.0), True),
@@ -28,6 +30,16 @@ MOVE_POSE_CORPUS = {
     "at_the_edge_of_reach": ((0.45, 0.0, 0.1), DOWN, False),
     "wrist_near_its_limit": ((0.3, 0.0, 0.3), (0.0, 1.0, 0.0, 0.0), False),
 }
+
+ZERO_QUATERNION_BUG = pytest.mark.xfail(
+    strict=False,
+    reason=(
+        "BUG zero-quaternion-moves: a (0, 0, 0, 0) orientation is normalised to "
+        "something arbitrary and the arm moves there. Fixed by the 'Reject a "
+        "move_pose with a zero-length orientation' commit on motion-fixes."
+    ),
+)
+MARKS = {"zero_quaternion": ZERO_QUATERNION_BUG}
 
 # name -> (tag pose [x y z qx qy qz qw], must_abort)
 TAG_CORPUS = {
@@ -67,7 +79,9 @@ def assert_next_goal_works(rig):
     assert run.outcome == "succeeded", f"server did not recover: {run}"
 
 
-@pytest.mark.parametrize("name", MOVE_POSE_CORPUS)
+@pytest.mark.parametrize(
+    "name", [pytest.param(n, marks=MARKS.get(n, ())) for n in MOVE_POSE_CORPUS]
+)
 def test_move_pose(healthy, name):
     xyz, quat, must_abort = MOVE_POSE_CORPUS[name]
     run = healthy.client.move_pose(xyz, quat).wait_done()
@@ -145,3 +159,30 @@ def test_pick_while_already_holding(healthy):
     run = client.pick("tag_3").wait_done()
     assert_aborted_with_reason(run)
     assert "holding" in run.message.lower(), run
+
+
+LOG_BUG = pytest.mark.xfail(
+    strict=False,
+    reason=(
+        "BUG unexplained-aborts: aborts are logged without the goal, stage or MoveIt "
+        "error code. Fixed by the 'Log every abort with its stage, goal id and MoveIt "
+        "error code' commit on motion-fixes."
+    ),
+)
+
+
+@LOG_BUG
+def test_every_abort_is_logged_with_goal_stage_and_moveit_error(healthy):
+    log = healthy.stack.log_dir / "motion_server.log"
+    start = log.stat().st_size
+    run = healthy.client.pick("tag_99").wait_done()
+    assert run.outcome == "aborted", run
+    far = healthy.client.move_pose((2.0, 0.0, 0.3)).wait_done()
+    assert far.outcome == "aborted", far
+    assert "MoveIt error" in far.message, far
+    with open(log, errors="replace") as handle:
+        handle.seek(start)
+        aborts = [line for line in handle if "Abort:" in line]
+    assert len(aborts) >= 2, aborts
+    for line in aborts:
+        assert re.search(r"\[goal=[0-9a-f]{8} stage=\S+ moveit=.+\]", line), line

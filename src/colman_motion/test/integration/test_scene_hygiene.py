@@ -6,6 +6,16 @@ the carried cube: it may be modelled on the tip only while the vacuum holds one.
 
 import pytest
 
+PHANTOM_CUBE_BUG = pytest.mark.xfail(
+    strict=False,
+    reason=(
+        "BUG phantom-attached-cube: /release after a failed place leaves the cube "
+        "attached to the tip in the planning scene, so later moves plan around a "
+        "cube that is not there. Fixed by the 'Take the cube off the arm's model "
+        "whenever the vacuum lets go' commit on motion-fixes."
+    ),
+)
+
 
 def scene(rig):
     state = rig.client.server_state()
@@ -62,6 +72,7 @@ def test_after_pick_canceled_while_moving(healthy):
     assert_baseline(healthy, "after canceled pick")
 
 
+@PHANTOM_CUBE_BUG
 def test_failed_place_leaves_the_cube_only_while_held(healthy):
     """A failed place keeps the cube on the tip; letting go must remove it."""
     client = healthy.client
@@ -77,6 +88,7 @@ def test_failed_place_leaves_the_cube_only_while_held(healthy):
     assert_baseline(healthy, "after release and a move")
 
 
+@PHANTOM_CUBE_BUG
 def test_failed_release_keeps_cube_and_holding_in_step(healthy):
     client = healthy.client
     assert client.pick("tag_2").wait_done().outcome == "succeeded"

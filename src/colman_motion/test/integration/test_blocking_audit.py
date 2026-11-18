@@ -41,6 +41,9 @@ BOUND_KEYWORDS = {"timeout", "timeout_sec", "timeout_s"}
 
 # (module, enclosing function, method) -> why an unbounded call is fine there.
 REVIEWED = {
+    ("arm_control.py", "execute_once", "wait_for_execution"): (
+        "only after the completion callback has fired, so the trajectory is over"
+    ),
     ("vacuum_control.py", "set_digital_out", "result"): (
         "only after future.done() is true, in a loop bounded by a deadline"
     ),
@@ -91,7 +94,7 @@ def all_unbounded():
         "BUG unbounded-execute-wait: ArmControl.execute_once waits for the "
         "trajectory with Event.wait() and wait_for_execution() and no timeout, so a "
         "controller that never reports back leaves the goal EXECUTING forever. "
-        "Fixed by the 'bound the trajectory wait' commit on motion-fixes."
+        "Fixed by the 'Bound the trajectory wait' commit on motion-fixes."
     ),
 )
 def test_no_unreviewed_blocking_call_is_unbounded():

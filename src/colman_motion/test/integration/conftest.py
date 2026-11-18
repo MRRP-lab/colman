@@ -181,13 +181,27 @@ class Rig:
         else:
             self.release()
         # Back to a known arm pose, so a test never inherits an awkward one.
-        run = client.move_to("home")
-        run.wait_done(HOME_TIMEOUT_S)
+        run = self.go_home()
         if run.outcome != "succeeded":
             self.restart_server()
             self.restart_driver()
             raise RuntimeError(f"could not return home after a test: {run}")
         client.wait_arm_still()
+
+    def go_home(self):
+        """Send the arm home, riding out a server that is still restarting itself."""
+
+        def attempt():
+            try:
+                run = self.client.move_to("home")
+                if not run.wait_accepted():
+                    self.wait_for_server()
+                    return None
+                return run.wait_done(HOME_TIMEOUT_S)
+            except TimeoutError:
+                return None
+
+        return wait_until(attempt, RECOVERY_S, "a move home to be accepted")
 
     # --- invariants ---
 
