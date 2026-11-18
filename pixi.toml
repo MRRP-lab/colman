@@ -51,7 +51,11 @@ graph = "rqt_graph"
 
 fmt  = "ruff format src/"
 lint = "ruff check --fix src/"
-test-integration = "pytest -v -s --basetemp=build/integration_logs src/colman_motion/test/integration"
+# The fast, deterministic subset: what CI runs on every push.
+test-integration = "pytest -v -s --basetemp=build/integration_logs -m 'not slow and not fault_injection' src/colman_motion/test/integration"
+# Everything: fault injection, long random sequences and the soak (SOAK_CYCLES=n sets
+# its length). Takes the better part of an hour; run by hand or nightly.
+test-motion-faults = "pytest -v -s --basetemp=build/integration_logs src/colman_motion/test/integration"
 clean = "rm -rf build install log"
 
 [activation.env]

@@ -10,56 +10,16 @@ a real arm or another developer's stack on the same network.
 """
 
 import os
-import random
-import signal
-import subprocess
 import sys
 import time
 from pathlib import Path
 
 import pytest
+from harness import Stack, isolated_env
 
-HERE = Path(__file__).parent
 STARTUP_TIMEOUT_S = 180
 GOAL_TIMEOUT_S = 240
-
-
-def isolated_env():
-    env = dict(os.environ)
-    env["ROS_DOMAIN_ID"] = str(random.randint(100, 200))
-    env["ROS_LOCALHOST_ONLY"] = "1"
-    return env
-
-
-class Stack:
-    """The processes of the test stack, in their own process groups."""
-
-    def __init__(self, env, log_dir):
-        self.env = env
-        self.log_dir = log_dir
-        self.procs = []
-
-    def start(self, name, command):
-        log = open(self.log_dir / f"{name}.log", "w")
-        proc = subprocess.Popen(
-            command,
-            env=self.env,
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
-        self.procs.append(proc)
-
-    def stop(self):
-        for sig, wait_s in ((signal.SIGINT, 20), (signal.SIGKILL, 5)):
-            for proc in self.procs:
-                if proc.poll() is None:
-                    os.killpg(proc.pid, sig)
-            deadline = time.monotonic() + wait_s
-            while time.monotonic() < deadline and any(
-                p.poll() is None for p in self.procs
-            ):
-                time.sleep(0.2)
+HERE = Path(__file__).parent
 
 
 @pytest.fixture(scope="module")
@@ -168,15 +128,6 @@ def test_pick_loose_cube(node):
         release(node)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Known bug: both scan poses put the tool tip within ~1 cm of the upper arm, so "
-        "the carried-cube model (and a real 39 mm cube) collides there and the look "
-        "move before every place by tag fails with 'Look move failed'. Remove this "
-        "mark when the scan poses are fixed."
-    ),
-)
 def test_pick_then_place_on_a_tag(node):
     try:
         success, message = pick(node, "tag_2")
