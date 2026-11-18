@@ -29,6 +29,8 @@ def make_detector(context):
             name=name,
             output="screen",
             parameters=[params_file],
+            respawn=True,
+            respawn_delay=2.0,
             remappings=[
                 ("image_rect", f"{prefix}/rgb/image"),
                 ("camera_info", f"{prefix}/rgb/camera_info"),

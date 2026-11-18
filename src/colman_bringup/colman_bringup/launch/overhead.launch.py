@@ -31,6 +31,8 @@ def make_nodes(context):
             name="camera_publisher_overhead",
             output="screen",
             parameters=[{"camera": "overhead"}],
+            respawn=True,
+            respawn_delay=2.0,
         ),
         Node(
             package="tf2_ros",

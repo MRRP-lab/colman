@@ -6,6 +6,7 @@ results (no arm moves) or `driver:=false` if the arm driver is already running.
 """
 
 from ament_index_python.packages import get_package_share_directory
+from colman_bringup.supervision import supervise
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
 from launch.conditions import IfCondition
@@ -34,51 +35,80 @@ def generate_launch_description():
             DeclareLaunchArgument("driver", default_value="true"),
             DeclareLaunchArgument("robot_ip", default_value="192.168.56.101"),
             # Arm
-            Node(
-                package="colman_bringup",
-                executable="driver_supervisor",
-                output="screen",
-                parameters=[{"robot_ip": robot_ip}],
-                condition=IfCondition(driver),
+            *supervise(
+                "driver_supervisor",
+                lambda: [
+                    Node(
+                        package="colman_bringup",
+                        executable="driver_supervisor",
+                        output="screen",
+                        parameters=[{"robot_ip": robot_ip}],
+                        condition=IfCondition(driver),
+                    )
+                ],
             ),
+            # Reports which stack nodes/services/actions are alive on /stack_health
+            Node(package="colman_bringup", executable="stack_health", output="screen"),
             # Perception
             Node(
                 package="colman_perception",
                 executable="camera_publisher",
                 output="screen",
+                respawn=True,
+                respawn_delay=2.0,
             ),
             include("colman_bringup", "launch", "apriltag.launch.py"),
             include("colman_bringup", "launch", "overhead.launch.py"),
             # Motion server, after the driver has had time to come up
             TimerAction(
                 period=10.0,
-                actions=[
-                    include(
-                        "colman_motion",
-                        "launch",
-                        "motion_server.launch.py",
-                        gripper_type="vacuum",
+                actions=supervise(
+                    "motion_server",
+                    lambda: [
+                        include(
+                            "colman_motion",
+                            "launch",
+                            "motion_server.launch.py",
+                            gripper_type="vacuum",
+                        )
+                    ],
+                ),
+            ),
+            # Voice
+            *supervise(
+                "kokoro_tts",
+                lambda: [
+                    Node(
+                        package="colman_audio_output",
+                        executable="kokoro_tts",
+                        output="screen",
                     )
                 ],
             ),
-            # Voice
-            Node(
-                package="colman_audio_output", executable="kokoro_tts", output="screen"
+            *supervise(
+                "speech_to_text",
+                lambda: [
+                    Node(
+                        package="colman_audio_input",
+                        executable="speech_to_text",
+                        output="screen",
+                        # sounddevice index of the TONOR USB mic; the built-in input
+                        # doesn't support 16 kHz. Indices can shift if USB audio
+                        # devices are replugged.
+                        parameters=[{"input_device": 10}],
+                    )
+                ],
             ),
-            Node(
-                package="colman_audio_input",
-                executable="speech_to_text",
-                output="screen",
-                # sounddevice index of the TONOR USB mic; the built-in input
-                # doesn't support 16 kHz. Indices can shift if USB audio
-                # devices are replugged.
-                parameters=[{"input_device": 10}],
-            ),
-            Node(
-                package="colman_llm",
-                executable="llm_node",
-                output="screen",
-                parameters=[{"dry_run": dry_run}],
+            *supervise(
+                "llm_node",
+                lambda: [
+                    Node(
+                        package="colman_llm",
+                        executable="llm_node",
+                        output="screen",
+                        parameters=[{"dry_run": dry_run}],
+                    )
+                ],
             ),
         ]
     )
