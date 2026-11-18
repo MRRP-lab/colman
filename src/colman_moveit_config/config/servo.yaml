@@ -1,0 +1,54 @@
+# MoveIt Servo parameters for the cube follower (moveit_servo 2.12, Jazzy).
+# Passed to servo_node under the `moveit_servo` namespace by colman_motion's
+# follow.launch.py. Key names follow moveit_servo's own servo_parameters.yaml.
+#
+# Servo moves the tip link of the ur_arm group (tool0) and takes the planning frame
+# from the robot model (base_link); neither is a parameter. The follower converts its
+# camera twist to the tool0 point.
+move_group_name: ur_arm
+# The motion server owns the planning scene (it adds the table); Servo reads it.
+is_primary_planning_scene_monitor: false
+monitored_planning_scene_topic: /monitored_planning_scene
+
+command_in_type: speed_units   # m/s and rad/s
+scale:
+  linear: 0.3
+  rotational: 0.5
+  joint: 0.5
+# Twist angular velocities turn the arm about tool0 (the follower accounts for it).
+apply_twist_commands_about_ee_frame: true
+
+publish_period: 0.02
+max_expected_latency: 0.1
+incoming_command_timeout: 0.2   # drops commands older than this
+
+# The real arm's controller. In Gazebo it is /ur_arm_controller/joint_trajectory.
+command_out_topic: /scaled_joint_trajectory_controller/joint_trajectory
+command_out_type: trajectory_msgs/JointTrajectory
+publish_joint_positions: true
+publish_joint_velocities: false
+publish_joint_accelerations: false
+
+cartesian_command_in_topic: ~/delta_twist_cmds
+joint_command_in_topic: ~/delta_joint_cmds
+pose_command_in_topic: ~/pose_target_cmds
+joint_topic: /joint_states
+status_topic: ~/status
+check_collisions: true
+collision_check_rate: 10.0
+self_collision_proximity_threshold: 0.01
+scene_collision_proximity_threshold: 0.02
+
+# Slow down near singularities and stop before them.
+# Servo's stock 17/30 stop the UR3e in ordinary bent poses (the Jacobian mixes metres
+# and radians), so the arm froze with HALT_FOR_SINGULARITY.
+lower_singularity_threshold: 50.0
+hard_stop_singularity_threshold: 100.0
+leaving_singularity_threshold_multiplier: 2.0
+joint_limit_margins: [0.1]
+# Only stop the joints that are heading into a limit, not the whole arm, so the rest
+# keeps tracking while the follower steers the limited joint back.
+halt_all_joints_in_cartesian_mode: false
+halt_all_joints_in_joint_mode: false
+use_smoothing: true
+smoothing_filter_plugin_name: online_signal_smoothing::ButterworthFilterPlugin

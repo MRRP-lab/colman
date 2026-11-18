@@ -14,6 +14,7 @@ setup(
             [
                 "colman_motion/motion_server.launch.py",
                 "colman_motion/demo.launch.py",
+                "colman_motion/follow.launch.py",
             ],
         ),
     ],
@@ -37,6 +38,7 @@ setup(
             "demo_circle = colman_motion.demo_circle:main",
             "demo_obstacle = colman_motion.demo_obstacle:main",
             "eye_in_hand = colman_motion.eye_in_hand:main",
+            "cube_follower = colman_motion.cube_follower:main",
         ],
     },
 )

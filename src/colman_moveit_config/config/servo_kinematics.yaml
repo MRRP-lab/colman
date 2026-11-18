@@ -1,0 +1,9 @@
+# Inverse kinematics for MoveIt Servo only (the motion server keeps TRAC-IK).
+# Servo takes a small step from the current joints on every cycle. TRAC-IK finds no
+# solution from singular poses such as the arm's HOME pose (error -31); KDL
+# continues from the seed and so can move the arm out of them.
+ur_arm:
+  kinematics_solver: kdl_kinematics_plugin/KDLKinematicsPlugin
+  kinematics_solver_search_resolution: 0.005
+  kinematics_solver_timeout: 0.005
+  kinematics_solver_attempts: 1
