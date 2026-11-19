@@ -5,7 +5,7 @@ apriltag_overhead:
   ros__parameters:
     image_transport: raw
     family: 36h11
-    size: 0.039
+    size: 0.0392  # the black square of the cube tags measures 39.2 mm
     max_hamming: 0
     detector:
       threads: 2
@@ -18,4 +18,4 @@ apriltag_overhead:
     tag:
       ids:    [1, 2, 3, 4, 5, 6, 7, 8]
       frames: ["ovh_tag_1", "ovh_tag_2", "ovh_tag_3", "ovh_tag_4", "ovh_tag_5", "ovh_tag_6", "ovh_tag_7", "ovh_tag_8"]
-      sizes:  [0.039, 0.039, 0.039, 0.039, 0.039, 0.039, 0.039, 0.039]
+      sizes:  [0.0392, 0.0392, 0.0392, 0.0392, 0.0392, 0.0392, 0.0392, 0.0392]

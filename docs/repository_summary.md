@@ -145,9 +145,9 @@ The relevant code is in:
 AprilTag detection is provided by the external `apriltag_ros` package. The AprilTag launch file remaps the camera input:
 
 - `apriltag.launch.py`: takes `camera:=wrist` (default, node `apriltag`, `apriltag.yaml`, `/oakd_pro` topics) or `camera:=overhead` (node `apriltag_overhead`, `apriltag_overhead.yaml`, `/overhead` topics)
-- `overhead.launch.py` (`pixi run overhead`): runs `camera_publisher` with `camera:=overhead` at 1080p, publishes the `base_link` to `overhead_camera_optical_frame` static transform from `colman_perception/config/overhead_camera_pose_in_base_link.yaml` (the merged calibration), and starts the overhead detector. Its tags are named `ovh_tag_N`. At 1.8 m a 39 mm tag is about 30 px wide at 1080p; all eight tags are detected.
+- `overhead.launch.py` (`pixi run overhead`): runs `camera_publisher` with `camera:=overhead` at 1080p, publishes the `base_link` to `overhead_camera_optical_frame` static transform from `colman_perception/config/overhead_camera_pose_in_base_link.yaml` (the merged calibration), and starts the overhead detector. Its tags are named `ovh_tag_N`. At 1.8 m a 39.2 mm tag is about 30 px wide at 1080p; all eight tags are detected.
 
-The detector config (`colman_perception/config/apriltag.yaml`) registers tag IDs 1 to 8 at 39 mm. The motion code finds objects by TF frame names such as:
+The detector config (`colman_perception/config/apriltag.yaml`) registers tag IDs 1 to 8 at 39.2 mm. The motion code finds objects by TF frame names such as:
 
 ```text
 tag_1   white cube 1 (base of the white stack)
