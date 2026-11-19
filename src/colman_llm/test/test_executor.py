@@ -2,6 +2,7 @@ import logging
 
 import pytest
 from colman_llm.executor import FakeExecutor, PickAndPlaceExecutor
+from colman_llm.fake_arm import FakeArm
 
 LOG = logging.getLogger("test")
 GOOD = {"object": "white cube 3", "destination": "white cube 2"}
@@ -37,17 +38,8 @@ def test_unknown_tool_is_rejected():
 
 
 def make_executor(pick=(True, "picked"), place=(True, "placed")):
-    calls = []
-
-    def do_pick(frame):
-        calls.append(("pick", frame))
-        return pick
-
-    def do_place(frame):
-        calls.append(("place", frame))
-        return place
-
-    return PickAndPlaceExecutor(do_pick, do_place, LOG), calls
+    arm = FakeArm(LOG, [pick], [place])
+    return arm.executor(), arm.calls
 
 
 def test_pick_then_place_with_mapped_frames():
@@ -86,9 +78,12 @@ def test_second_pick_and_place_while_busy_is_rejected():
     def pick(frame):
         # A second call arrives while the first is still picking.
         holder["second"] = holder["executor"].run_tool("pick_and_place", GOOD)
-        return True, "picked"
+        return arm.do_pick(frame)
 
-    holder["executor"] = PickAndPlaceExecutor(pick, lambda f: (True, "ok"), LOG)
+    arm = FakeArm(LOG)
+    holder["executor"] = PickAndPlaceExecutor(
+        pick, arm.do_place, LOG, arm.world.view, sleep=lambda s: None
+    )
     ok, _ = holder["executor"].run_tool("pick_and_place", GOOD)
     assert ok
     second_ok, second_message = holder["second"]
@@ -106,10 +101,12 @@ def make_with_stop(stop=(True, "Stopped"), resume=(True, "Resumed")):
         calls.append("resume")
         return resume
 
+    arm = FakeArm(LOG)
     executor = PickAndPlaceExecutor(
-        lambda f: (True, "p"),
-        lambda f: (True, "p"),
+        arm.do_pick,
+        arm.do_place,
         LOG,
+        arm.world.view,
         stop=do_stop,
         resume=do_resume,
     )
@@ -142,8 +139,19 @@ def test_stop_works_while_a_pick_and_place_holds_the_lock():
         holder["stop"] = holder["executor"].run_tool("stop_robot", {})
         return True, "picked"
 
+    arm = FakeArm(LOG)
+
+    def pick_then_stop(frame):
+        pick(frame)
+        return arm.do_pick(frame)
+
     executor = PickAndPlaceExecutor(
-        pick, lambda f: (True, "ok"), LOG, stop=lambda: (True, "Stopped")
+        pick_then_stop,
+        arm.do_place,
+        LOG,
+        arm.world.view,
+        stop=lambda: (True, "Stopped"),
+        sleep=lambda s: None,
     )
     holder["executor"] = executor
     executor.run_tool("pick_and_place", GOOD)
@@ -158,19 +166,8 @@ def test_fake_executor_handles_stop_and_resume():
 
 def make_stacker(pick_results=None, place_results=None):
     """Executor whose pick and place results come from lists (default: success)."""
-    calls = []
-    picks = list(pick_results or [])
-    places = list(place_results or [])
-
-    def pick(frame):
-        calls.append(("pick", frame))
-        return picks.pop(0) if picks else (True, "ok")
-
-    def place(frame):
-        calls.append(("place", frame))
-        return places.pop(0) if places else (True, "ok")
-
-    return PickAndPlaceExecutor(pick, place, LOG), calls
+    arm = FakeArm(LOG, pick_results, place_results)
+    return arm.executor(), arm.calls
 
 
 def test_stack_three_white_cubes_builds_the_tower_in_order():
@@ -216,7 +213,10 @@ def test_failed_place_does_not_count_the_cube_as_stacked():
     executor, calls = make_stacker(place_results=[(False, "tag_1 not visible")])
     ok, message = executor.run_tool("stack_cube", {"color": "white", "count": 1})
     assert not ok and "0 on top" in message
-    # The retry targets the same cube and the same spot.
+    # The arm still holds the cube, so nothing else is picked until it is let go.
+    ok, message = executor.run_tool("stack_cube", {"color": "white", "count": 1})
+    assert not ok and "still holding" in message
+    executor.run_tool("release_cube", {})
     executor.run_tool("stack_cube", {"color": "white", "count": 1})
     assert calls[-2:] == [("pick", "tag_2"), ("place", "tag_1")]
 
