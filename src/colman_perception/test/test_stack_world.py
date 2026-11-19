@@ -493,3 +493,26 @@ def test_the_snapshot_says_why_a_move_was_or_was_not_carried():
     tall_stack(w)
     snap = w.settle({"tag_7": at(0.35, 0.05, 3)})
     assert any("carried tag_5, tag_6" in n and "not" not in n for n in snap.notes)
+
+
+def test_a_stack_pushed_far_keeps_its_cubes_while_its_top_has_no_settled_pose():
+    # The node's real order of events: the top is seen moving but is not settled, so it
+    # is in `fresh` and not in `settled`, and the carried cubes are alone at their spot.
+    m = StackModel(ALL)
+    stack = {
+        "tag_5": at(0.2, 0.0, 1),
+        "tag_6": at(0.2, 0.0, 2),
+        "tag_7": at(0.2, 0.0, 3),
+    }
+    m.update(1.0, stack, {"tag_7": stack["tag_7"]})
+    m.update(2.0, stack, {"tag_7": stack["tag_7"]})
+    settled = {t: p for t, p in stack.items() if t != "tag_7"}  # the top moved
+    first = m.update(3.0, settled, {"tag_7": at(0.35, 0.0, 3)})
+    assert set(first.relocated) == {"tag_5", "tag_6"}
+    settled.update(first.relocated)
+    second = m.update(4.0, settled, {"tag_7": at(0.7, 0.2, 3)})  # pushed much farther
+    assert set(second.relocated) == {"tag_5", "tag_6"}
+    settled.update(second.relocated)
+    for t in range(5, 60):  # the push has stopped, the top stays seen, nothing is lost
+        snap = m.update(float(t), settled, {"tag_7": at(0.7, 0.2, 3)})
+        assert snap.lost == []

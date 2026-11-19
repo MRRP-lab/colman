@@ -246,7 +246,10 @@ class StackModel:
             self.uncertain.update(under)
             carried.add(top)
             notes.append(f"{top} moved {moved_cm:.0f} cm, carried {', '.join(under)}")
-            del self.beneath[top]
+            # Keep following this top. While it is still being pushed it has no settled
+            # pose, so the carried cubes form a column with no top and nothing else
+            # would remember that they belong under it.
+            self.beneath[top] = (under, tuple(q[:2]), height, now_s)
         return relocated, carried
 
     def update_ghosts(self, now_s, columns, carried=()):
