@@ -1,3 +1,6 @@
+# Provenance note: the grid_data/ and colman-processing/ paths under `fit:` name the capture
+# folders used for the original fit. They are not kept in this repo (grid_data/ was removed);
+# the fit inputs that are kept are in camera_pose_calibration/data/.
 child_frame: overhead_camera_optical_frame
 fit:
   edges:

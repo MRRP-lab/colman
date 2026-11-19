@@ -30,7 +30,7 @@ solve-wrist-mount-from-hand-eye-samples = "python src/colman_motion/colman_motio
 capture-wrist-table-edge-views = "ros2 run colman_motion capture_wrist_table_edge_views"
 capture-wrist-views-of-touched-circles = "ros2 run colman_motion capture_wrist_views_of_touched_circles camera_pose_calibration/data/wrist_mount_check_with_touched_circle_views"
 score-wrist-mounts-against-touched-circles = "ros2 run colman_perception score_wrist_mounts_against_touched_circles camera_pose_calibration/data/wrist_mount_check_with_touched_circle_views"
-check-overhead-pose-against-touched-points = "ros2 run colman_perception check_overhead_pose_against_touched_points camera_pose_calibration/data/overhead_pose_from_touched_points/overhead_capture camera_pose_calibration/data/overhead_pose_from_touched_points/touched_points_set2_after_table_leg_fix.yaml camera_pose_calibration/results/overhead_camera_pose_in_base_link.yaml --pixels camera_pose_calibration/data/overhead_pose_from_touched_points/pixels.yaml"
+check-overhead-pose-against-touched-points = "ros2 run colman_perception check_overhead_pose_against_touched_points camera_pose_calibration/data/overhead_pose_from_touched_points/overhead_capture camera_pose_calibration/data/overhead_pose_from_touched_points/touched_points_set2_after_table_leg_fix.yaml camera_pose_calibration/results/overhead_camera_pose_in_base_link.yaml --pixels camera_pose_calibration/data/overhead_pose_from_touched_points/circle_centres_in_overhead_image.yaml"
 motion = "ros2 launch colman_motion motion_server.launch.py gripper_type:=vacuum"
 demo = "ros2 run colman_motion pick_and_place"
 demo-turns = "ros2 launch colman_motion demo.launch.py demo:=demo_turns"
