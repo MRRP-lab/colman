@@ -33,7 +33,10 @@ class WorldView:
 
     @classmethod
     def from_msg(cls, msg):
-        columns = [Column(list(s.tags), s.height, s.order_known) for s in msg.stacks]
+        columns = [
+            Column(list(s.tags), s.height, s.order_known, s.top_seen)
+            for s in msg.stacks
+        ]
         return cls(columns, msg.held, list(msg.missing))
 
     # ------------------------------------------------------------------ queries
@@ -95,6 +98,8 @@ class WorldView:
         own = self.column_of(cube)
         if own is None:
             return f"I can't see the {self.name_of(cube)}."
+        if not own.top_seen:
+            return f"I can't see the {self.name_of(cube)} right now."
         if own.tags[-1] != cube:
             above = own.tags[own.tags.index(cube) + 1]
             return (
@@ -104,6 +109,8 @@ class WorldView:
         dest = self.column_of(target)
         if dest is None:
             return f"I can't see the {self.name_of(target)}."
+        if not dest.top_seen:
+            return f"I can't see the top of the stack with the {self.name_of(target)}."
         if dest is own:
             return f"The {self.name_of(cube)} is already on the {self.name_of(target)}."
         if dest.tags[-1] != target:

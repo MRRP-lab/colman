@@ -8,7 +8,9 @@ from ament_index_python.packages import get_package_share_directory
 from geometry_msgs.msg import TransformStamped
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
+from sensor_msgs.msg import CameraInfo
 from tf2_ros import Buffer, TransformBroadcaster, TransformException, TransformListener
 from ur_msgs.msg import IOStates
 
@@ -35,6 +37,8 @@ STILL_S = 0.3
 RATE_HZ = 30.0
 IO_TOPIC = "/io_and_status_controller/io_states"
 WORLD_TOPIC = "/world_state"
+CAMERA_INFO_TOPIC = "/overhead/rgb/camera_info"
+CAMERA_ALIVE_S = 5.0  # the overhead camera counts as stopped after this long
 PUBLISH_EVERY = 3  # ticks of the update timer between /world_state messages
 VACUUM_PIN = 0
 
@@ -106,6 +110,10 @@ class WorldState(Node):
         self.model = StackModel(self.tag_frames)
         self.world_pub = self.create_publisher(WorldStateMsg, WORLD_TOPIC, 10)
         self.ticks = 0
+        self.camera_seen = None
+        self.create_subscription(
+            CameraInfo, CAMERA_INFO_TOPIC, self.on_camera, qos_profile_sensor_data
+        )
         self.create_subscription(IOStates, IO_TOPIC, self.on_io, 10)
         self.create_timer(1.0 / RATE_HZ, self.update)
         self.get_logger().info(f"world state tracking {', '.join(self.tag_frames)}")
@@ -161,6 +169,15 @@ class WorldState(Node):
         if seconds(samples[-1][0] - self.since[key]) < SETTLE_S:
             return position, None
         return position, (mean(samples), samples[-1][2])
+
+    def on_camera(self, msg):
+        self.camera_seen = self.get_clock().now()
+
+    def camera_alive(self, now):
+        return (
+            self.camera_seen is not None
+            and seconds(now - self.camera_seen) < CAMERA_ALIVE_S
+        )
 
     def on_io(self, msg):
         on = next(
@@ -268,11 +285,11 @@ class WorldState(Node):
     def arm_hides(self, tip):
         """True if (x, y) is within ARM_CLEAR_M of the line from the base to the tip."""
         if tip is None:
-            return lambda xy: True  # arm position unknown: do not call tags lost
+            return lambda xy: False  # no robot model, so no arm in the way
         ax, ay = tip[:2]
         length = ax * ax + ay * ay
         if length < 1e-9:
-            return lambda xy: True
+            return lambda xy: False
 
         def hides(xy):
             along = max(0.0, min(1.0, (xy[0] * ax + xy[1] * ay) / length))
@@ -284,6 +301,7 @@ class WorldState(Node):
         msg = WorldStateMsg()
         msg.stamp = now.to_msg()
         msg.held = self.held[0] if self.held is not None else ""
+        msg.stale = snapshot.stale
         msg.missing = list(snapshot.missing)
         for column in snapshot.columns:
             stack = WorldStack()
@@ -291,6 +309,7 @@ class WorldState(Node):
             stack.position.x, stack.position.y = column.position
             stack.height = column.height
             stack.order_known = column.order_known
+            stack.top_seen = column.top_seen
             msg.stacks.append(stack)
         self.world_pub.publish(msg)
 
@@ -313,7 +332,14 @@ class WorldState(Node):
         tip = self.lookup(TIP_FRAME)
         hides = self.arm_hides(position_of(tip) if tip is not None else None)
         held = self.held[0] if self.held is not None else None
-        snapshot = self.model.update(now.nanoseconds / 1e9, settled, fresh, held, hides)
+        snapshot = self.model.update(
+            now.nanoseconds / 1e9,
+            settled,
+            fresh,
+            held,
+            hides,
+            self.camera_alive(now),
+        )
         for tag_frame in snapshot.lost:
             self.get_logger().warn(f"{tag_frame}: lost, not seen and not covered")
             self.belief.pop(tag_frame, None)

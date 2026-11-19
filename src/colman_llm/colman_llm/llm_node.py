@@ -92,7 +92,9 @@ class LlmNode(Node):
     def _world(self):
         """The latest world_state as a WorldView, or None if it is missing or stale."""
         msg = self._world_msg
-        if msg is None or time.monotonic() - self._world_at > WORLD_STALE_S:
+        if msg is None or msg.stale:
+            return None
+        if time.monotonic() - self._world_at > WORLD_STALE_S:
             return None
         return WorldView.from_msg(msg)
 

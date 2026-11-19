@@ -173,3 +173,30 @@ def test_describe_says_when_the_order_is_uncertain():
 def test_describe_lists_cubes_it_cannot_see():
     text = table(col("tag_1"), missing=["tag_2"]).describe()
     assert "I can't see: white cube 2" in text
+
+
+def test_a_cube_in_a_column_with_no_visible_top_cannot_be_picked_or_placed_on():
+    hidden = col("tag_1", top_seen=False)
+    view = table(hidden, col("tag_2"), col("tag_3"))
+    assert "can't see the white cube 2" not in (view.check_move("tag_2", "tag_3") or "")
+    assert "can't see the top of the stack" in view.check_move("tag_2", "tag_1")
+    view = table(col("tag_1"), Column(["tag_2"], 1, True, False), col("tag_3"))
+    assert "can't see the white cube 2 right now" in view.check_move("tag_2", "tag_3")
+
+
+def test_a_stack_with_no_visible_top_is_not_a_target():
+    view = table(
+        Column(["tag_1", UNKNOWN], 2, False, False), col("tag_2"), col("tag_3")
+    )
+    target, reason = view.target_of("white")
+    assert target is None and "can't see the top" in reason
+
+
+def test_from_msg_carries_the_visibility_of_the_top():
+    from types import SimpleNamespace
+
+    stack = SimpleNamespace(
+        tags=["tag_1", "tag_2"], height=2, order_known=True, top_seen=False
+    )
+    view = WorldView.from_msg(SimpleNamespace(stacks=[stack], held="", missing=[]))
+    assert view.columns[0].top_seen is False

@@ -14,7 +14,8 @@ from dataclasses import dataclass, field
 CUBE_M = 0.05  # a cube is 5 cm, so a tag on the top of level n is n * CUBE_M high
 XY_TOL_M = 0.03  # tags closer than this in x, y are in the same column
 COVER_M = 0.035  # a tag this much higher over another covers it
-LOST_S = 2.0  # how long a tag may vanish with no explanation before it is lost
+LOST_S = 5.0  # how long a tag may vanish with no explanation before it is lost
+GHOST_S = 15.0  # how long a stack whose top was removed is kept while its tag is unseen
 ARM_CLEAR_M = 0.12  # the arm hides the table within this of its base-to-tip line
 UNKNOWN = "unknown"
 
@@ -41,6 +42,7 @@ class Snapshot:
     columns: list = field(default_factory=list)
     missing: list = field(default_factory=list)
     lost: list = field(default_factory=list)  # tags whose remembered pose is stale
+    stale: bool = False  # the camera is not delivering images, so nothing here is new
 
     def column_of(self, tag):
         return next((c for c in self.columns if tag in c.tags), None)
@@ -59,10 +61,22 @@ def clusters(poses):
     return groups
 
 
+@dataclass
+class Ghost:
+    """What is left of a stack when its top cube was removed and nothing is seen yet."""
+
+    tags: list
+    position: tuple
+    height: int
+    since: float
+
+
 class StackModel:
     def __init__(self, all_tags):
         self.all_tags = list(all_tags)
         self.unexplained = {}  # tag -> when it first vanished with no explanation
+        self.ghosts = []
+        self.last_columns = []
 
     def covered(self, tag, pos, visible):
         return any(
@@ -70,15 +84,29 @@ class StackModel:
             for other, p in visible.items()
         )
 
-    def update(self, now_s, settled, fresh, held=None, arm_hides=lambda xy: False):
+    def update(
+        self,
+        now_s,
+        settled,
+        fresh,
+        held=None,
+        arm_hides=lambda xy: False,
+        camera_alive=True,
+    ):
         """settled: tag -> (x, y, z) believed pose (seen or remembered).
         fresh: tag -> pose of tags the cameras see right now.
         held: the tag the arm is holding. arm_hides(xy): True if the arm is in the way.
+        camera_alive: False while the overhead camera is not delivering images. Then
+        nothing is learned from a missing tag, and the snapshot is marked stale.
         """
         beliefs = {t: p for t, p in settled.items() if t != held}
         visible = {t: p for t, p in fresh.items() if t != held}
         lost = []
+        if not camera_alive:
+            self.unexplained.clear()
         for tag, pos in beliefs.items():
+            if not camera_alive:
+                break
             if tag in visible:
                 self.unexplained.pop(tag, None)
             elif self.covered(tag, pos, visible) or arm_hides(pos[:2]):
@@ -97,10 +125,38 @@ class StackModel:
             column, dropped = self.column(group, members, visible)
             lost += dropped
             columns.append(column)
+        if camera_alive:
+            self.update_ghosts(now_s, columns)
+        self.last_columns = list(columns)
+        columns += [
+            Column(g.tags, g.position, g.height, False, False) for g in self.ghosts
+        ]
         columns.sort(key=lambda c: c.position)
         placed = {t for c in columns for t in c.tags}
         missing = [t for t in self.all_tags if t not in placed and t != held]
-        return Snapshot(columns, missing, lost)
+        return Snapshot(columns, missing, lost, not camera_alive)
+
+    def update_ghosts(self, now_s, columns):
+        """Keep a stack whose top was removed until its next cube is seen."""
+
+        def near(a, others):
+            return any(xy_gap(a, o) <= XY_TOL_M for o in others)
+
+        positions = [c.position for c in columns]
+        for prev in self.last_columns:
+            if (
+                prev.top_seen
+                and prev.height >= 2
+                and not near(prev.position, positions)
+            ):
+                if not near(prev.position, [g.position for g in self.ghosts]):
+                    tags = prev.tags[:-1]
+                    self.ghosts.append(Ghost(tags, prev.position, len(tags), now_s))
+        self.ghosts = [
+            g
+            for g in self.ghosts
+            if now_s - g.since < GHOST_S and not near(g.position, positions)
+        ]
 
     def column(self, group, members, visible):
         seen = [t for t in group if t in visible]

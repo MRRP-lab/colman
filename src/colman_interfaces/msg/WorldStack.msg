@@ -5,3 +5,6 @@ geometry_msgs/Point position
 uint8 height
 # False when any cube in the column is "unknown" or the order was not watched.
 bool order_known
+# False while the top tag is not visible: hidden by the arm, or the top cube was removed
+# and the cube under it has not been seen yet. Do not place on such a column.
+bool top_seen
