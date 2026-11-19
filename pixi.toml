@@ -39,7 +39,6 @@ llm = "ros2 run colman_llm llm_node"
 stack = "ros2 launch colman_bringup stack.launch.py"
 stack-dry = "ros2 launch colman_bringup stack.launch.py dry_run:=true driver:=false"
 
-kill-all = "bash scripts/kill_all.sh"
 stop = "ros2 service call /stop std_srvs/srv/Trigger"
 resume = "ros2 service call /resume std_srvs/srv/Trigger"
 build = "colcon build --symlink-install --base-paths src"
