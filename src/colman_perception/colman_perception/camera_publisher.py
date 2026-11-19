@@ -11,6 +11,13 @@ from colman_perception.camera_names import device_info
 
 CONTINUOUS_AF = dai.CameraControl.AutoFocusMode.CONTINUOUS_VIDEO
 
+# Cameras whose focus is locked at this lens position (0 to 255) instead of running
+# autofocus. The overhead camera works out a tag's height from how big the tag looks,
+# and continuous autofocus changes the image scale, so every tag's height jumped by
+# centimetres together whenever a hand moved over the table. 118 is where its
+# autofocus settles on the table.
+LOCKED_LENS_POSITION = {"overhead": 118}
+
 # How often to retry while no camera is connected.
 RECONNECT_S = 2.0
 
@@ -85,7 +92,10 @@ class CameraPublisher(Node):
         cam = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
         # Autofocus and autoexposure are set explicitly, so they never depend on the
         # camera's defaults. Both keep adjusting as the arm moves and the view changes.
-        cam.initialControl.setAutoFocusMode(CONTINUOUS_AF)
+        if self.camera in LOCKED_LENS_POSITION:
+            cam.initialControl.setManualFocus(LOCKED_LENS_POSITION[self.camera])
+        else:
+            cam.initialControl.setAutoFocusMode(CONTINUOUS_AF)
         cam.initialControl.setAutoExposureEnable()
         control_queue = cam.inputControl.createInputQueue()
         out = cam.requestOutput(self.size, enableUndistortion=True, fps=self.fps)
@@ -141,8 +151,11 @@ class CameraPublisher(Node):
             response.message = f"{self.camera} camera is not connected"
             return response
         ctrl = dai.CameraControl()
-        ctrl.setAutoFocusMode(CONTINUOUS_AF)
-        ctrl.setAutoFocusTrigger()
+        if self.camera in LOCKED_LENS_POSITION:
+            ctrl.setManualFocus(LOCKED_LENS_POSITION[self.camera])
+        else:
+            ctrl.setAutoFocusMode(CONTINUOUS_AF)
+            ctrl.setAutoFocusTrigger()
         ctrl.setAutoExposureEnable()
         try:
             self.control_queue.send(ctrl)

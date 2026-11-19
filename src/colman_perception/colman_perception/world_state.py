@@ -5,12 +5,11 @@ from pathlib import Path
 import rclpy
 import yaml
 from ament_index_python.packages import get_package_share_directory
+from apriltag_msgs.msg import AprilTagDetectionArray
 from geometry_msgs.msg import TransformStamped
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
-from sensor_msgs.msg import CameraInfo
 from tf2_ros import Buffer, TransformBroadcaster, TransformException, TransformListener
 from ur_msgs.msg import IOStates
 
@@ -37,8 +36,9 @@ STILL_S = 0.3
 RATE_HZ = 30.0
 IO_TOPIC = "/io_and_status_controller/io_states"
 WORLD_TOPIC = "/world_state"
-CAMERA_INFO_TOPIC = "/overhead/rgb/camera_info"
-CAMERA_ALIVE_S = 5.0  # the overhead camera counts as stopped after this long
+DETECTIONS_TOPIC = "/detections"
+OVERHEAD_FRAME_HINT = "overhead"  # the frame_id of the overhead detector's output
+CAMERA_ALIVE_S = 5.0  # the overhead detector counts as stopped after this long
 PUBLISH_EVERY = 3  # ticks of the update timer between /world_state messages
 VACUUM_PIN = 0
 
@@ -111,8 +111,10 @@ class WorldState(Node):
         self.world_pub = self.create_publisher(WorldStateMsg, WORLD_TOPIC, 10)
         self.ticks = 0
         self.camera_seen = None
+        # The detector publishes an array for every image it processes, even an empty
+        # one, so these arriving means the camera and detector are both running.
         self.create_subscription(
-            CameraInfo, CAMERA_INFO_TOPIC, self.on_camera, qos_profile_sensor_data
+            AprilTagDetectionArray, DETECTIONS_TOPIC, self.on_detections, 10
         )
         self.create_subscription(IOStates, IO_TOPIC, self.on_io, 10)
         self.create_timer(1.0 / RATE_HZ, self.update)
@@ -170,8 +172,9 @@ class WorldState(Node):
             return position, None
         return position, (mean(samples), samples[-1][2])
 
-    def on_camera(self, msg):
-        self.camera_seen = self.get_clock().now()
+    def on_detections(self, msg):
+        if OVERHEAD_FRAME_HINT in msg.header.frame_id:
+            self.camera_seen = self.get_clock().now()
 
     def camera_alive(self, now):
         return (
