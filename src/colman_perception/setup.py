@@ -33,6 +33,9 @@ setup(
             "detection = colman_perception.detection:main",
             "camera_info_republisher = colman_perception.camera_info_republisher:main",
             "camera_publisher = colman_perception.camera_publisher:main",
+            "list_cameras = colman_perception.camera_names:main",
+            "print_tags = colman_perception.print_tags:main",
+            "world_state = colman_perception.world_state:main",
         ],
     },
 )

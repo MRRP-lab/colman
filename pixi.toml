@@ -23,7 +23,8 @@ sim-calibration = "ros2 launch colman_bringup colman.launch.py sim:=true depth:=
 mock = "ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur3e robot_ip:=0.0.0.0 use_mock_hardware:=true launch_dashboard_client:=false description_launchfile:=$(ros2 pkg prefix colman_bringup)/share/colman_bringup/launch/rsp.launch.py"
 driver = "ros2 run colman_bringup driver_supervisor --ros-args -p robot_ip:=192.168.56.101"
 
-detect = "ros2 run colman_perception camera_publisher & ros2 launch colman_bringup apriltag.launch.py"
+detect = "ros2 run colman_perception camera_publisher & ros2 run colman_perception world_state & ros2 launch colman_bringup apriltag.launch.py"
+overhead = "ros2 launch colman_bringup overhead.launch.py"
 calibrate = "ros2 run colman_motion eye_in_hand"
 solve = "python src/colman_motion/colman_motion/hand_eye_solve.py"
 motion = "ros2 launch colman_motion motion_server.launch.py gripper_type:=vacuum"
@@ -31,9 +32,14 @@ demo = "ros2 run colman_motion pick_and_place"
 demo-turns = "ros2 launch colman_motion demo.launch.py demo:=demo_turns"
 demo-choose = "ros2 launch colman_motion demo.launch.py demo:=demo_choose"
 demo-circle = "ros2 launch colman_motion demo.launch.py demo:=demo_circle"
+demo-obstacle = "ros2 launch colman_motion demo.launch.py demo:=demo_obstacle"
 
 speak = "ros2 run colman_audio_output kokoro_tts"
+llm = "ros2 run colman_llm llm_node"
+stack = "ros2 launch colman_bringup stack.launch.py"
+stack-dry = "ros2 launch colman_bringup stack.launch.py dry_run:=true driver:=false"
 
+kill-all = "bash scripts/kill_all.sh"
 stop = "ros2 service call /stop std_srvs/srv/Trigger"
 resume = "ros2 service call /resume std_srvs/srv/Trigger"
 build = "colcon build --symlink-install --base-paths src"
@@ -45,6 +51,7 @@ graph = "rqt_graph"
 
 fmt  = "ruff format src/"
 lint = "ruff check --fix src/"
+test-integration = "pytest -v -s --basetemp=build/integration_logs src/colman_motion/test/integration"
 clean = "rm -rf build install log"
 
 [activation.env]
@@ -93,4 +100,4 @@ onnxruntime-gpu = ">=1.20"
 silero-vad = ">=5"
 sounddevice = "*"
 huggingface_hub = "*"
-anthropic = ">=0.40"
+anthropic = ">=2.4.0, <3"

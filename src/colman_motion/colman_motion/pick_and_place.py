@@ -11,13 +11,12 @@ from rclpy.node import Node
 from rclpy.signals import SignalHandlerOptions
 from rclpy.utilities import remove_ros_args
 
-from colman_interfaces.action import MoveTo, Pick, Place
+from colman_interfaces.action import Pick, Place
 from colman_motion.patterns import PATTERNS
 from colman_motion.tag_lookup import TagLookup
 
 TAG_PATTERN = ["tag_1", "tag_3", "tag_5", "tag_6"]
 DEFAULT_PATTERN = "left_to_right"
-LOOK_POSE = "Look3"
 SERVER_WAIT_S = 10.0
 CANCEL_WAIT_S = 2.0
 SIGNALS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
@@ -37,7 +36,6 @@ def main():
     spin_thread = threading.Thread(target=executor.spin, daemon=True)
     spin_thread.start()
 
-    move_client = ActionClient(node, MoveTo, "move_to")
     pick_client = ActionClient(node, Pick, "pick")
     place_client = ActionClient(node, Place, "place")
 
@@ -83,16 +81,14 @@ def main():
             logger.error(f"Unknown pattern {pattern}")
             return
 
-        for client in (move_client, pick_client, place_client):
+        for client in (pick_client, place_client):
             if not client.wait_for_server(timeout_sec=SERVER_WAIT_S):
                 logger.error("Action servers not available")
                 return
 
-        response = run_goal(move_client, MoveTo.Goal(pose_name=LOOK_POSE))
-        if response is None or not response.result.success:
-            logger.error("Look move failed")
-            return
-
+        # Read each tag where it is seen, from the wrist camera if the arm happens to be
+        # looking at it and otherwise from the overhead one. Only the order of the
+        # tags is taken from these positions.
         tags = {}
         for tag_frame in TAG_PATTERN:
             tag_pose = tag.get_tag_pose(tag_frame)

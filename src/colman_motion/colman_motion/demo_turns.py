@@ -68,12 +68,10 @@ def main():
             old = None
             for tag_name in tag_pattern:
                 tag_frame = tag_name
-                if not arm.go_to_configured_pose("Look3", fast):
+                tag_pose = tag.get_tag_pose(tag_frame)
+                if tag_pose is None:
                     logger.warn("Stopping")
                     return
-                tag_pose = None
-                while tag_pose is None:
-                    tag_pose = tag.get_tag_pose(tag_frame)
 
                 tag_translation = tag_pose.translation
                 pick_translation = (
@@ -106,13 +104,10 @@ def main():
                 else:
                     tag_frame = old
 
-                    if not arm.go_to_configured_pose("Look3", fast):
+                    drop_pose = tag.get_tag_pose(tag_frame)
+                    if drop_pose is None:
                         logger.warn("Stopping")
                         return
-
-                    drop_pose = None
-                    while drop_pose is None:
-                        drop_pose = tag.get_tag_pose(tag_frame)
 
                     drop_off = (
                         drop_pose.translation.x,

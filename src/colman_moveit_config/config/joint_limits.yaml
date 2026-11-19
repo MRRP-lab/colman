@@ -20,11 +20,10 @@ joint_limits:
     has_position_limits: true
     has_velocity_limits: true
     max_effort: 56.0
-    # -270 to +45 degrees: the table (around -180) plus some slack either
-    # side, but less than a full turn so the arm can't wind its cables
-    # around the base.
-    min_position: -4.71238898038469
-    max_position:  0.7853981633974483
+    # +-360 degrees, the robot's own range: effectively no limit on the base joint.
+    # (The robot description reads this file, so the keys must stay numeric.)
+    min_position: -6.283185307179586
+    max_position: 6.283185307179586
     max_velocity:  3.141592653589793
   shoulder_lift_joint:
     # acceleration limits are not publicly available
@@ -34,8 +33,10 @@ joint_limits:
     has_position_limits: true
     has_velocity_limits: true
     max_effort: 54.0
-    min_position: -6.283185307179586
-    max_position:  6.283185307179586
+    # arm stays above the horizontal; the table is at base height, and
+    # the other half-range only holds mirrored IK solutions (upside down)
+    min_position: -3.141592653589793
+    max_position: 0.0
     max_velocity:  3.141592653589793
   elbow_joint:
     # acceleration limits are not publicly available
@@ -66,8 +67,10 @@ joint_limits:
     has_position_limits: true
     has_velocity_limits: true
     max_effort: 9.0
-    min_position: -6.283185307179586
-    max_position:  6.283185307179586
+    # wrist 1 stays between -270 and +90 degrees, always passing through 0, so the
+    # cables never wind past the neutral pose in either direction
+    min_position: -4.71238898038469
+    max_position: 1.5707963267948966
     max_velocity:  6.283185307179586
   wrist_2_joint:
     # acceleration limits are not publicly available
@@ -77,17 +80,21 @@ joint_limits:
     has_position_limits: true
     has_velocity_limits: true
     max_effort: 12.0
-    min_position: -6.283185307179586
-    max_position:  6.283185307179586
+    # wrist 2 stays within +-150 degrees, through 0
+    min_position: -2.6179938779914944
+    max_position: 2.6179938779914944
     max_velocity:  6.283185307179586
   wrist_3_joint:
     # acceleration limits are not publicly available
     has_acceleration_limits: true
     max_acceleration: 5.0
     has_effort_limits: true
-    has_position_limits: false
+    has_position_limits: true
     has_velocity_limits: true
     max_effort: 12.0
+    # wrist 3 stays between -90 and +90 degrees, through 0 (it does not spin)
+    min_position: -1.5707963267948966
+    max_position: 1.5707963267948966
     max_velocity:  6.283185307179586
 
   servotodrivegear:

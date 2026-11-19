@@ -1,0 +1,7 @@
+geometry_msgs/Pose pose
+bool slow
+---
+bool success
+string message
+---
+string stage

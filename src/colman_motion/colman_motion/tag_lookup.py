@@ -8,18 +8,8 @@ from tf2_ros import Buffer, TransformException, TransformListener
 BASE_FRAME = "base_link"
 TAG_FRAME = "tag_1"
 LOOKUP_TIMEOUT_S = 2.0
-TOLERANCE_M = 0.003
-WAIT_S = 1.0
-
-
-def within_tolerance(first, second, tol):
-    """
-    Checks that the tag hasn't moved past the specified threshold.
-    """
-    dx = abs(second.x - first.x)
-    dy = abs(second.y - first.y)
-    dz = abs(second.z - first.z)
-    return max(dx, dy, dz) < tol
+FRESH_WAIT_S = 0.5
+POLL_S = 0.02
 
 
 class TagLookup(Node):
@@ -28,7 +18,7 @@ class TagLookup(Node):
         self.buffer = Buffer()
         self.listener = TransformListener(self.buffer, self)
 
-    def lookup(self, tag_frame, base_frame):
+    def lookup(self, tag_frame, base_frame, timeout_s=LOOKUP_TIMEOUT_S):
         """
         Given the tag and the base of the arm,
         returns the latest transform between them, or None.
@@ -38,7 +28,7 @@ class TagLookup(Node):
                 base_frame,
                 tag_frame,
                 Time(),
-                Duration(seconds=LOOKUP_TIMEOUT_S),
+                Duration(seconds=timeout_s),
             )
         except TransformException:
             return None
@@ -49,23 +39,13 @@ class TagLookup(Node):
         or None while it is still moving or unseen.
         """
         first = self.lookup(tag_frame, base_frame)
-
         if first is None:
             return None
 
-        time.sleep(WAIT_S)
-
-        second = self.lookup(tag_frame, base_frame)
-        if second is None:
-            return None
-
-        if first.header.stamp == second.header.stamp:
-            return None
-
-        first_pos = first.transform.translation
-        second_pos = second.transform.translation
-
-        if not within_tolerance(first_pos, second_pos, TOLERANCE_M):
-            return None
-
-        return second.transform
+        deadline = time.monotonic() + FRESH_WAIT_S
+        while time.monotonic() < deadline:
+            time.sleep(POLL_S)
+            latest = self.lookup(tag_frame, base_frame, timeout_s=0.0)
+            if latest is not None and latest.header.stamp != first.header.stamp:
+                return latest.transform
+        return None

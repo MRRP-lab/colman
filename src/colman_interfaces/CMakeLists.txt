@@ -9,6 +9,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "action/Pick.action"
   "action/Place.action"
   "action/MoveTo.action"
+  "action/MovePose.action"
   DEPENDENCIES geometry_msgs
 )
 

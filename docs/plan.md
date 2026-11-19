@@ -6,10 +6,10 @@ Design for adding voice-driven control to the robot. For how the rest of the rep
 
 - `colman_audio_input` publishes recognized speech on `/speech_text` (`std_msgs/String`).
 - `colman_audio_output` subscribes to `llm_response` (`std_msgs/String`), speaks it locally with Kokoro-82M, and publishes `tts_speaking` (`std_msgs/Bool`, transient-local) while audio plays.
-- `colman_audio_input` on the `NVIDIA-Parakeet` branch is the Parakeet speech recognition node (`onnx-asr`, `silero-vad`, `sounddevice`, all in `pixi.toml`). It already mutes the microphone while `tts_speaking` is true plus a 600 ms tail (`mute_topic`, `mute_tail_ms` parameters), and `test/wav_file_check.py` runs it on a WAV file. That branch is not merged yet, and `main` still has the Azure node. Merge `NVIDIA-Parakeet` before the closed-loop test.
+- `colman_audio_input` is the Parakeet speech recognition node (`onnx-asr`, `silero-vad`, `sounddevice`, all in `pixi.toml`), merged from `NVIDIA-Parakeet`. It mutes the microphone while `tts_speaking` is true plus a 600 ms tail (`mute_topic`, `mute_tail_ms` parameters), and `test/wav_file_check.py` runs it on a WAV file.
 - `colman_interfaces` and `colman_motion` provide `MoveTo`, `Pick` and `Place` actions on `/move_to`, `/pick` and `/place`, plus `std_srvs/Trigger` services `/stop` and `/resume`. Run the server with `pixi run motion`.
 - `colman_bringup` has a driver supervisor (`pixi run driver`) that recovers the UR arm in place.
-- There is no `colman_llm` package yet.
+- `colman_llm` exists. Steps 1 to 5 of Order of work are done: the node answers `/speech_text` through Claude, the `pick_and_place` tool sends `/pick` then `/place` goals, a spoken stop word calls `/stop` and cancels the active goal before anything is queued, and the `stop_robot` and `resume_robot` tools call `/stop` and `/resume`. A `dry_run` parameter swaps in a fake executor with canned results for use without an arm. The demo offers Claude `stack_cube`, `pick_and_place`, `go_to_pose`, `release_cube`, `report_state`, `stop_robot` and `resume_robot`; see Cube stacking demo.
 
 The `Pick` action takes a `frame` (for example `tag_3`) and reports a `stage` as feedback. The `Place` action takes a `location` frame and an optional `position`. Both return `success` and `message`.
 
@@ -57,7 +57,11 @@ src/colman_llm/
     llm_node.py        # ROS node: subscription, worker thread, publishing
     claude_client.py   # Anthropic SDK wrapper: one turn in, text or tool calls out
     tools.py           # tool schemas and allow-lists
-    executor.py        # validates a tool call and runs the ROS action
+    executor.py        # validates a tool call and runs it
+    action_call.py     # one blocking ROS action call, with cancel
+    service_call.py    # one blocking Trigger service call
+    stop_words.py      # whole-word stop/halt/freeze match
+    stack_state.py     # which cubes are stacked (held by the node, not by Claude)
   resource/colman_llm
   package.xml
   setup.py
@@ -120,25 +124,44 @@ PICK_AND_PLACE = {
 The enum values are human names. The node maps them to frames, so Claude never sees or sends a raw frame name:
 
 ```python
-# Placeholder tag names. Replace them when the real tags are named.
-OBJECT_FRAMES = {
-    "red block": "tag_3",
-    "blue block": "tag_5",
-}
+# The eight tagged cubes: tags 1 to 4 are white cubes 1 to 4, tags 5 to 8 blue cubes 1 to 4.
+# Cube 1 of each colour is a base and never moves.
+CUBE_NAMES = {"white cube 1": "tag_1", "white cube 2": "tag_2", ..., "blue cube 4": "tag_8"}
 
-DESTINATION_FRAMES = {
-    "left tray": "tag_1",
-    "right tray": "tag_6",
-}
+OBJECT_FRAMES = {n: f for n, f in CUBE_NAMES.items() if f not in BASE_FRAMES}  # 6 loose cubes
+DESTINATION_FRAMES = dict(CUBE_NAMES)                                           # any of the 8
+
+POSES = {"home": "home", "compact": "Compact"}
 ```
+
+`pick_and_place(object, destination)` picks one loose cube and places it on top of any cube. Claude never names a tag; the node maps the spoken names above to frames. The node also checks the move against `stack_state.py` before the arm moves, and refuses with a plain-language reason if the cube is a base, already has a cube on top, is already on the destination, or the destination is covered or already 3 cubes high.
 
 Even with `strict: true` the executor re-checks every value against these dicts before sending a goal, because the node is the safety boundary.
 
 Never let Claude supply arbitrary joint positions, Cartesian coordinates, ROS topic, service or action names, or code.
 
+The other tools:
+
+- `release_cube` calls `/release` (vacuum off) and takes no arguments. It is refused while the arm is busy moving. If the node believed the arm was holding a cube, that cube is recorded as loose on the table.
+- `go_to_pose(pose)` calls the `/move_to` action with one of the named poses in `POSES`. It is refused while the arm is busy or holding a cube. `Zero` is left out on purpose, and raw joint or Cartesian targets are never accepted.
+- `report_state` takes no arguments and never moves the arm. It reports the stacks, the loose cubes, what the node believes the arm is holding, and whether it is stopped. The stopped flag follows `stop_robot`, `resume_robot` and a spoken stop; a manual `pixi run resume` is not seen by the node.
+
 `stop_robot` calls `/stop` and takes no arguments. `resume_robot` calls `/resume` and takes no arguments. Both are added after `pick_and_place`, each in its own step. A spoken stop must always work (see Safety).
 
 Parse `tool_use.input` as already-decoded JSON from the SDK. Do not string-match the serialized form.
+
+## Cube stacking demo
+
+The demo uses tagged cubes. Tags 1 to 4 are white cubes and tags 5 to 8 are blue cubes. Cube 1 of each colour (`tag_1`, `tag_5`) is the base of that colour's stack and never moves. The other three are loose, and the detector config (`colman_perception/config/apriltag.yaml`) registers IDs 1 to 8 at 39 mm.
+
+Claude gets `stack_cube(color, count)` for building a stack, with `color` in `white` or `blue` and `count` from 1 to 3, and `pick_and_place`, `go_to_pose`, `release_cube`, `report_state`, `stop_robot` and `resume_robot` (see Tool definitions). The node, not Claude, decides which cube moves where:
+
+- `stack_state.py` keeps the stacks. The next loose cube of that colour is picked with `/pick`, and placed with `/place` on the top of the stack: the base for the first cube, then the previously placed cube. `/place` with a `location` already drops 50 mm above the tag, which is one cube height, so the cube lands on top of the cube carrying that tag.
+- A count above what fits stops when the stack is full and says so. A failed pick or place, or a spoken stop, ends the run and reports how many were stacked. A failed cube is not counted, so a retry targets the same cube and spot.
+- The state is in memory. Restarting the node resets it, so every run starts with empty stacks and loose cubes.
+- `pick_and_place` and `stack_cube` share one model of which cube sits on which, so a cube moved by one is where the other expects it. A cube left in the gripper after a failed place blocks every other arm tool until `release_cube`.
+
+If a place fails after a successful pick, the vacuum still holds the cube and the next pick fails with "Already holding". Release it with `ros2 service call /release std_srvs/srv/Trigger`.
 
 ## Pick and place: two actions, one tool
 
@@ -172,7 +195,7 @@ Details:
 
 ## Safety
 
-- **A spoken stop must interrupt a running action.** With a single blocking worker, "stop" would sit in the queue behind the pick-and-place it is meant to stop. Handle stop words in the subscription callback itself, before queueing. Match the whole words `stop`, `halt` and `freeze`, case-insensitive. This accepts false matches such as "don't stop at the red block", which is the safe direction. On a match, call `/stop`, cancel the active goal, drop the queue, and publish "Stopped." on `llm_response`. `stop_robot` also exists as a tool for stops phrased differently. A physical emergency stop remains the real safety mechanism. Voice stop is a convenience on top.
+- **A spoken stop must interrupt a running action.** With a single blocking worker, "stop" would sit in the queue behind the pick-and-place it is meant to stop. Handle stop words in the subscription callback itself, before queueing. Match the whole words `stop`, `halt` and `freeze`, case-insensitive. This accepts false matches such as "don't stop at the red block", which is the safe direction. On a match, call `/stop`, cancel the active goal, drop the queue, and publish "Stopped." on `llm_response`. The reply to any utterance that was in flight when the stop arrived is dropped, so the user hears only "Stopped.". The microphone is muted while the robot speaks, so a stop word spoken during "On it." is not heard; the physical emergency stop covers that gap. `stop_robot` also exists as a tool for stops phrased differently. A physical emergency stop remains the real safety mechanism. Voice stop is a convenience on top.
 - After `/stop` the server rejects goals until `/resume`. Resuming works both ways: spoken, through the `resume_robot` tool, and manual, with `pixi run resume`. The spoken reply to a rejected goal says the arm is stopped and must be resumed.
 - Speech is not ignored while the arm moves. Goals are serialized by the single worker, and a tool call while the arm reports busy returns a `tool_result` error with `is_error: true`.
 - Rate-limit tool calls (at most one pick-and-place at a time) and log each tool call with its validated arguments.
@@ -180,31 +203,31 @@ Details:
 
 ## Audio loop
 
-The output node uses its defaults: `stream` mode and the `af_heart` voice, with a bounded queue of 5.
+The output node uses its defaults: `stream` mode and the `am_echo` voice, with a bounded queue of 5.
 
-The microphone mute is already implemented in the Parakeet node on the `NVIDIA-Parakeet` branch (see Starting point). It subscribes to `tts_speaking` with transient-local QoS, so a late-starting mic node sees the current state. Merge that branch before the closed-loop test.
+The microphone mute is implemented in the Parakeet node (see Starting point). It subscribes to `tts_speaking` with transient-local QoS, so a late-starting mic node sees the current state.
 
 Before a long action starts, the worker publishes the acknowledgement "On it." as a separate `llm_response` message, so the user knows the command was heard.
 
 The speech loop:
 
 ```text
-User: "Pick up the red block and put it in the left tray."
+User: "Put white cube three on blue cube one."
     |
     v
 /speech_text
     |
     v
-Claude returns tool_use: pick_and_place(object="red block", destination="left tray")
+Claude returns tool_use: pick_and_place(object="white cube 3", destination="blue cube 1")
     |
     v
-node validates -> /pick tag_3 -> /place tag_1
+node validates -> /pick tag_3 -> /place tag_5
     |
     v
 Claude receives success/failure as tool_result
     |
     v
-/llm_response: "I picked up the red block and placed it in the left tray."
+/llm_response: "I picked up white cube 3 and placed it on blue cube 1."
     |
     v
 Kokoro speaks the response
@@ -222,14 +245,14 @@ Kokoro speaks the response
 1. Unit tests with a fake Anthropic client: plain reply, valid tool call, unknown object, malformed arguments, refusal, API error, tool loop cap.
 2. Unit tests for the executor with a fake action client: pick fails, pick succeeds then place fails, timeout, busy rejection.
 3. Simulation: run `colman_llm` with the motion server in Gazebo and publish text on `/speech_text` directly (`ros2 topic pub`), without the microphone.
-4. Closed loop with real audio, after `NVIDIA-Parakeet` is merged so the mic mute is present.
+4. Closed loop with real audio, using the Parakeet node and its mic mute.
 
 ## Order of work
 
-1. Scaffold `colman_llm` with a node that echoes `/speech_text` to `llm_response` through a Claude call with no tools. Include the `ANTHROPIC_API_KEY` check, `package.xml` with `python3-anthropic`, and a `pixi run llm` task.
-2. Add the `pick_and_place` tool with a fake executor that returns canned results.
-3. Wire the executor to `/pick` and `/place`.
-4. Add the spoken stop fast path and the `stop_robot` tool.
-5. Add the `resume_robot` tool.
-6. Merge `NVIDIA-Parakeet` for the microphone and its mute on `tts_speaking`.
+1. (Done) Scaffold `colman_llm` with a node that echoes `/speech_text` to `llm_response` through a Claude call with no tools. Include the `ANTHROPIC_API_KEY` check, `package.xml` with `python3-anthropic`, and a `pixi run llm` task.
+2. (Done) Add the `pick_and_place` tool with a fake executor that returns canned results.
+3. (Done) Wire the executor to `/pick` and `/place`.
+4. (Done) Add the spoken stop fast path and the `stop_robot` tool.
+5. (Done) Add the `resume_robot` tool.
+6. (Done) Check the microphone mute on `tts_speaking` in the closed loop. Parakeet is merged and mutes on `tts_speaking`. Checked live: with muting on, the robot's own sentence was not transcribed; with the mute topic pointed at an unused topic, the mic transcribed it.
 7. Tune the system prompt against a list of real spoken phrases.

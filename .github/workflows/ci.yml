@@ -45,5 +45,18 @@ jobs:
       - run: pixi run build
       # ruff (lint job) is the style checker; the ament flake8/pep257 template
       # tests disagree with its formatting, so skip them here.
-      - run: pixi run colcon test --event-handlers console_direct+ --pytest-args -k "not flake8 and not pep257"
+      - run: pixi run colcon test --event-handlers console_direct+ --pytest-args -k "not flake8 and not pep257 and not pick_place_sim"
       - run: pixi run colcon test-result --verbose
+      # Motion-level integration test: the real motion server and MoveIt against mock UR
+      # hardware and fake tags, in its own ROS domain on localhost. No Gazebo or display.
+      # It has its own step so a failure uploads the process logs.
+      - name: Integration test (mock hardware)
+        timeout-minutes: 20
+        run: pixi run test-integration
+      - name: Upload integration logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-logs
+          path: build/integration_logs
+          if-no-files-found: ignore
