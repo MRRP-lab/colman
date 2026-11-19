@@ -36,11 +36,15 @@ setup(
             "demo_choose = colman_motion.demo_choose:main",
             "demo_circle = colman_motion.demo_circle:main",
             "demo_obstacle = colman_motion.demo_obstacle:main",
-            "eye_in_hand = colman_motion.eye_in_hand:main",
-            # camera calibration, see calibration/README.md
-            "calib_sweep = colman_motion.calib_sweep:main",
-            "grid_sweep_wrist = colman_motion.grid_sweep_wrist:main",
-            "wrist_circle_sweep = colman_motion.wrist_circle_sweep:main",
+            "record_wrist_hand_eye_samples = "
+            "colman_motion.record_wrist_hand_eye_samples:main",
+            # fitting where the wrist and overhead cameras are,
+            # see camera_pose_calibration/README.md
+            "capture_wrist_table_edge_views = "
+            "colman_motion.capture_wrist_table_edge_views:main",
+            "capture_wrist_grid_views = colman_motion.capture_wrist_grid_views:main",
+            "capture_wrist_views_of_touched_circles = "
+            "colman_motion.capture_wrist_views_of_touched_circles:main",
         ],
     },
 )

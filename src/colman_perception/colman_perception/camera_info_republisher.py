@@ -47,9 +47,9 @@ class CameraInfoRepublisher(Node):
 
     def copy_msg(self, msg: CameraInfo) -> CameraInfo:
         """
-        :param msg: Incoming camera calibration message.
+        :param msg: Incoming CameraInfo message (the camera's factory lens intrinsics).
         :type msg: CameraInfo
-        :return: Copied and normalized camera calibration message.
+        :return: Copy of the CameraInfo message, normalized.
         :rtype: CameraInfo
 
         Copy a camera info message to edit and send as a stereo camera info message.
@@ -65,7 +65,7 @@ class CameraInfoRepublisher(Node):
 
     def left_cb(self, msg: CameraInfo):
         """
-        :param msg: Incoming left camera calibration message.
+        :param msg: Incoming left CameraInfo message (factory lens intrinsics).
         :type msg: CameraInfo
 
         Validates left camera info and publishes.
@@ -80,7 +80,7 @@ class CameraInfoRepublisher(Node):
 
     def right_cb(self, msg: CameraInfo):
         """
-        :param msg: Incoming right camera calibration message.
+        :param msg: Incoming right CameraInfo message (factory lens intrinsics).
         :type msg: CameraInfo
 
         Validates right camera info and publishes.

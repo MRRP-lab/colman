@@ -40,11 +40,12 @@ Common tasks:
 | `llm` | LLM node: `/speech_text` -> Claude -> `llm_response` (needs `ANTHROPIC_API_KEY`) |
 | `fmt`, `lint` | `ruff` format and check |
 
-## Camera calibration
+## Camera pose calibration (where each camera is)
 
-The wrist camera's mount and the overhead camera's pose are calibrated against points the
-arm touched. The results, the data and how to redo them are in
-[`calibration/README.md`](calibration/README.md).
+Where the wrist camera sits on the arm's tool flange (its mount) and where the overhead
+camera sits above the table (its pose in `base_link`) are fitted to points the arm touched.
+Lens distortion and focal length are not calibrated here. The results, the data and how to redo them are in
+[`camera_pose_calibration/README.md`](camera_pose_calibration/README.md).
 
 ## Voice
 
