@@ -12,6 +12,11 @@ from rclpy.time import Time
 from tf2_ros import Buffer, TransformBroadcaster, TransformException, TransformListener
 from ur_msgs.msg import IOStates
 
+from colman_interfaces.msg import WorldStack
+from colman_interfaces.msg import WorldState as WorldStateMsg
+from colman_perception.overhead_correction import correct_position
+from colman_perception.stack_world import ARM_CLEAR_M, StackModel
+
 BASE_FRAME = "base_link"
 TIP_FRAME = "vacuum_tip_link"
 WRIST_CAMERA_FRAME = "oakd_pro_camera_rgb_optical_frame_wrist"
@@ -29,6 +34,8 @@ STILL_M = 0.001
 STILL_S = 0.3
 RATE_HZ = 30.0
 IO_TOPIC = "/io_and_status_controller/io_states"
+WORLD_TOPIC = "/world_state"
+PUBLISH_EVERY = 3  # ticks of the update timer between /world_state messages
 VACUUM_PIN = 0
 
 
@@ -96,6 +103,9 @@ class WorldState(Node):
         self.camera_track = deque()
         self.held = None
         self.vacuum_on = None
+        self.model = StackModel(self.tag_frames)
+        self.world_pub = self.create_publisher(WorldStateMsg, WORLD_TOPIC, 10)
+        self.ticks = 0
         self.create_subscription(IOStates, IO_TOPIC, self.on_io, 10)
         self.create_timer(1.0 / RATE_HZ, self.update)
         self.get_logger().info(f"world state tracking {', '.join(self.tag_frames)}")
@@ -136,6 +146,8 @@ class WorldState(Node):
             return None, None
 
         position = position_of(transform)
+        if source == "overhead":
+            position = correct_position(position)
         samples = self.samples.setdefault(key, deque())
         if not samples or stamp > samples[-1][0]:
             if samples and moved(position, mean(samples), TOLERANCE_M):
@@ -213,7 +225,7 @@ class WorldState(Node):
 
     def track(self, tag_frame, now, wrist_usable):
         if self.held is not None and self.held[0] == tag_frame:
-            return "held", self.held_pose()
+            return "held", self.held_pose(), None
 
         usable = {"wrist": wrist_usable, "overhead": True}
         fresh = {}
@@ -225,20 +237,21 @@ class WorldState(Node):
         if settled["wrist"] is not None and settled["overhead"] is not None:
             self.check_disagreement(tag_frame, settled["wrist"], settled["overhead"])
 
+        seen = next((p for p in fresh.values() if p is not None), None)
         source = next((s for s in SOURCES if settled[s] is not None), None)
         if source is not None:
             self.belief[tag_frame] = settled[source]
-            return source, settled[source]
+            return source, settled[source], seen
 
         belief = self.belief.get(tag_frame)
         if belief is None:
-            return None, None
+            return None, None, seen
         if any(
             p is not None and math.dist(p, belief[0]) > MOVED_M for p in fresh.values()
         ):
             del self.belief[tag_frame]
-            return None, None
-        return "remembered", belief
+            return None, None, seen
+        return "remembered", belief, seen
 
     def publish(self, tag_frame, pose, now):
         position, rotation = pose
@@ -252,16 +265,68 @@ class WorldState(Node):
         r.x, r.y, r.z, r.w = rotation
         self.broadcaster.sendTransform(msg)
 
+    def arm_hides(self, tip):
+        """True if (x, y) is within ARM_CLEAR_M of the line from the base to the tip."""
+        if tip is None:
+            return lambda xy: True  # arm position unknown: do not call tags lost
+        ax, ay = tip[:2]
+        length = ax * ax + ay * ay
+        if length < 1e-9:
+            return lambda xy: True
+
+        def hides(xy):
+            along = max(0.0, min(1.0, (xy[0] * ax + xy[1] * ay) / length))
+            return math.hypot(xy[0] - along * ax, xy[1] - along * ay) < ARM_CLEAR_M
+
+        return hides
+
+    def publish_world(self, snapshot, now):
+        msg = WorldStateMsg()
+        msg.stamp = now.to_msg()
+        msg.held = self.held[0] if self.held is not None else ""
+        msg.missing = list(snapshot.missing)
+        for column in snapshot.columns:
+            stack = WorldStack()
+            stack.tags = list(column.tags)
+            stack.position.x, stack.position.y = column.position
+            stack.height = column.height
+            stack.order_known = column.order_known
+            msg.stacks.append(stack)
+        self.world_pub.publish(msg)
+
     def update(self):
         now = self.get_clock().now()
         wrist_usable = self.arm_still(now)
+        poses, settled, fresh = {}, {}, {}
         for tag_frame in self.tag_frames:
-            state, pose = self.track(tag_frame, now, wrist_usable)
+            state, pose, seen = self.track(tag_frame, now, wrist_usable)
             if state != self.state.get(tag_frame):
                 self.get_logger().info(f"{tag_frame}: {state or 'unknown'}")
                 self.state[tag_frame] = state
             if pose is not None:
-                self.publish(tag_frame, pose, now)
+                poses[tag_frame] = pose
+                if state != "held":
+                    settled[tag_frame] = pose[0]
+            if seen is not None:
+                fresh[tag_frame] = seen
+
+        tip = self.lookup(TIP_FRAME)
+        hides = self.arm_hides(position_of(tip) if tip is not None else None)
+        held = self.held[0] if self.held is not None else None
+        snapshot = self.model.update(now.nanoseconds / 1e9, settled, fresh, held, hides)
+        for tag_frame in snapshot.lost:
+            self.get_logger().warn(f"{tag_frame}: lost, not seen and not covered")
+            self.belief.pop(tag_frame, None)
+            for source in SOURCES:
+                self.forget((tag_frame, source))
+            self.state[tag_frame] = None
+            poses.pop(tag_frame, None)
+
+        for tag_frame, pose in poses.items():
+            self.publish(tag_frame, pose, now)
+        self.ticks += 1
+        if self.ticks % PUBLISH_EVERY == 0:
+            self.publish_world(snapshot, now)
 
 
 def main():
