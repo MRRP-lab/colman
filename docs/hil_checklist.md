@@ -32,9 +32,9 @@ Useful flags: `--skip STEP` (repeatable, e.g. `--skip driver_recovery`), `--tags
 
 | Step | Passes when |
 | --- | --- |
-| preflight | `/move_to`, `/pick`, `/place` servers and `/stop`, `/resume`, `/grasp`, `/release` services exist; something listens on `llm_response`; `/joint_states` and `/oakd_pro/rgb/image` publish; every `--tags` tag has a TF to `base_link`; `/release` (vacuum off) answers |
+| preflight | `/move_to`, `/pick`, `/place` servers and `/stop`, `/resume`, `/grasp`, `/release` services exist; something listens on `llm_response`; `/joint_states`, `/oakd_pro/rgb/image` and `/overhead/rgb/image` publish; every `--tags` tag has a TF to `base_link`; `/release` (vacuum off) answers |
 | home | `MoveTo home` succeeds |
-| scan | expected tags are visible with the arm at home |
+| check_tags | expected tags are visible with the arm at home |
 | pick | `Pick` of `--pick-tag` succeeds |
 | place | `Place` at `--place-tag` succeeds |
 | stop_mid_motion | `MoveTo` is accepted, `/stop` after `--stop-delay` ends the goal unsuccessfully, and a new goal is refused while stopped |
@@ -57,7 +57,7 @@ Compare step durations between runs: a step that slows down gradually (planning 
 
 ## Known failure signatures
 
-- `tag_N not visible` on scan or pick: overhead camera lost the tag, lighting, a cube moved, or the arm is not clear of the camera view at home.
+- `tag_N not visible` on check_tags or pick: overhead camera lost the tag, lighting, a cube moved, or the arm is not clear of the camera view at home.
 - `goal rejected` right after a stop: `/resume` was not called, or the server is still busy with an earlier goal.
 - `move completed despite /stop`: the stop came after the move finished (raise the target distance or lower `--stop-delay`), or `/stop` is not halting execution. Treat the second as a real bug.
 - `goal still running after /stop`: halting did not end the goal.

@@ -4,7 +4,7 @@
 Drives a running stack (``pixi run motion`` plus driver, detector and so on) through a
 fixed sequence over the normal ROS interfaces and records pass/fail per step:
 
-    preflight -> [home -> scan -> pick -> place -> stop_mid_motion -> resume
+    preflight -> [home -> check_tags -> pick -> place -> stop_mid_motion -> resume
                   -> pick_again -> place_again -> driver_recovery] x N cycles
 
 Usage (dry run first, it sends nothing):
@@ -39,7 +39,7 @@ GRASP_SERVICE = "/grasp"
 RELEASE_SERVICE = "/release"
 TTS_TOPIC = "llm_response"
 JOINT_STATES_TOPIC = "/joint_states"
-IMAGE_TOPICS = ["/oakd_pro/rgb/image"]
+IMAGE_TOPICS = ["/oakd_pro/rgb/image", "/overhead/rgb/image"]
 BASE_FRAME = "base_link"
 
 DEFAULT_TAGS = ["tag_1", "tag_2"]
@@ -51,7 +51,7 @@ DEFAULT_STOP_TARGET = "Compact"
 
 CYCLE_STEPS = [
     "home",
-    "scan",
+    "check_tags",
     "pick",
     "place",
     "stop_mid_motion",
@@ -237,7 +237,7 @@ class Runner:
     def step_home(self):
         return self.need(self.be.move_to(HOME_POSE, self.cfg.motion_timeout_s), "home")
 
-    def step_scan(self):
+    def step_check_tags(self):
         missing = [
             t
             for t in self.cfg.tags
@@ -314,7 +314,7 @@ class Runner:
     def run(self) -> list[StepResult]:
         steps = {
             "home": self.step_home,
-            "scan": self.step_scan,
+            "check_tags": self.step_check_tags,
             "pick": self.step_pick,
             "place": self.step_place,
             "stop_mid_motion": self.step_stop_mid_motion,
