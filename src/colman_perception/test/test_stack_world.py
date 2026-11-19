@@ -1,5 +1,6 @@
 from colman_perception.stack_world import (
     ARM_CLEAR_M,
+    ARM_HIDE_MAX_S,
     GHOST_S,
     LOST_S,
     UNKNOWN,
@@ -274,3 +275,73 @@ def test_a_short_dropout_does_not_lose_anything():
     assert snap.lost == []
     snap = w.settle({"tag_3": at(0.4, 0.2, 1), "tag_4": at(0.4, -0.2, 1)})
     assert snap.lost == [] and len(snap.columns) == 2
+
+
+# ----------------------------------------- slow covers, the arm, and stale memory
+def test_a_cube_covered_by_a_cube_that_takes_seconds_to_be_seen_is_not_lost():
+    w = World()
+    w.settle({"tag_1": at(0.4, 0.2, 1), "tag_5": at(0.2, -0.3, 1)})
+    # cube 2 is placed on cube 1, but its tag is not detected for 6 s
+    snap = w.settle({"tag_5": at(0.2, -0.3, 1)}, seconds=6.0)
+    assert snap.lost == []
+    snap = w.settle({"tag_5": at(0.2, -0.3, 1), "tag_2": at(0.4, 0.2, 2)})
+    assert snap.lost == []
+    assert snap.column_of("tag_1").tags == ["tag_1", "tag_2"]
+
+
+def test_a_cube_with_no_cover_arriving_is_lost_after_the_wait():
+    w = World()
+    w.settle({"tag_1": at(0.4, 0.2, 1), "tag_5": at(0.2, -0.3, 1)})
+    w.settle({"tag_5": at(0.2, -0.3, 1)})  # the timer starts when it is first missed
+    snap = w.settle({"tag_5": at(0.2, -0.3, 1)}, seconds=LOST_S + 1)
+    assert snap.lost == ["tag_1"]
+
+
+def test_a_covered_tag_is_remembered_for_as_long_as_its_cover_is_seen():
+    w = World()
+    stack = {"tag_1": at(0.4, 0.2, 1), "tag_2": at(0.4, 0.2, 2)}
+    w.settle(stack)
+    snap = w.settle({"tag_2": at(0.4, 0.2, 2)}, seconds=600.0)
+    assert snap.lost == []
+    assert snap.column_of("tag_1").tags == ["tag_1", "tag_2"]
+
+
+def test_the_arm_explains_a_missing_tag_only_for_a_limited_time():
+    w = World()
+    w.settle({"tag_3": at(0.4, 0.2, 1), "tag_5": at(0.2, -0.3, 1)})
+    arm = lambda xy: True  # noqa: E731
+    w.settle({"tag_5": at(0.2, -0.3, 1)}, arm=arm)  # the timer starts here
+    snap = w.settle({"tag_5": at(0.2, -0.3, 1)}, arm=arm, seconds=ARM_HIDE_MAX_S - 1)
+    assert snap.lost == []
+    snap = w.settle({"tag_5": at(0.2, -0.3, 1)}, arm=arm, seconds=2.0)
+    assert snap.lost == ["tag_3"]
+
+
+def test_a_cube_the_arm_stops_hiding_gets_the_normal_wait_afresh():
+    w = World()
+    w.settle({"tag_3": at(0.4, 0.2, 1), "tag_5": at(0.2, -0.3, 1)})
+    arm = lambda xy: True  # noqa: E731
+    w.settle({"tag_5": at(0.2, -0.3, 1)}, arm=arm, seconds=ARM_HIDE_MAX_S - 5)
+    snap = w.settle({"tag_5": at(0.2, -0.3, 1)}, seconds=LOST_S - 1)
+    assert snap.lost == []
+    snap = w.settle({"tag_5": at(0.2, -0.3, 1)}, seconds=LOST_S)
+    assert snap.lost == ["tag_3"]
+
+
+def test_no_unseen_cube_stays_remembered_forever_when_nothing_explains_it():
+    w = World()
+    w.settle({"tag_3": at(0.306, 0.14, 1), "tag_4": at(0.329, 0.049, 1)})
+    # cube 3 is moved while out of view, and cube 4 ends up near it, but not over it
+    w.take("tag_3")
+    w.settle({"tag_4": at(0.329, 0.049, 1)})
+    snap = w.settle({"tag_4": at(0.329, 0.049, 1)}, seconds=3600.0)
+    assert snap.column_of("tag_3") is None and "tag_3" in snap.missing
+
+
+def test_a_ghost_left_by_a_belief_the_node_kept_is_dropped_when_the_arm_is_unknown():
+    # with no joint states the node reports no arm, so nothing hides a tag
+    w = World()
+    w.settle({"tag_3": at(0.306, 0.14, 1), "tag_4": at(0.329, 0.049, 1)})
+    w.settle({"tag_4": at(0.329, 0.049, 1)})
+    snap = w.settle({"tag_4": at(0.329, 0.049, 1)}, seconds=LOST_S + 1)
+    assert snap.lost == ["tag_3"]

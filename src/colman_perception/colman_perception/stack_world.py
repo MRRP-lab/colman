@@ -14,7 +14,10 @@ from dataclasses import dataclass, field
 CUBE_M = 0.05  # a cube is 5 cm, so a tag on the top of level n is n * CUBE_M high
 XY_TOL_M = 0.03  # tags closer than this in x, y are in the same column
 COVER_M = 0.035  # a tag this much higher over another covers it
-LOST_S = 5.0  # how long a tag may vanish with no explanation before it is lost
+LOST_S = 10.0  # how long a tag may vanish with no explanation before it is lost
+# A cube placed on another can take several seconds to be detected, and its hand may
+# linger over it, so a covered tag must outlast that before it is called lost.
+ARM_HIDE_MAX_S = 30.0  # the arm may explain a missing tag for this long, no longer
 GHOST_S = 15.0  # how long a stack whose top was removed is kept while its tag is unseen
 ARM_CLEAR_M = 0.12  # the arm hides the table within this of its base-to-tip line
 UNKNOWN = "unknown"
@@ -75,6 +78,7 @@ class StackModel:
     def __init__(self, all_tags):
         self.all_tags = list(all_tags)
         self.unexplained = {}  # tag -> when it first vanished with no explanation
+        self.arm_hidden = {}  # tag -> when the arm first started to explain its absence
         self.ghosts = []
         self.last_columns = []
 
@@ -104,20 +108,33 @@ class StackModel:
         lost = []
         if not camera_alive:
             self.unexplained.clear()
+            self.arm_hidden.clear()
         for tag, pos in beliefs.items():
             if not camera_alive:
                 break
             if tag in visible:
                 self.unexplained.pop(tag, None)
-            elif self.covered(tag, pos, visible) or arm_hides(pos[:2]):
+                self.arm_hidden.pop(tag, None)
+            elif self.covered(tag, pos, visible):
+                # A seen tag over it explains it for as long as that tag stays.
                 self.unexplained.pop(tag, None)
+                self.arm_hidden.pop(tag, None)
+            elif arm_hides(pos[:2]):
+                # The arm explains it only for a while: a memory that outlives the arm
+                # would be a ghost at a place the cube may have left.
+                self.unexplained.pop(tag, None)
+                since = self.arm_hidden.setdefault(tag, now_s)
+                if now_s - since >= ARM_HIDE_MAX_S:
+                    lost.append(tag)
             else:
+                self.arm_hidden.pop(tag, None)
                 since = self.unexplained.setdefault(tag, now_s)
                 if now_s - since >= LOST_S:
                     lost.append(tag)
-        for tag in list(self.unexplained):
-            if tag not in beliefs or tag in lost:
-                self.unexplained.pop(tag, None)
+        for timers in (self.unexplained, self.arm_hidden):
+            for tag in list(timers):
+                if tag not in beliefs or tag in lost:
+                    timers.pop(tag, None)
         members = {t: p for t, p in beliefs.items() if t not in lost}
 
         columns = []

@@ -10,6 +10,7 @@ from geometry_msgs.msg import TransformStamped
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.time import Time
+from sensor_msgs.msg import JointState
 from tf2_ros import Buffer, TransformBroadcaster, TransformException, TransformListener
 from ur_msgs.msg import IOStates
 
@@ -35,6 +36,8 @@ STILL_M = 0.001
 STILL_S = 0.3
 RATE_HZ = 30.0
 IO_TOPIC = "/io_and_status_controller/io_states"
+JOINT_TOPIC = "/joint_states"
+ARM_ALIVE_S = 2.0  # the arm position is only trusted while joint states keep arriving
 WORLD_TOPIC = "/world_state"
 DETECTIONS_TOPIC = "/detections"
 OVERHEAD_FRAME_HINT = "overhead"  # the frame_id of the overhead detector's output
@@ -111,6 +114,8 @@ class WorldState(Node):
         self.world_pub = self.create_publisher(WorldStateMsg, WORLD_TOPIC, 10)
         self.ticks = 0
         self.camera_seen = None
+        self.joints_seen = None
+        self.create_subscription(JointState, JOINT_TOPIC, self.on_joints, 10)
         # The detector publishes an array for every image it processes, even an empty
         # one, so these arriving means the camera and detector are both running.
         self.create_subscription(
@@ -171,6 +176,20 @@ class WorldState(Node):
         if seconds(samples[-1][0] - self.since[key]) < SETTLE_S:
             return position, None
         return position, (mean(samples), samples[-1][2])
+
+    def on_joints(self, msg):
+        self.joints_seen = self.get_clock().now()
+
+    def arm_known(self, now):
+        """True only while a real arm is reporting joints.
+
+        robot_state_publisher publishes the arm at its zero pose when nothing sends
+        joint states, and that pose is not where the arm is.
+        """
+        return (
+            self.joints_seen is not None
+            and seconds(now - self.joints_seen) < ARM_ALIVE_S
+        )
 
     def on_detections(self, msg):
         if OVERHEAD_FRAME_HINT in msg.header.frame_id:
@@ -333,7 +352,8 @@ class WorldState(Node):
                 fresh[tag_frame] = seen
 
         tip = self.lookup(TIP_FRAME)
-        hides = self.arm_hides(position_of(tip) if tip is not None else None)
+        known = tip is not None and self.arm_known(now)
+        hides = self.arm_hides(position_of(tip) if known else None)
         held = self.held[0] if self.held is not None else None
         snapshot = self.model.update(
             now.nanoseconds / 1e9,
