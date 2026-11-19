@@ -44,6 +44,7 @@ class World:
     def forget(self, snapshot):
         for tag in snapshot.lost:
             self.settled.pop(tag, None)
+        self.settled.update(snapshot.relocated)
 
     def settle(self, poses, **kw):
         snap = self.see(poses, **kw)
@@ -154,9 +155,11 @@ def test_a_stack_carried_away_by_hand_does_not_leave_ghosts():
     w.settle({"tag_2": at(0.4, 0.05, 1), "tag_6": at(0.4, 0.05, 2)})
     w.settle({"tag_6": at(0.4, 0.05, 2)})
     snap = w.settle({"tag_6": at(0.3, -0.3, 2)})
-    assert snap.column_of("tag_2") is None or snap.column_of("tag_2").height == 1
+    # the stack went with it: the cube under it is carried, and nothing stays behind
+    assert snap.column_of("tag_2").tags == ["tag_2", "tag_6"]
+    assert [c.position for c in snap.columns] == [(0.3, -0.3)]
     snap = w.settle({"tag_6": at(0.3, -0.3, 2)}, seconds=LOST_S + 1)
-    assert "tag_2" in snap.lost or snap.column_of("tag_2") is None
+    assert snap.lost == [] and snap.column_of("tag_2").tags == ["tag_2", "tag_6"]
 
 
 def test_two_stacks_side_by_side_stay_separate():
@@ -367,3 +370,87 @@ def test_a_sideways_shift_is_a_move():
 
 def test_a_cube_lifted_straight_up_is_a_move():
     assert shifted((0.4, 0.1, 0.05), (0.4, 0.1, 0.10), MOVED_XY_M, MOVED_Z_M)
+
+
+# ------------------------------------------------------------ a stack is slid
+def tall_stack(w, x=0.2, y=0.0):
+    poses = {
+        "tag_5": at(x, y, 1),
+        "tag_6": at(x, y, 2),
+        "tag_7": at(x, y, 3),
+    }
+    w.settle(poses)
+    w.settle({"tag_7": poses["tag_7"]})  # the lower two are covered, remembered
+    return poses
+
+
+def test_a_slid_stack_takes_the_cubes_under_its_top_with_it():
+    w = World()
+    tall_stack(w)
+    snap = w.settle({"tag_7": at(0.35, 0.05, 3)})
+    column = snap.column_of("tag_7")
+    assert column.tags == ["tag_5", "tag_6", "tag_7"]
+    assert column.position == (0.35, 0.05)
+    assert set(snap.relocated) == {"tag_5", "tag_6"} and snap.lost == []
+    assert [c.height for c in snap.columns] == [3]  # nothing left at the old spot
+
+
+def test_a_carried_stack_is_marked_uncertain_until_a_cube_in_it_is_seen():
+    w = World()
+    tall_stack(w)
+    snap = w.settle({"tag_7": at(0.35, 0.05, 3)})
+    assert not snap.column_of("tag_7").order_known
+    # the top comes off and the cube under it is seen where the guess put it
+    w.take("tag_7")
+    snap = w.settle({"tag_6": at(0.35, 0.05, 2)})
+    assert snap.column_of("tag_6").tags[-1] == "tag_6"
+    snap = w.settle({"tag_6": at(0.35, 0.05, 2), "tag_5": at(0.5, -0.2, 1)})
+    assert snap.column_of("tag_5").order_known
+
+
+def test_a_top_lifted_onto_the_table_leaves_the_cubes_under_it_alone():
+    w = World()
+    tall_stack(w)
+    snap = w.settle({"tag_7": at(0.4, 0.2, 1)})
+    assert snap.relocated == {}
+    assert snap.column_of("tag_7").tags == ["tag_7"]
+
+
+def test_a_top_moved_onto_another_stack_of_the_same_height_is_not_a_slide():
+    w = World()
+    tall_stack(w)
+    other = {
+        "tag_1": at(0.4, 0.2, 1),
+        "tag_2": at(0.4, 0.2, 2),
+        "tag_3": at(0.4, 0.2, 3),
+    }
+    w.settle({**other, "tag_7": at(0.2, 0.0, 3)})
+    snap = w.settle({"tag_3": other["tag_3"], "tag_7": at(0.4, 0.2, 3)})
+    assert snap.relocated == {}
+
+
+def test_nothing_is_carried_when_the_cubes_under_the_top_are_still_seen():
+    w = World()
+    poses = {"tag_5": at(0.2, 0.0, 1), "tag_7": at(0.2, 0.0, 2)}
+    w.settle(poses)
+    snap = w.settle({"tag_5": poses["tag_5"], "tag_7": at(0.35, 0.05, 2)})
+    assert snap.relocated == {}
+
+
+def test_a_slide_onto_a_spot_with_another_cube_is_not_carried():
+    w = World()
+    tall_stack(w)
+    w.settle({"tag_8": at(0.35, 0.05, 1), "tag_7": at(0.2, 0.0, 3)})
+    snap = w.settle({"tag_8": at(0.35, 0.05, 1), "tag_7": at(0.36, 0.05, 3)})
+    assert snap.relocated == {}
+
+
+def test_a_carried_cube_that_is_not_there_is_dropped_like_any_other():
+    w = World()
+    tall_stack(w)
+    w.settle({"tag_7": at(0.35, 0.05, 3)})
+    # tag_7, the cover, is taken away, and the carried cubes are never seen
+    w.take("tag_7")
+    snap = w.settle({"tag_1": at(0.5, -0.2, 1)})
+    snap = w.settle({"tag_1": at(0.5, -0.2, 1)}, seconds=LOST_S + 1)
+    assert set(snap.lost) == {"tag_5", "tag_6"}

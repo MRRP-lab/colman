@@ -372,6 +372,11 @@ class WorldState(Node):
             hides,
             self.camera_alive(now),
         )
+        for tag_frame, pose in snapshot.relocated.items():
+            belief = self.belief.get(tag_frame)
+            if belief is not None:
+                self.belief[tag_frame] = (list(pose), belief[1])
+            self.get_logger().info(f"{tag_frame}: carried with a slid stack")
         for tag_frame in snapshot.lost:
             self.get_logger().warn(f"{tag_frame}: lost, not seen and not covered")
             self.belief.pop(tag_frame, None)

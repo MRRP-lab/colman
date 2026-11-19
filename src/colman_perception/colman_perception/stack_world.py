@@ -18,6 +18,7 @@ LOST_S = 10.0  # how long a tag may vanish with no explanation before it is lost
 # A cube placed on another can take several seconds to be detected, and its hand may
 # linger over it, so a covered tag must outlast that before it is called lost.
 ARM_HIDE_MAX_S = 30.0  # the arm may explain a missing tag for this long, no longer
+CARRY_MEMORY_S = 60.0  # how long a stack's covered cubes are remembered for a slide
 GHOST_S = 15.0  # how long a stack whose top was removed is kept while its tag is unseen
 ARM_CLEAR_M = 0.12  # the arm hides the table within this of its base-to-tip line
 UNKNOWN = "unknown"
@@ -61,6 +62,7 @@ class Snapshot:
     missing: list = field(default_factory=list)
     lost: list = field(default_factory=list)  # tags whose remembered pose is stale
     stale: bool = False  # the camera is not delivering images, so nothing here is new
+    relocated: dict = field(default_factory=dict)  # tag -> new pose, a slid stack
 
     def column_of(self, tag):
         return next((c for c in self.columns if tag in c.tags), None)
@@ -96,6 +98,8 @@ class StackModel:
         self.arm_hidden = {}  # tag -> when the arm first started to explain its absence
         self.ghosts = []
         self.last_columns = []
+        self.beneath = {}  # top tag -> (tags under it, column position, height, when)
+        self.uncertain = set()  # tags placed by a slide guess, not seen to go there
 
     def covered(self, tag, pos, visible):
         return any(
@@ -121,6 +125,10 @@ class StackModel:
         beliefs = {t: p for t, p in settled.items() if t != held}
         visible = {t: p for t, p in fresh.items() if t != held}
         lost = []
+        relocated, carried = {}, set()
+        if camera_alive:
+            relocated, carried = self.carry(now_s, beliefs, visible)
+        self.uncertain -= set(visible)
         if not camera_alive:
             self.unexplained.clear()
             self.arm_hidden.clear()
@@ -158,17 +166,73 @@ class StackModel:
             lost += dropped
             columns.append(column)
         if camera_alive:
-            self.update_ghosts(now_s, columns)
+            self.update_ghosts(now_s, columns, carried)
         self.last_columns = list(columns)
+        self.remember_beneath(now_s, columns)
         columns += [
             Column(g.tags, g.position, g.height, False, False) for g in self.ghosts
         ]
         columns.sort(key=lambda c: c.position)
         placed = {t for c in columns for t in c.tags}
         missing = [t for t in self.all_tags if t not in placed and t != held]
-        return Snapshot(columns, missing, lost, not camera_alive)
+        return Snapshot(columns, missing, lost, not camera_alive, relocated)
 
-    def update_ghosts(self, now_s, columns):
+    def remember_beneath(self, now_s, columns):
+        """Note which cubes are under each stack's visible top, in case it slides."""
+        for column in columns:
+            if not column.top_seen or column.height < 2:
+                continue
+            under = [t for t in column.tags[:-1] if t != UNKNOWN]
+            if under:
+                self.beneath[column.tags[-1]] = (
+                    under,
+                    column.position,
+                    column.height,
+                    now_s,
+                )
+        self.beneath = {
+            top: v for top, v in self.beneath.items() if now_s - v[3] < CARRY_MEMORY_S
+        }
+
+    def carry(self, now_s, beliefs, visible):
+        """Move the remembered cubes under a stack's top when the stack slides.
+
+        The top tag shows where the stack went, but the cubes under it stay covered
+        and are never seen to move. They are carried only if the top is now seen
+        somewhere new at the same height, the spot it has gone to is free, and every
+        cube under it is still remembered, unseen, at the old spot. A top lifted off
+        and put on the table, or on another stack, does not qualify. Returns the new
+        poses of the carried cubes and the tops that carried them.
+        """
+        relocated, carried = {}, set()
+        for top, (under, old_xy, height, _) in list(self.beneath.items()):
+            if top not in visible or any(t not in beliefs for t in under):
+                continue
+            q = visible[top]
+            if xy_gap(q, old_xy) <= XY_TOL_M or level_of(q[2]) != height:
+                continue
+            if any(
+                t in visible or xy_gap(beliefs[t], old_xy) > XY_TOL_M for t in under
+            ):
+                continue
+            crowded = any(
+                other != top and other not in under and xy_gap(p, q) <= XY_TOL_M
+                for other, p in {**beliefs, **visible}.items()
+            )
+            if crowded:
+                continue
+            for tag in under:
+                z = beliefs[tag][2]
+                beliefs[tag] = (q[0], q[1], z)
+                relocated[tag] = beliefs[tag]
+                self.unexplained.pop(tag, None)
+                self.arm_hidden.pop(tag, None)
+            self.uncertain.update(under)
+            carried.add(top)
+            del self.beneath[top]
+        return relocated, carried
+
+    def update_ghosts(self, now_s, columns, carried=()):
         """Keep a stack whose top was removed until its next cube is seen."""
 
         def near(a, others):
@@ -176,6 +240,8 @@ class StackModel:
 
         positions = [c.position for c in columns]
         for prev in self.last_columns:
+            if prev.tags[-1] in carried:
+                continue  # the whole stack slid, nothing is left behind
             if (
                 prev.top_seen
                 and prev.height >= 2
@@ -209,6 +275,6 @@ class StackModel:
             else:
                 slots[level] = tag
         tags = [slots.get(level, UNKNOWN) for level in range(1, height + 1)]
-        if UNKNOWN in tags:
+        if UNKNOWN in tags or self.uncertain.intersection(tags):
             order_known = False
         return Column(tags, members[top][:2], height, order_known, bool(seen)), dropped
