@@ -372,6 +372,9 @@ class WorldState(Node):
             hides,
             self.camera_alive(now),
         )
+        for tag_frame, pose in snapshot.restored.items():
+            if self.belief.get(tag_frame) is None:
+                self.belief[tag_frame] = (list(pose), (0.0, 0.0, 0.0, 1.0))
         for note in snapshot.notes:
             self.get_logger().info(note, throttle_duration_sec=0.5)
         for tag_frame, pose in snapshot.relocated.items():

@@ -19,6 +19,7 @@ LOST_S = 10.0  # how long a tag may vanish with no explanation before it is lost
 # linger over it, so a covered tag must outlast that before it is called lost.
 ARM_HIDE_MAX_S = 30.0  # the arm may explain a missing tag for this long, no longer
 CARRY_MEMORY_S = 60.0  # how long a stack's covered cubes are remembered for a slide
+RESTORE_S = 8.0  # a deleted tag comes back if a cube lands on its spot within this
 GHOST_S = 15.0  # how long a stack whose top was removed is kept while its tag is unseen
 ARM_CLEAR_M = 0.12  # the arm hides the table within this of its base-to-tip line
 UNKNOWN = "unknown"
@@ -64,6 +65,9 @@ class Snapshot:
     stale: bool = False  # the camera is not delivering images, so nothing here is new
     relocated: dict = field(default_factory=dict)  # tag -> new pose, a slid stack
     notes: list = field(default_factory=list)  # why a slide was or was not carried
+    restored: dict = field(
+        default_factory=dict
+    )  # tag -> pose, covered as it was dropped
 
     def column_of(self, tag):
         return next((c for c in self.columns if tag in c.tags), None)
@@ -101,6 +105,8 @@ class StackModel:
         self.last_columns = []
         self.beneath = {}  # top tag -> (tags under it, column position, height, when)
         self.uncertain = set()  # tags placed by a slide guess, not seen to go there
+        self.prev_beliefs = {}  # the beliefs of the last update
+        self.gone = {}  # tag -> (pose, when) of a belief dropped without being lost
 
     def covered(self, tag, pos, visible):
         return any(
@@ -130,6 +136,7 @@ class StackModel:
         if camera_alive:
             relocated, carried = self.carry(now_s, beliefs, visible, notes)
         self.uncertain -= set(visible)
+        restored = self.restore(now_s, beliefs, visible, notes)
         if not camera_alive:
             self.unexplained.clear()
             self.arm_hidden.clear()
@@ -174,9 +181,39 @@ class StackModel:
             Column(g.tags, g.position, g.height, False, False) for g in self.ghosts
         ]
         columns.sort(key=lambda c: c.position)
+        self.note_gone(now_s, beliefs, lost, visible, held)
         placed = {t for c in columns for t in c.tags}
         missing = [t for t in self.all_tags if t not in placed and t != held]
-        return Snapshot(columns, missing, lost, not camera_alive, relocated, notes)
+        return Snapshot(
+            columns, missing, lost, not camera_alive, relocated, notes, restored
+        )
+
+    def restore(self, now_s, beliefs, visible, notes):
+        """Bring back a tag dropped just before a cube landed on it.
+
+        The tag under a cube being placed is sometimes seen at a slightly wrong pose
+        in the moment before it is covered, and the node drops it as moved. If a
+        taller tag then appears over where it was, it is under that cube.
+        """
+        restored = {}
+        for tag, (pos, since) in list(self.gone.items()):
+            if now_s - since > RESTORE_S or tag in visible or tag in beliefs:
+                del self.gone[tag]
+            elif self.covered(tag, pos, visible):
+                beliefs[tag] = pos
+                restored[tag] = pos
+                self.uncertain.add(tag)
+                notes.append(f"{tag} restored under the cube now over it")
+                del self.gone[tag]
+        return restored
+
+    def note_gone(self, now_s, beliefs, lost, visible, held):
+        """Remember tags whose belief disappeared without being lost or seen to move."""
+        for tag, pos in self.prev_beliefs.items():
+            if tag in beliefs or tag in lost or tag in visible or tag == held:
+                continue
+            self.gone.setdefault(tag, (pos, now_s))
+        self.prev_beliefs = {t: p for t, p in beliefs.items() if t not in lost}
 
     def remember_beneath(self, now_s, columns):
         """Note which cubes are under each stack's visible top, in case it slides."""

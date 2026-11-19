@@ -5,6 +5,7 @@ from colman_perception.stack_world import (
     LOST_S,
     MOVED_XY_M,
     MOVED_Z_M,
+    RESTORE_S,
     SETTLE_XY_M,
     SETTLE_Z_M,
     UNKNOWN,
@@ -45,6 +46,7 @@ class World:
         for tag in snapshot.lost:
             self.settled.pop(tag, None)
         self.settled.update(snapshot.relocated)
+        self.settled.update(snapshot.restored)
 
     def settle(self, poses, **kw):
         snap = self.see(poses, **kw)
@@ -516,3 +518,64 @@ def test_a_stack_pushed_far_keeps_its_cubes_while_its_top_has_no_settled_pose():
     for t in range(5, 60):  # the push has stopped, the top stays seen, nothing is lost
         snap = m.update(float(t), settled, {"tag_7": at(0.7, 0.2, 3)})
         assert snap.lost == []
+
+
+# --------------------------------------- a tag dropped as a cube lands on it
+def drop_then_cover(w, seconds_before_cover=2.0, cover_tag="tag_8"):
+    """tag_7 is dropped as moved, then a cube lands where it was."""
+    w.settle({"tag_7": at(0.4, 0.2, 1), "tag_1": at(0.2, -0.3, 1)})
+    w.take("tag_7")  # the node dropped its belief
+    w.settle({"tag_1": at(0.2, -0.3, 1)}, seconds=0.5)  # the model notices it is gone
+    w.settle({"tag_1": at(0.2, -0.3, 1)}, seconds=seconds_before_cover)
+    return w.settle({"tag_1": at(0.2, -0.3, 1), cover_tag: at(0.4, 0.2, 2)})
+
+
+def test_a_tag_dropped_as_a_cube_lands_on_it_is_brought_back_under_it():
+    w = World()
+    snap = drop_then_cover(w)
+    assert set(snap.restored) == {"tag_7"}
+    column = snap.column_of("tag_8")
+    assert column.tags == ["tag_7", "tag_8"] and not column.order_known
+    assert "tag_7" not in snap.missing
+
+
+def test_a_restored_tag_is_not_lost_while_its_cover_stays():
+    w = World()
+    drop_then_cover(w)
+    snap = w.settle({"tag_8": at(0.4, 0.2, 2)}, seconds=300.0)
+    assert snap.lost == []
+    assert snap.column_of("tag_7").tags == ["tag_7", "tag_8"]
+
+
+def test_a_dropped_tag_is_not_restored_if_the_cover_comes_too_late():
+    w = World()
+    snap = drop_then_cover(w, seconds_before_cover=RESTORE_S + 2)
+    assert snap.restored == {} and "tag_7" in snap.missing
+
+
+def test_a_dropped_tag_seen_elsewhere_is_not_restored_under_a_new_cube():
+    w = World()
+    w.settle({"tag_7": at(0.4, 0.2, 1)})
+    w.take("tag_7")
+    w.settle({"tag_7": at(0.1, -0.4, 1)})  # it was moved: seen at its new spot
+    snap = w.settle({"tag_7": at(0.1, -0.4, 1), "tag_8": at(0.4, 0.2, 2)})
+    assert snap.restored == {}
+    assert snap.column_of("tag_7").tags == ["tag_7"]
+
+
+def test_a_dropped_tag_with_nothing_landing_on_it_stays_gone():
+    w = World()
+    w.settle({"tag_7": at(0.4, 0.2, 1), "tag_1": at(0.2, -0.3, 1)})
+    w.take("tag_7")
+    snap = w.settle({"tag_1": at(0.2, -0.3, 1)}, seconds=3.0)
+    assert snap.restored == {} and "tag_7" in snap.missing
+
+
+def test_a_lost_tag_is_never_restored():
+    w = World()
+    w.settle({"tag_7": at(0.4, 0.2, 1), "tag_1": at(0.2, -0.3, 1)})
+    w.settle({"tag_1": at(0.2, -0.3, 1)})
+    snap = w.settle({"tag_1": at(0.2, -0.3, 1)}, seconds=LOST_S + 1)
+    assert snap.lost == ["tag_7"]
+    snap = w.settle({"tag_1": at(0.2, -0.3, 1), "tag_8": at(0.4, 0.2, 2)})
+    assert snap.restored == {}
