@@ -32,7 +32,7 @@ Ground truth we have (measured by hand, see the memory/coordinate docs):
 - Tabletop is 112.5 cm in y (centred on `base_link`, y = ±0.5625 m) by 54 cm in x
   (x = 0.09 m to 0.63 m). Its surface is z = 0.
 - Four AprilTag cubes (tags 1, 3, 5, 6), 50 mm cubes about 1–2 cm inside the corners.
-  The black tag square is 39.2 mm, not 40.
+  The black tag square is 39 mm exactly (an earlier note of 39.2 mm was wrong).
 - The arm is UR3e serial 20245300947. Its factory kinematic parameters were pulled from the
   controller and the hash matches `ur_config.yaml`.
 

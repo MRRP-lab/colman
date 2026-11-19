@@ -76,9 +76,9 @@ Repeatable-but-wrong is the signature of a systematic offset.
 
 ## Tags: size, placement, pose estimation
 
-- Tag size is **measured**: 39.2 mm black square, not 40 mm. The earlier 39 mm in the
-  config was wrong by 0.2 mm; 1% tag size error is a 1% range error (about 3 mm at 0.3 m) so
-  this matters, and it still needs checking with calipers or a scan at high resolution.
+- Tag size is known: the black square is 39 mm exactly, as in the config. (An earlier note
+  of 39.2 mm was wrong.) A 1% tag size error would be a 1% range error (about 3 mm at
+  0.3 m), so the size has to be right, and it is.
 - The large tag (id 20) is configured at 98 mm and has not been verified.
 - Printed tag scale: printers scale. The printed size may differ from the file.
 - Tags sit on the **tops of 50 mm cubes**, so their z is about 50 mm in nominal terms, but
