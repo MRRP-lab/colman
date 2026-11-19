@@ -17,7 +17,15 @@ from ur_msgs.msg import IOStates
 from colman_interfaces.msg import WorldStack
 from colman_interfaces.msg import WorldState as WorldStateMsg
 from colman_perception.overhead_correction import correct_position
-from colman_perception.stack_world import ARM_CLEAR_M, StackModel
+from colman_perception.stack_world import (
+    ARM_CLEAR_M,
+    MOVED_XY_M,
+    MOVED_Z_M,
+    SETTLE_XY_M,
+    SETTLE_Z_M,
+    StackModel,
+    shifted,
+)
 
 BASE_FRAME = "base_link"
 TIP_FRAME = "vacuum_tip_link"
@@ -165,7 +173,7 @@ class WorldState(Node):
             position = correct_position(position)
         samples = self.samples.setdefault(key, deque())
         if not samples or stamp > samples[-1][0]:
-            if samples and moved(position, mean(samples), TOLERANCE_M):
+            if samples and shifted(position, mean(samples), SETTLE_XY_M, SETTLE_Z_M):
                 samples.clear()
             if not samples:
                 self.since[key] = stamp
@@ -286,7 +294,8 @@ class WorldState(Node):
         if belief is None:
             return None, None, seen
         if any(
-            p is not None and math.dist(p, belief[0]) > MOVED_M for p in fresh.values()
+            p is not None and shifted(p, belief[0], MOVED_XY_M, MOVED_Z_M)
+            for p in fresh.values()
         ):
             del self.belief[tag_frame]
             return None, None, seen

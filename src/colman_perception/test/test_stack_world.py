@@ -3,9 +3,14 @@ from colman_perception.stack_world import (
     ARM_HIDE_MAX_S,
     GHOST_S,
     LOST_S,
+    MOVED_XY_M,
+    MOVED_Z_M,
+    SETTLE_XY_M,
+    SETTLE_Z_M,
     UNKNOWN,
     StackModel,
     level_of,
+    shifted,
 )
 
 ALL = [f"tag_{i}" for i in range(1, 9)]
@@ -345,3 +350,20 @@ def test_a_ghost_left_by_a_belief_the_node_kept_is_dropped_when_the_arm_is_unkno
     w.settle({"tag_4": at(0.329, 0.049, 1)})
     snap = w.settle({"tag_4": at(0.329, 0.049, 1)}, seconds=LOST_S + 1)
     assert snap.lost == ["tag_3"]
+
+
+# ----------------------------------------------- pose flips are not moves
+def test_a_height_swing_from_a_pose_flip_is_not_a_move():
+    still = (0.46, -0.283, 0.016)
+    flipped = (0.46, -0.282, 0.039)  # z jumped 23 mm, x and y did not
+    assert not shifted(flipped, still, MOVED_XY_M, MOVED_Z_M)
+    assert not shifted(flipped, still, SETTLE_XY_M, SETTLE_Z_M)
+
+
+def test_a_sideways_shift_is_a_move():
+    assert shifted((0.46, -0.283, 0.02), (0.49, -0.283, 0.02), MOVED_XY_M, MOVED_Z_M)
+    assert shifted((0.46, -0.283, 0.02), (0.463, -0.283, 0.02), SETTLE_XY_M, SETTLE_Z_M)
+
+
+def test_a_cube_lifted_straight_up_is_a_move():
+    assert shifted((0.4, 0.1, 0.05), (0.4, 0.1, 0.10), MOVED_XY_M, MOVED_Z_M)

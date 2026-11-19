@@ -23,6 +23,21 @@ ARM_CLEAR_M = 0.12  # the arm hides the table within this of its base-to-tip lin
 UNKNOWN = "unknown"
 
 
+# The overhead camera gets a small flat tag's height from the tag's apparent size and
+# its pose solver sometimes flips between two answers 2 to 3 cm apart while x and y stay
+# put. A tag has moved when it moves sideways, or its height changes by more than that
+# swing (a cube lifted straight up is 5 cm).
+SETTLE_XY_M = 0.003  # a tag is still while x and y stay this close
+SETTLE_Z_M = 0.03  # ... and its height stays within the pose-flip swing
+MOVED_XY_M = 0.02  # a tag has moved if it shifts this far sideways
+MOVED_Z_M = 0.04  # ... or its height changes by this much
+
+
+def shifted(a, b, xy_m, z_m):
+    """True if poses a and b differ by xy_m sideways or z_m in height."""
+    return math.hypot(a[0] - b[0], a[1] - b[1]) >= xy_m or abs(a[2] - b[2]) >= z_m
+
+
 def level_of(z):
     return max(1, round(z / CUBE_M))
 
