@@ -277,4 +277,6 @@ class StackModel:
         tags = [slots.get(level, UNKNOWN) for level in range(1, height + 1)]
         if UNKNOWN in tags or self.uncertain.intersection(tags):
             order_known = False
-        return Column(tags, members[top][:2], height, order_known, bool(seen)), dropped
+        return Column(
+            tags, tuple(members[top][:2]), height, order_known, bool(seen)
+        ), dropped

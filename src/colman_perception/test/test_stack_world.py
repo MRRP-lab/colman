@@ -454,3 +454,19 @@ def test_a_carried_cube_that_is_not_there_is_dropped_like_any_other():
     snap = w.settle({"tag_1": at(0.5, -0.2, 1)})
     snap = w.settle({"tag_1": at(0.5, -0.2, 1)}, seconds=LOST_S + 1)
     assert set(snap.lost) == {"tag_5", "tag_6"}
+
+
+def test_poses_given_as_lists_work_like_tuples():
+    # the node passes list poses; a slide must not mix lists and tuples in a column
+    w = World()
+    w.settle(
+        {
+            "tag_5": [0.2, 0.0, 0.05],
+            "tag_6": [0.2, 0.0, 0.10],
+            "tag_7": [0.2, 0.0, 0.15],
+        }
+    )
+    w.settle({"tag_7": [0.2, 0.0, 0.15]})
+    snap = w.settle({"tag_7": [0.35, 0.05, 0.15], "tag_1": [0.5, -0.2, 0.05]})
+    assert snap.column_of("tag_7").tags == ["tag_5", "tag_6", "tag_7"]
+    assert all(isinstance(c.position, tuple) for c in snap.columns)
