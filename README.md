@@ -35,7 +35,6 @@ Common tasks:
 | `motion` | `MoveTo` / `Pick` / `Place` action server |
 | `demo-turns`, `demo-choose`, `demo-circle` | Demo behaviours |
 | `stop`, `resume` | Stop the arm / allow goals again |
-| `kill-all` | Stop every process started from this checkout (including the driver) and clean up DDS shared memory |
 | `speak` | Local text-to-speech node (Kokoro-82M) |
 | `llm` | LLM node: `/speech_text` -> Claude -> `llm_response` (needs `ANTHROPIC_API_KEY`) |
 | `fmt`, `lint` | `ruff` format and check |

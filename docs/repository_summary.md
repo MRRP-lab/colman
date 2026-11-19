@@ -218,7 +218,7 @@ Saying "stop", "halt" or "freeze" stops the arm immediately, before anything is 
 
 ## Operating the real arm
 
-The real-arm stack is several separate processes, each its own pixi task, started in this order: `driver`, `motion`, `detect` (camera and AprilTag), then optionally `image-view`. Only one driver may hold the robot, because a second one fails with `speed_slider_mask is currently controlled by another RTDE client`. `pixi run kill-all` stops every process started from this checkout (including the driver), then removes stale DDS shared-memory files and stops the ROS 2 daemon. For a manual pick, send `ros2 action send_goal --feedback /pick colman_interfaces/action/Pick "{frame: tag_1}"`, then `/place` or `/release`. A pick that succeeds leaves the cube held, and the next pick is refused until it is placed or released.
+The real-arm stack is several separate processes, each its own pixi task, started in this order: `driver`, `motion`, `detect` (camera and AprilTag), then optionally `image-view`. Only one driver may hold the robot, because a second one fails with `speed_slider_mask is currently controlled by another RTDE client`. For a manual pick, send `ros2 action send_goal --feedback /pick colman_interfaces/action/Pick "{frame: tag_1}"`, then `/place` or `/release`. A pick that succeeds leaves the cube held, and the next pick is refused until it is placed or released.
 
 ---
 
