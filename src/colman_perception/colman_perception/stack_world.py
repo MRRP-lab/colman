@@ -63,6 +63,7 @@ class Snapshot:
     lost: list = field(default_factory=list)  # tags whose remembered pose is stale
     stale: bool = False  # the camera is not delivering images, so nothing here is new
     relocated: dict = field(default_factory=dict)  # tag -> new pose, a slid stack
+    notes: list = field(default_factory=list)  # why a slide was or was not carried
 
     def column_of(self, tag):
         return next((c for c in self.columns if tag in c.tags), None)
@@ -125,9 +126,9 @@ class StackModel:
         beliefs = {t: p for t, p in settled.items() if t != held}
         visible = {t: p for t, p in fresh.items() if t != held}
         lost = []
-        relocated, carried = {}, set()
+        relocated, carried, notes = {}, set(), []
         if camera_alive:
-            relocated, carried = self.carry(now_s, beliefs, visible)
+            relocated, carried = self.carry(now_s, beliefs, visible, notes)
         self.uncertain -= set(visible)
         if not camera_alive:
             self.unexplained.clear()
@@ -175,7 +176,7 @@ class StackModel:
         columns.sort(key=lambda c: c.position)
         placed = {t for c in columns for t in c.tags}
         missing = [t for t in self.all_tags if t not in placed and t != held]
-        return Snapshot(columns, missing, lost, not camera_alive, relocated)
+        return Snapshot(columns, missing, lost, not camera_alive, relocated, notes)
 
     def remember_beneath(self, now_s, columns):
         """Note which cubes are under each stack's visible top, in case it slides."""
@@ -194,7 +195,7 @@ class StackModel:
             top: v for top, v in self.beneath.items() if now_s - v[3] < CARRY_MEMORY_S
         }
 
-    def carry(self, now_s, beliefs, visible):
+    def carry(self, now_s, beliefs, visible, notes=None):
         """Move the remembered cubes under a stack's top when the stack slides.
 
         The top tag shows where the stack went, but the cubes under it stay covered
@@ -205,21 +206,36 @@ class StackModel:
         poses of the carried cubes and the tops that carried them.
         """
         relocated, carried = {}, set()
+        notes = [] if notes is None else notes
         for top, (under, old_xy, height, _) in list(self.beneath.items()):
-            if top not in visible or any(t not in beliefs for t in under):
+            if top not in visible:
                 continue
             q = visible[top]
-            if xy_gap(q, old_xy) <= XY_TOL_M or level_of(q[2]) != height:
+            if xy_gap(q, old_xy) <= XY_TOL_M:
                 continue
-            if any(
-                t in visible or xy_gap(beliefs[t], old_xy) > XY_TOL_M for t in under
-            ):
+            moved_cm = xy_gap(q, old_xy) * 100
+
+            def refuse(why, top=top, moved_cm=moved_cm):
+                notes.append(f"{top} moved {moved_cm:.0f} cm, not carried: {why}")
+
+            if any(t not in beliefs for t in under):
+                refuse("a cube under it is no longer remembered")
+                continue
+            if level_of(q[2]) != height:
+                refuse(f"its height changed from {height} to {level_of(q[2])}")
+                continue
+            if any(t in visible for t in under):
+                refuse("a cube under it is now seen")
+                continue
+            if any(xy_gap(beliefs[t], old_xy) > XY_TOL_M for t in under):
+                refuse("a cube under it is no longer at the old spot")
                 continue
             crowded = any(
                 other != top and other not in under and xy_gap(p, q) <= XY_TOL_M
                 for other, p in {**beliefs, **visible}.items()
             )
             if crowded:
+                refuse("another cube is at the new spot")
                 continue
             for tag in under:
                 z = beliefs[tag][2]
@@ -229,6 +245,7 @@ class StackModel:
                 self.arm_hidden.pop(tag, None)
             self.uncertain.update(under)
             carried.add(top)
+            notes.append(f"{top} moved {moved_cm:.0f} cm, carried {', '.join(under)}")
             del self.beneath[top]
         return relocated, carried
 

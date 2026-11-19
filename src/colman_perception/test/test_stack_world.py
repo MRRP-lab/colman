@@ -395,6 +395,18 @@ def test_a_slid_stack_takes_the_cubes_under_its_top_with_it():
     assert [c.height for c in snap.columns] == [3]  # nothing left at the old spot
 
 
+def test_a_stack_pushed_in_several_steps_keeps_its_cubes_with_it():
+    w = World()
+    tall_stack(w)
+    for x in (0.28, 0.36, 0.44, 0.52):
+        snap = w.settle({"tag_7": at(x, 0.0, 3)})
+        assert snap.column_of("tag_7").tags == ["tag_5", "tag_6", "tag_7"]
+        assert snap.lost == [] and [c.height for c in snap.columns] == [3]
+    snap = w.settle({"tag_7": at(0.52, 0.0, 3)}, seconds=LOST_S * 3)
+    assert snap.lost == []
+    assert snap.column_of("tag_5").tags == ["tag_5", "tag_6", "tag_7"]
+
+
 def test_a_carried_stack_is_marked_uncertain_until_a_cube_in_it_is_seen():
     w = World()
     tall_stack(w)
@@ -470,3 +482,14 @@ def test_poses_given_as_lists_work_like_tuples():
     snap = w.settle({"tag_7": [0.35, 0.05, 0.15], "tag_1": [0.5, -0.2, 0.05]})
     assert snap.column_of("tag_7").tags == ["tag_5", "tag_6", "tag_7"]
     assert all(isinstance(c.position, tuple) for c in snap.columns)
+
+
+def test_the_snapshot_says_why_a_move_was_or_was_not_carried():
+    w = World()
+    tall_stack(w)
+    snap = w.settle({"tag_7": at(0.4, 0.2, 1)})
+    assert any("not carried" in n and "height changed" in n for n in snap.notes)
+    w = World()
+    tall_stack(w)
+    snap = w.settle({"tag_7": at(0.35, 0.05, 3)})
+    assert any("carried tag_5, tag_6" in n and "not" not in n for n in snap.notes)
