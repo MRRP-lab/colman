@@ -126,7 +126,12 @@
     <!-- Wrist camera mount: the previous mount with the hand-eye correction from calibrate_camera.py
          (calib_data_20261026_1156, fitted to the table edges; held-out edge error 1.09 mm). The
          correction is applied in the optical frame: moves the camera 1.3 mm and turns it 0.5 deg. -->
+    <!-- Wrist camera mount from the hand-eye correction in c8a4f18, superseded by the grid fit below
     <xacro:oakd_pro_joint x="0.000333" y="-0.100725" z="0.044019" roll="0.012657" pitch="-0.007433" yaw="-3.138355" mount_point="$(arg oakd_mount_point)" parent_link="camera_adapter_link"/>
+    -->
+    <!-- Wrist camera mount fitted to views of a grid on the table (calibration/results/wrist_camera_mount.yaml).
+         Scored against the touched circles: median 0.8 mm, against 1.6 mm for the mount above and 6.1 mm for the original. -->
+    <xacro:oakd_pro_joint x="0.000609" y="-0.099473" z="0.043895" roll="0.009631" pitch="-0.003062" yaw="-3.141120" mount_point="$(arg oakd_mount_point)" parent_link="camera_adapter_link"/>
   </xacro:if>
 
   <!-- vacuum gripper -->

@@ -23,3 +23,9 @@ __pycache__/
 calib_samples.npz
 # api keys
 .env
+
+# calibration captures are large; the small data kept with the calibration is not
+*.npz
+*.png
+!calibration/**/*.npz
+!calibration/**/*.png

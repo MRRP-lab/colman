@@ -1,0 +1,62 @@
+child_frame: overhead_camera_optical_frame
+fit:
+  edges:
+  - grid_data/overhead
+  - grid_data/oh_midrot
+  grids:
+  - grid_data/oh_topleft
+  - grid_data/oh_farright
+  - grid_data/oh_nearleft2
+  - grid_data/oh_nearright
+  - grid_data/overhead
+  - grid_data/oh_midrot
+  method: table edges and grid corners, one pose
+  sigma_corner_px: 0.15
+  sigma_edge_px: 0.4
+  wrist_calibration: colman-processing/calib_data_20261026_1156/calibration.yaml
+parent_frame: base_link
+quaternion_xyzw:
+- 0.7106552249855365
+- -0.702763164956181
+- -0.028023599607622213
+- 0.017543176638587402
+rotation_matrix:
+- - 0.01067722369161984
+  - -0.9978613842910209
+  - -0.064487631643954
+- - -0.9998278761228832
+  - -0.011632341868411021
+  - 0.014453606825319355
+- - -0.015172838292277929
+  - 0.06432220738954471
+  - -0.9978138296369182
+static_transform_args:
+- '0.33275'
+- '0.05225'
+- '1.82645'
+- '0.71066'
+- '-0.70276'
+- '-0.02802'
+- '0.01754'
+- base_link
+- overhead_camera_optical_frame
+translation_m:
+- 0.33275081007205215
+- 0.05225361890645422
+- 1.826447281349554
+touch_off_fit:
+  method: 8 circles touched with the vacuum nozzle, camera pose only (intrinsics fixed),
+    projected onto the mean touched height
+  data: touch_off_data/
+  points: 8
+  rms_mm: 0.41
+  worst_mm: 0.71
+  leave_one_out_mean_mm: 0.86
+  leave_one_out_worst_mm: 2.76
+  error_before_mm: 2.83
+  previous_translation_m:
+  - 0.342209967508181
+  - 0.04808542944111356
+  - 1.8301225839911397
+  note: touched z includes the nozzle's rubber compression; the table is not known
+    to be level

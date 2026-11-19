@@ -37,6 +37,10 @@ setup(
             "demo_circle = colman_motion.demo_circle:main",
             "demo_obstacle = colman_motion.demo_obstacle:main",
             "eye_in_hand = colman_motion.eye_in_hand:main",
+            # camera calibration, see calibration/README.md
+            "calib_sweep = colman_motion.calib_sweep:main",
+            "grid_sweep_wrist = colman_motion.grid_sweep_wrist:main",
+            "wrist_circle_sweep = colman_motion.wrist_circle_sweep:main",
         ],
     },
 )

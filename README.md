@@ -40,6 +40,12 @@ Common tasks:
 | `llm` | LLM node: `/speech_text` -> Claude -> `llm_response` (needs `ANTHROPIC_API_KEY`) |
 | `fmt`, `lint` | `ruff` format and check |
 
+## Camera calibration
+
+The wrist camera's mount and the overhead camera's pose are calibrated against points the
+arm touched. The results, the data and how to redo them are in
+[`calibration/README.md`](calibration/README.md).
+
 ## Voice
 
 Speech runs locally where possible. The pipeline is
