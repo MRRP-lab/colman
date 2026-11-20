@@ -108,7 +108,7 @@ class CameraPublisher(Node):
             self.device, self.pipeline, self.queue, self.control_queue = (
                 self.open_camera()
             )
-        except RuntimeError as e:
+        except Exception as e:  # noqa: BLE001 - whatever an unplugged camera raises
             self.get_logger().warn(
                 f"No {self.camera} camera yet ({e}), retrying",
                 throttle_duration_sec=30.0,
@@ -174,7 +174,7 @@ class CameraPublisher(Node):
             if self.device.isClosed():
                 raise RuntimeError("device closed")
             packet = self.queue.tryGet()
-        except RuntimeError as e:
+        except Exception as e:  # noqa: BLE001 - an unplugged camera raises many things
             self.get_logger().warn(f"Camera lost ({e}), reconnecting")
             self.disconnect()
             return

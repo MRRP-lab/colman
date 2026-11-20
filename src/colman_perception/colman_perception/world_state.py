@@ -25,6 +25,7 @@ from colman_perception.stack_world import (
     SETTLE_Z_M,
     StackModel,
     shifted,
+    should_publish,
 )
 
 BASE_FRAME = "base_link"
@@ -347,7 +348,8 @@ class WorldState(Node):
     def update(self):
         now = self.get_clock().now()
         wrist_usable = self.arm_still(now)
-        poses, settled, fresh = {}, {}, {}
+        camera_alive = self.camera_alive(now)
+        poses, states, settled, fresh = {}, {}, {}, {}
         for tag_frame in self.tag_frames:
             state, pose, seen = self.track(tag_frame, now, wrist_usable)
             if state != self.state.get(tag_frame):
@@ -355,6 +357,7 @@ class WorldState(Node):
                 self.state[tag_frame] = state
             if pose is not None:
                 poses[tag_frame] = pose
+                states[tag_frame] = state
                 if state != "held":
                     settled[tag_frame] = pose[0]
             if seen is not None:
@@ -370,7 +373,7 @@ class WorldState(Node):
             fresh,
             held,
             hides,
-            self.camera_alive(now),
+            camera_alive,
         )
         for tag_frame, pose in snapshot.restored.items():
             if self.belief.get(tag_frame) is None:
@@ -392,7 +395,8 @@ class WorldState(Node):
             poses.pop(tag_frame, None)
 
         for tag_frame, pose in poses.items():
-            self.publish(tag_frame, pose, now)
+            if should_publish(states.get(tag_frame), camera_alive):
+                self.publish(tag_frame, pose, now)
         self.ticks += 1
         if self.ticks % PUBLISH_EVERY == 0:
             self.publish_world(snapshot, now)

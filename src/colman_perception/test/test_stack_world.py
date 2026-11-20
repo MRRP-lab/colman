@@ -6,6 +6,7 @@ from colman_perception.stack_world import (
     LOST_S,
     MOVED_XY_M,
     MOVED_Z_M,
+    OUTAGE_S,
     RESTORE_S,
     SETTLE_XY_M,
     SETTLE_Z_M,
@@ -13,6 +14,7 @@ from colman_perception.stack_world import (
     StackModel,
     level_of,
     shifted,
+    should_publish,
 )
 
 ALL = [f"tag_{i}" for i in range(1, 9)]
@@ -788,3 +790,60 @@ def test_a_lost_tag_says_which_rule_dropped_it():
     w.settle({"tag_4": at(0.4, -0.2, 1)})
     snap = w.settle({"tag_4": at(0.4, -0.2, 1)}, seconds=LOST_S + 1)
     assert "not seen and not covered" in snap.lost_why["tag_3"]
+
+
+# ----------------------------------------------------- the camera is unplugged
+def test_with_the_camera_down_only_a_wrist_or_held_pose_is_published():
+    assert should_publish("overhead", True) and should_publish("remembered", True)
+    assert should_publish("wrist", False) and should_publish("held", False)
+    assert not should_publish("overhead", False)
+    assert not should_publish("remembered", False)
+    assert not should_publish(None, False)
+
+
+def test_a_long_outage_makes_the_order_inside_a_stack_uncertain():
+    w = World()
+    stack = {"tag_5": at(0.2, 0.0, 1), "tag_6": at(0.2, 0.0, 2)}
+    w.settle(stack)
+    w.settle({"tag_6": stack["tag_6"]})  # tag_5 is covered and remembered
+    assert w.settle({"tag_6": stack["tag_6"]}).column_of("tag_6").order_known
+    w.see({}, seconds=0.5, alive=False)  # the camera stops
+    w.see({}, seconds=OUTAGE_S + 5, alive=False)
+    snap = w.settle({"tag_6": stack["tag_6"]})
+    assert snap.column_of("tag_6").tags == ["tag_5", "tag_6"]
+    assert not snap.column_of("tag_6").order_known
+    assert any("camera was down" in n for n in snap.notes)
+
+
+def test_a_short_outage_leaves_the_order_alone():
+    w = World()
+    stack = {"tag_5": at(0.2, 0.0, 1), "tag_6": at(0.2, 0.0, 2)}
+    w.settle(stack)
+    w.settle({"tag_6": stack["tag_6"]})
+    w.see({}, seconds=0.5, alive=False)
+    w.see({}, seconds=OUTAGE_S - 5, alive=False)
+    snap = w.settle({"tag_6": stack["tag_6"]})
+    assert snap.column_of("tag_6").order_known
+    assert not any("camera was down" in n for n in snap.notes)
+
+
+def test_a_stack_left_with_no_visible_top_is_forgotten_after_a_long_outage():
+    w = World()
+    stack_of_three(w)
+    w.take("tag_2")
+    snap = w.settle({"tag_6": at(0.2, -0.3, 1)})
+    assert any(c.height == 2 and not c.top_seen for c in snap.columns)  # a ghost
+    w.see({}, seconds=0.5, alive=False)
+    w.see({}, seconds=OUTAGE_S + 5, alive=False)
+    snap = w.settle({"tag_6": at(0.2, -0.3, 1)})
+    assert all(c.top_seen for c in snap.columns)
+
+
+def test_the_outage_is_timed_from_when_the_camera_stopped():
+    w = World()
+    w.settle({"tag_3": at(0.4, 0.2, 1)})
+    w.see({}, seconds=0.5, alive=False)  # the camera stops
+    w.see({}, seconds=OUTAGE_S - 2, alive=False)
+    w.see({}, seconds=3.0, alive=False)  # more than 10 s since it stopped, in steps
+    snap = w.settle({"tag_3": at(0.4, 0.2, 1)})
+    assert any("camera was down" in n for n in snap.notes)

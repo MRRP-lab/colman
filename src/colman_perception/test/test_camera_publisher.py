@@ -150,3 +150,26 @@ def test_overhead_camera_runs_at_4k():
     assert camera_publisher.CAMERAS["overhead"][2] == (3840, 2160)
     node = FakeCameraPublisher([[]])
     assert (node.info_msg.width, node.info_msg.height) == (1280, 720)  # wrist default
+
+
+class DyingQueue(FakeQueue):
+    """A queue that raises a non-RuntimeError, as an unplugged camera may."""
+
+    def tryGet(self):
+        raise ValueError("X_LINK_ERROR")
+
+
+def test_reconnects_when_an_unplugged_camera_raises_an_unexpected_error():
+    node = FakeCameraPublisher([[], []])
+    node.queue = DyingQueue([])
+    node.timer_callback()  # must not raise
+    assert node.device is None
+    node.reconnect_callback()
+    assert node.device is not None and len(node.opened) == 2
+
+
+def test_keeps_retrying_when_opening_raises_an_unexpected_error():
+    node = FakeCameraPublisher([ValueError("X_LINK_ERROR"), []])
+    assert node.device is None  # the first open failed and the node is still running
+    node.reconnect_callback()
+    assert node.device is not None

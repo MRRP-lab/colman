@@ -19,6 +19,21 @@ LOST_S = 10.0  # how long a tag may vanish with no explanation before it is lost
 ARM_HIDE_MAX_S = 30.0  # the arm may explain a missing tag for this long, no longer
 CARRY_MEMORY_S = 60.0  # how long a stack's covered cubes are remembered for a slide
 RESTORE_S = 8.0  # a deleted tag comes back if a cube lands on its spot within this
+OUTAGE_S = 10.0  # after the camera was down this long, remembered cubes are doubted
+# The sources of a tag pose that can still be trusted while the overhead camera is down.
+TRUSTED_WITHOUT_OVERHEAD = ("wrist", "held")
+
+
+def should_publish(state, camera_alive):
+    """Whether a tag's pose may be published as tag_N.
+
+    With the overhead camera down, a remembered or overhead pose is a guess that may be
+    long out of date, and the motion server would act on it as if it were current. Only
+    a pose the wrist camera sees right now, or a cube held in the gripper, is published.
+    """
+    return camera_alive or state in TRUSTED_WITHOUT_OVERHEAD
+
+
 GHOST_S = 15.0  # how long a stack whose top was removed is kept while its tag is unseen
 ARM_CLEAR_M = 0.12  # the arm hides the table within this of its base-to-tip line
 UNKNOWN = "unknown"
@@ -109,6 +124,7 @@ class StackModel:
         self.gone = {}  # tag -> (pose, when) of a belief dropped without being lost
         self.refused = {}  # top tag -> the last reason its slide was not carried
         self.why = {}  # tag -> which rule dropped it in the current update
+        self.dead_since = None  # when the camera stopped, while it is down
 
     def covered(self, tag, pos, visible):
         """True if a seen tag sits over this one, at a higher cube level.
@@ -150,6 +166,10 @@ class StackModel:
         if not camera_alive:
             self.unexplained.clear()
             self.arm_hidden.clear()
+            if self.dead_since is None:
+                self.dead_since = now_s
+        elif self.dead_since is not None:
+            self.camera_returned(now_s, beliefs, visible, notes)
         self.beneath = {
             top: v for top, v in self.beneath.items() if now_s - v[3] < CARRY_MEMORY_S
         }
@@ -215,6 +235,24 @@ class StackModel:
             notes,
             restored,
             dict(self.why),
+        )
+
+    def camera_returned(self, now_s, beliefs, visible, notes):
+        """After a long outage, doubt what was only remembered.
+
+        Cubes may have been moved, stacked or taken away while nothing was watching, so
+        the order inside a stack, the stacks that had lost their top, and the cubes in
+        transit are no longer something to rely on.
+        """
+        outage = now_s - self.dead_since
+        self.dead_since = None
+        if outage < OUTAGE_S:
+            return
+        self.uncertain.update(t for t in beliefs if t not in visible)
+        self.ghosts = []
+        self.beneath = {}
+        notes.append(
+            f"the camera was down {outage:.0f} s; remembered cubes are uncertain"
         )
 
     def restore(self, now_s, beliefs, visible, notes):
