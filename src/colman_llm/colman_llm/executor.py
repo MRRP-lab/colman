@@ -10,13 +10,7 @@ runs without ROS or an arm (the node's dry_run mode).
 import threading
 import time
 
-from colman_llm.tools import (
-    DESTINATION_FRAMES,
-    MAX_STACK,
-    OBJECT_FRAMES,
-    POSES,
-    STACKS,
-)
+from colman_llm.tools import COLORS, CUBE_NAMES, CUBES_PER_COLOR, MIN_STACK, POSES
 from colman_llm.world_view import NAME_OF
 
 HELD_HINT = "The arm may still be holding it. Say release to let go of it."
@@ -30,11 +24,11 @@ def validate_pick_and_place(args):
     if not isinstance(args, dict) or set(args) != {"object", "destination"}:
         return None, None, "pick_and_place needs exactly an object and a destination."
     obj, dest = args["object"], args["destination"]
-    if not isinstance(obj, str) or obj not in OBJECT_FRAMES:
+    if not isinstance(obj, str) or obj not in CUBE_NAMES:
         return None, None, f"I don't know an object called {obj}."
-    if not isinstance(dest, str) or dest not in DESTINATION_FRAMES:
+    if not isinstance(dest, str) or dest not in CUBE_NAMES:
         return None, None, f"I don't know a destination called {dest}."
-    return OBJECT_FRAMES[obj], DESTINATION_FRAMES[dest], None
+    return CUBE_NAMES[obj], CUBE_NAMES[dest], None
 
 
 def validate_go_to_pose(args):
@@ -52,12 +46,19 @@ def validate_stack_cube(args):
     if not isinstance(args, dict) or set(args) != {"color", "count"}:
         return None, None, "stack_cube needs exactly a color and a count."
     color, count = args["color"], args["count"]
-    if not isinstance(color, str) or color not in STACKS:
+    if not isinstance(color, str) or color not in COLORS:
         return None, None, f"I don't have {color} cubes."
     if isinstance(count, bool) or not isinstance(count, int):
         return None, None, "The count must be a whole number."
-    if not 1 <= count <= MAX_STACK:
-        return None, None, f"I can stack between 1 and {MAX_STACK} cubes at a time."
+    if not MIN_STACK <= count <= CUBES_PER_COLOR:
+        return (
+            None,
+            None,
+            (
+                f"A stack needs between {MIN_STACK} and {CUBES_PER_COLOR} cubes of one "
+                "colour."
+            ),
+        )
     return color, count, None
 
 
@@ -140,16 +141,18 @@ class PickAndPlaceExecutor:
         return None
 
     def _stack(self, color, count):
+        """Grow the colour's tallest stack to count cubes, one cube at a time."""
         done = 0
         why = ""
         for _ in range(count):
             view = self._look()
             if view is None:
                 return False, self._partial(color, done, count, NO_VIEW)
-            cube, target, reason = view.next_move(color)
+            cube, target, reason = view.next_move(color, count)
             if cube is None:
                 if done == 0:
-                    return False, reason
+                    already = view.height(color) >= count
+                    return already, reason
                 why = reason
                 break
             name = view.name_of(cube)
@@ -193,9 +196,11 @@ class PickAndPlaceExecutor:
             done += 1
         view = self._look()
         height = view.height(color) if view is not None else 0
-        message = f"Stacked {done} {color} cube{'s' if done != 1 else ''}. "
-        message += f"The {color} stack now has {height} on top of its base."
-        if done < count:
+        message = (
+            f"Added {done} {color} cube{'s' if done != 1 else ''}. "
+            f"The tallest {color} stack now has {height}."
+        )
+        if height < count:
             message += f" {why} I stopped."
         return True, message
 
@@ -203,8 +208,8 @@ class PickAndPlaceExecutor:
         view = self._look()
         height = view.height(color) if view is not None else 0
         return (
-            f"Stacked {done} of {count} {color} cubes. {reason} "
-            f"The {color} stack has {height} on top of its base."
+            f"Added {done} {color} cubes toward a stack of {count}. {reason} "
+            f"The tallest {color} stack has {height}."
         )
 
     def _pick_and_place(self, args):

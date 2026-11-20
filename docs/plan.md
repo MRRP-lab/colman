@@ -126,16 +126,13 @@ The enum values are human names. The node maps them to frames, so Claude never s
 
 ```python
 # The eight tagged cubes: tags 1 to 4 are white cubes 1 to 4, tags 5 to 8 blue cubes 1 to 4.
-# Cube 1 of each colour is a base and never moves.
+# No cube is special: any cube can be picked and any cube can be placed on.
 CUBE_NAMES = {"white cube 1": "tag_1", "white cube 2": "tag_2", ..., "blue cube 4": "tag_8"}
-
-OBJECT_FRAMES = {n: f for n, f in CUBE_NAMES.items() if f not in BASE_FRAMES}  # 6 loose cubes
-DESTINATION_FRAMES = dict(CUBE_NAMES)                                           # any of the 8
 
 POSES = {"home": "home", "compact": "Compact"}
 ```
 
-`pick_and_place(object, destination)` picks one loose cube and places it on top of any cube. Claude never names a tag; the node maps the spoken names above to frames. The node also checks the move against the latest `/world_state` (what the overhead camera sees) before the arm moves, and again after the pick,, and refuses with a plain-language reason if the cube is a base, already has a cube on top, is already on the destination, or the destination is covered or already 3 cubes high. It then waits for the camera to see the cube on the destination before reporting success.
+`pick_and_place(object, destination)` picks one cube and places it on top of any other cube, in any colour. Claude never names a tag; the node maps the spoken names above to frames. The node also checks the move against the latest `/world_state` (what the overhead camera sees) before the arm moves, and again after the pick,, and refuses with a plain-language reason if the cube has a cube on top of it, is already on the destination, or the destination is covered. There is no height limit in the node, but the arm cannot reach very tall stacks (see `docs/arm_reach`). It then waits for the camera to see the cube on the destination before reporting success.
 
 Even with `strict: true` the executor re-checks every value against these dicts before sending a goal, because the node is the safety boundary.
 
@@ -153,13 +150,13 @@ Parse `tool_use.input` as already-decoded JSON from the SDK. Do not string-match
 
 ## Cube stacking demo
 
-The demo uses tagged cubes. Tags 1 to 4 are white cubes and tags 5 to 8 are blue cubes. Cube 1 of each colour (`tag_1`, `tag_5`) is the base of that colour's stack and never moves. The other three are loose, and the detector config (`colman_perception/config/apriltag.yaml`) registers IDs 1 to 8 at 39.2 mm.
+The demo uses tagged cubes. Tags 1 to 4 are white cubes and tags 5 to 8 are blue cubes. No cube is a base: any cube can be moved and any cube can go on any other. The detector config (`colman_perception/config/apriltag.yaml`) registers IDs 1 to 8 at 39.2 mm.
 
-Claude gets `stack_cube(color, count)` for building a stack, with `color` in `white` or `blue` and `count` from 1 to 3, and `pick_and_place`, `go_to_pose`, `release_cube`, `report_state`, `stop_robot` and `resume_robot` (see Tool definitions). The node, not Claude, decides which cube moves where:
+Claude gets `stack_cube(color, count)` for building a stack, with `color` in `white` or `blue` and `count` from 2 to 4, the number of cubes in the finished stack, and `pick_and_place`, `go_to_pose`, `release_cube`, `report_state`, `stop_robot` and `resume_robot` (see Tool definitions). The node, not Claude, decides which cube moves where:
 
-- The stacks come from the `world_state` node, which reads them off the overhead camera every frame; nothing remembers the arm's own moves. The height of a column is `round(corrected z / 50 mm)` of its top tag (`overhead_correction.py` fixes the overhead depth bias), tags at the same x, y form a column, a tag covered by a taller tag at the same x, y is remembered, and a tag that vanishes with nothing over it and the arm out of the way is dropped after 2 s. If what the camera sees contradicts what was remembered (a cube pulled from under a stack) the camera wins and the order is marked uncertain. The next loose cube of that colour is picked with `/pick`, and placed with `/place` on the top of the stack: the base for the first cube, then the previously placed cube. `/place` with a `location` already drops 50 mm above the tag, which is one cube height, so the cube lands on top of the cube carrying that tag.
-- A count above what fits stops when the stack is full and says so. A failed pick or place, or a spoken stop, ends the run and reports how many were stacked. A failed cube is not counted, so a retry targets the same cube and spot.
-- The state is in memory. Restarting the node resets it, so every run starts with empty stacks and loose cubes.
+- The stacks come from the `world_state` node, which reads them off the overhead camera every frame; nothing remembers the arm's own moves. The height of a column is `round(corrected z / 50 mm)` of its top tag (`overhead_correction.py` fixes the overhead depth bias), tags at the same x, y form a column, a tag covered by a taller tag at the same x, y is remembered, and a tag that vanishes with nothing over it and the arm out of the way is dropped after 2 s. If what the camera sees contradicts what was remembered (a cube pulled from under a stack) the camera wins and the order is marked uncertain. `stack_cube` builds on the tallest column made only of that colour, whichever cube is at its bottom, and adds the top cube of the shortest other column of that colour, so loose cubes go first. Each is picked with `/pick` and placed with `/place` on the top of the stack. Columns that hold another colour, or a cube the camera cannot identify, are left alone. `/place` with a `location` already drops 50 mm above the tag, which is one cube height, so the cube lands on top of the cube carrying that tag.
+- A stack that is already tall enough is reported, not rebuilt, and a count the free cubes cannot reach stops and says so. A failed pick or place, or a spoken stop, ends the run and reports how many were stacked. A failed cube is not counted, so a retry targets the same cube and spot.
+- The state is in memory. Restarting the node resets it, and the stacks are read from the camera, so a restart loses nothing.
 - `pick_and_place` and `stack_cube` share one model of which cube sits on which, so a cube moved by one is where the other expects it. A cube left in the gripper after a failed place blocks every other arm tool until `release_cube`.
 
 If a place fails after a successful pick, the vacuum still holds the cube and the next pick fails with "Already holding". Release it with `ros2 service call /release std_srvs/srv/Trigger`.
@@ -208,7 +205,7 @@ The output node uses its defaults: `stream` mode and the `am_echo` voice, with a
 
 The microphone mute is implemented in the Parakeet node (see Starting point). It subscribes to `tts_speaking` with transient-local QoS, so a late-starting mic node sees the current state.
 
-Before a long action starts, the worker publishes the acknowledgement "On it." as a separate `llm_response` message, so the user knows the command was heard.
+There is no fixed acknowledgement. The system prompt tells Claude to say one short sentence in its own words before `stack_cube`, `pick_and_place` or `go_to_pose`. `ClaudeClient.say` hands any text Claude writes before a tool call to the node as soon as it arrives, so it is spoken while the arm moves, and the reply returned afterwards is only what Claude says after the tool result. The one fixed phrase left is "Stopped." on a spoken stop, which skips Claude so it is instant.
 
 The speech loop:
 
