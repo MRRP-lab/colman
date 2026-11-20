@@ -29,3 +29,5 @@ wrist_hand_eye_samples.npz
 *.png
 !camera_pose_calibration/**/*.npz
 !camera_pose_calibration/**/*.png
+# hardware-in-the-loop run results
+hil_results/
