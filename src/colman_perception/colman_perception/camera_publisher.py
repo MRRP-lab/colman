@@ -156,38 +156,50 @@ class CameraPublisher(Node):
         the camera is missing or busy.
         """
         device = dai.Device(device_info(self.camera))
-        pipeline = dai.Pipeline(device)
-        cam = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
-        # Autofocus and autoexposure are set explicitly, so they never depend on the
-        # camera's defaults. Both keep adjusting as the arm moves and the view changes.
-        if self.camera in LOCKED_LENS_POSITION:
-            cam.initialControl.setManualFocus(LOCKED_LENS_POSITION[self.camera])
-        else:
-            cam.initialControl.setAutoFocusMode(CONTINUOUS_AF)
-        cam.initialControl.setAutoExposureEnable()
-        control_queue = cam.inputControl.createInputQueue()
-        if self.jpeg_quality == 0:
-            out = cam.requestOutput(self.size, enableUndistortion=True, fps=self.fps)
-        else:
-            # The camera's encoder takes NV12 and compresses each frame on its own.
-            nv12 = cam.requestOutput(
-                self.size,
-                type=dai.ImgFrame.Type.NV12,
-                enableUndistortion=True,
-                fps=self.fps,
-            )
-            out = (
-                pipeline.create(dai.node.VideoEncoder)
-                .build(
-                    nv12,
-                    frameRate=self.fps,
-                    profile=dai.VideoEncoderProperties.Profile.MJPEG,
-                    quality=self.jpeg_quality,
+        try:
+            pipeline = dai.Pipeline(device)
+            cam = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
+            # Autofocus and autoexposure are set explicitly, so they never depend on
+            # the camera's defaults. Both keep adjusting as the arm moves and the view
+            # changes.
+            if self.camera in LOCKED_LENS_POSITION:
+                cam.initialControl.setManualFocus(LOCKED_LENS_POSITION[self.camera])
+            else:
+                cam.initialControl.setAutoFocusMode(CONTINUOUS_AF)
+            cam.initialControl.setAutoExposureEnable()
+            control_queue = cam.inputControl.createInputQueue()
+            if self.jpeg_quality == 0:
+                out = cam.requestOutput(
+                    self.size, enableUndistortion=True, fps=self.fps
                 )
-                .out
-            )
-        queue = out.createOutputQueue(maxSize=4, blocking=False)
-        pipeline.start()
+            else:
+                # The camera's encoder takes NV12 and compresses each frame on its own.
+                nv12 = cam.requestOutput(
+                    self.size,
+                    type=dai.ImgFrame.Type.NV12,
+                    enableUndistortion=True,
+                    fps=self.fps,
+                )
+                out = (
+                    pipeline.create(dai.node.VideoEncoder)
+                    .build(
+                        nv12,
+                        frameRate=self.fps,
+                        profile=dai.VideoEncoderProperties.Profile.MJPEG,
+                        quality=self.jpeg_quality,
+                    )
+                    .out
+                )
+            queue = out.createOutputQueue(maxSize=4, blocking=False)
+            pipeline.start()
+        except BaseException:
+            # Nothing owns the device yet, so close it here; left open it stays busy
+            # and every retry fails with "already in use".
+            try:
+                device.close()
+            except Exception:  # noqa: BLE001 - the device may already be gone
+                pass
+            raise
         return device, pipeline, queue, control_queue
 
     def connect(self):
@@ -282,7 +294,16 @@ class CameraPublisher(Node):
             return
         self.last_frame = now
         for packet in packets:
-            self.accept(packet)
+            try:
+                self.accept(packet)
+            except RuntimeError as e:
+                self.get_logger().warn(f"Camera lost while reading ({e}), reconnecting")
+                self.disconnect()
+                return
+            except AttributeError:  # a packet with no frame in it
+                self.get_logger().warn(
+                    "Camera sent an empty frame", throttle_duration_sec=5
+                )
         self.publish_ready()
 
     def accept(self, packet):
@@ -293,6 +314,16 @@ class CameraPublisher(Node):
             f"exposure {packet.getExposureTime().total_seconds() * 1e6:.0f} us, "
             f"iso {packet.getSensitivity()}"
         )
+        frame = None
+        if self.pool is None:
+            frame = packet.getCvFrame()
+            if frame is not None:
+                # The size can differ from the configured one (a reconnect may come back
+                # at another resolution), and the intrinsics belong to the frame's size.
+                height, width = frame.shape[:2]
+                if (width, height) != (self.info_msg.width, self.info_msg.height):
+                    self.info_msg.width, self.info_msg.height = width, height
+                    self._info_ready = False
         if not self._info_ready:
             k = np.array(packet.getTransformation().getIntrinsicMatrix())
             self.info_msg.k = k.flatten().tolist()
@@ -300,7 +331,7 @@ class CameraPublisher(Node):
             self._info_ready = True
 
         if self.pool is None:
-            self.pending.append((stamp, packet.getCvFrame()))
+            self.pending.append((stamp, frame))
         elif len(self.pending) >= MAX_IN_FLIGHT:
             self.get_logger().warn(
                 "Decoding cannot keep up, dropping frames",
