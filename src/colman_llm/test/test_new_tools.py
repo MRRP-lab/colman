@@ -4,41 +4,15 @@ import logging
 
 import pytest
 from colman_llm.executor import FakeExecutor, PickAndPlaceExecutor
+from colman_llm.fake_arm import FakeArm
 
 LOG = logging.getLogger("test")
 
 
 def make(pick=None, place=None, release=(True, "off"), move=(True, "ok"), stop=True):
     """Executor with scripted arm results. Returns (executor, calls)."""
-    calls = []
-    picks, places = list(pick or []), list(place or [])
-
-    def do_pick(frame):
-        calls.append(("pick", frame))
-        return picks.pop(0) if picks else (True, "ok")
-
-    def do_place(frame):
-        calls.append(("place", frame))
-        return places.pop(0) if places else (True, "ok")
-
-    def do_release():
-        calls.append(("release",))
-        return release
-
-    def do_move(pose):
-        calls.append(("move_to", pose))
-        return move
-
-    executor = PickAndPlaceExecutor(
-        do_pick,
-        do_place,
-        LOG,
-        stop=(lambda: (True, "stopped")) if stop else None,
-        resume=(lambda: (True, "resumed")) if stop else None,
-        release=do_release,
-        move_to=do_move,
-    )
-    return executor, calls
+    arm = FakeArm(LOG, pick, place, release, move)
+    return arm.executor(stop=stop), arm.calls
 
 
 def pap(executor, obj, dest):
@@ -48,17 +22,49 @@ def pap(executor, obj, dest):
 # ------------------------------------------------------------------ pick_and_place
 def test_any_loose_cube_goes_on_any_cube():
     executor, calls = make()
-    ok, message = pap(executor, "blue cube 3", "white cube 1")
-    assert ok and "blue cube 3" in message and "white cube 1" in message
+    ok, message = pap(executor, "blue cube 7", "white cube 1")
+    assert ok and "blue cube 7" in message and "white cube 1" in message
     assert calls == [("pick", "tag_7"), ("place", "tag_1")]
 
 
-def test_a_manual_move_is_remembered_by_stack_cube():
+def test_a_manual_move_is_seen_by_stack_cube():
     executor, calls = make()
     pap(executor, "white cube 2", "white cube 1")
-    executor.run_tool("stack_cube", {"color": "white", "count": 1})
-    # white cube 3 goes on the cube that is now on top, not on the base again.
+    executor.run_tool("stack_cube", {"color": "white", "count": 3})
+    # white cube 3 goes on the cube that is now on top of the stack.
     assert calls[-2:] == [("pick", "tag_3"), ("place", "tag_2")]
+
+
+def test_stack_cube_builds_on_the_tallest_stack_whichever_cubes_it_holds():
+    executor, calls = make()
+    pap(executor, "white cube 3", "white cube 4")
+    del calls[:]
+    ok, message = executor.run_tool("stack_cube", {"color": "white", "count": 3})
+    # The stack with white cube 4 at the bottom is the tallest, so it grows. The
+    # cubes added are the other loose ones, in tag order.
+    assert ok and calls == [("pick", "tag_1"), ("place", "tag_3")]
+    assert "tallest white stack now has 3" in message
+
+
+def test_stack_cube_only_uses_cubes_of_its_colour():
+    executor, calls = make()
+    pap(executor, "white cube 2", "blue cube 5")  # a mixed stack
+    del calls[:]
+    ok, _ = executor.run_tool("stack_cube", {"color": "white", "count": 4})
+    # The mixed stack's white cube is not free and its blue base is not white.
+    assert calls == [
+        ("pick", "tag_3"),
+        ("place", "tag_1"),
+        ("pick", "tag_4"),
+        ("place", "tag_3"),
+    ]
+    assert ok
+
+
+def test_a_former_base_can_be_moved():
+    executor, calls = make()
+    assert pap(executor, "white cube 1", "blue cube 7")[0]
+    assert calls == [("pick", "tag_1"), ("place", "tag_7")]
 
 
 def test_blocked_moves_never_reach_the_arm():
@@ -79,22 +85,23 @@ def test_a_covered_cube_cannot_be_picked_up():
     executor, calls = make()
     pap(executor, "white cube 3", "white cube 2")
     del calls[:]
-    ok, message = pap(executor, "white cube 2", "blue cube 1")
+    ok, message = pap(executor, "white cube 2", "blue cube 5")
     assert not ok and "white cube 3 is on top of the white cube 2" in message
     assert calls == []
 
 
-def test_stacks_stop_at_the_height_limit():
+def test_stacks_can_mix_colours_and_grow_past_one_colour():
     executor, calls = make()
     for obj, dest in [
         ("white cube 2", "white cube 1"),
-        ("white cube 3", "white cube 2"),
-        ("white cube 4", "white cube 3"),
+        ("blue cube 6", "white cube 2"),
+        ("white cube 3", "blue cube 6"),
+        ("blue cube 8", "white cube 3"),
+        ("white cube 4", "blue cube 8"),
     ]:
         assert pap(executor, obj, dest)[0]
-    del calls[:]
-    ok, message = pap(executor, "blue cube 2", "white cube 4")
-    assert not ok and "3 cubes high" in message and calls == []
+    _, message = executor.run_tool("report_state", {})
+    assert "white cube 1 then white cube 2 then blue cube 6" in message
 
 
 def test_failed_pick_changes_nothing():
@@ -123,20 +130,23 @@ def test_failed_place_leaves_the_cube_held_until_released():
 
 def test_stack_cube_failed_place_also_holds_the_cube():
     executor, _ = make(place=[(False, "no")])
-    ok, _ = executor.run_tool("stack_cube", {"color": "white", "count": 1})
+    ok, _ = executor.run_tool("stack_cube", {"color": "white", "count": 2})
     assert not ok
-    ok, message = pap(executor, "blue cube 2", "blue cube 1")
+    ok, message = pap(executor, "blue cube 6", "blue cube 5")
     assert not ok and "still holding the white cube 2" in message
 
 
 def test_pick_and_place_is_rejected_while_busy():
     holder = {}
+    arm = FakeArm(LOG)
 
-    def pick(frame):
+    def pick(frame, place_frame=""):
         holder["second"] = pap(holder["executor"], "white cube 3", "white cube 1")
-        return True, "ok"
+        return arm.do_pick(frame, place_frame)
 
-    holder["executor"] = PickAndPlaceExecutor(pick, lambda f: (True, "ok"), LOG)
+    holder["executor"] = PickAndPlaceExecutor(
+        pick, arm.do_place, LOG, arm.world.view, sleep=lambda s: None
+    )
     assert pap(holder["executor"], "white cube 2", "white cube 1")[0]
     ok, message = holder["second"]
     assert not ok and "busy" in message
@@ -164,16 +174,20 @@ def test_release_takes_no_arguments():
 def test_release_is_refused_while_the_arm_is_moving():
     holder = {}
 
+    arm = FakeArm(LOG)
+
     def place(frame):
         holder["release"] = holder["executor"].run_tool("release_cube", {})
-        return True, "ok"
+        return arm.do_place(frame)
 
     calls = []
     holder["executor"] = PickAndPlaceExecutor(
-        lambda f: (True, "ok"),
+        arm.do_pick,
         place,
         LOG,
+        arm.world.view,
         release=lambda: calls.append("release") or (True, "off"),
+        sleep=lambda s: None,
     )
     pap(holder["executor"], "white cube 2", "white cube 1")
     ok, message = holder["release"]
@@ -220,13 +234,19 @@ def test_move_failure_is_reported():
 
 def test_go_to_pose_is_refused_while_busy():
     holder = {}
+    arm = FakeArm(LOG)
 
-    def pick(frame):
+    def pick(frame, place_frame=""):
         holder["pose"] = holder["executor"].run_tool("go_to_pose", {"pose": "home"})
-        return True, "ok"
+        return arm.do_pick(frame, place_frame)
 
     holder["executor"] = PickAndPlaceExecutor(
-        pick, lambda f: (True, "ok"), LOG, move_to=lambda p: (True, "ok")
+        pick,
+        arm.do_place,
+        LOG,
+        arm.world.view,
+        move_to=lambda p: (True, "ok"),
+        sleep=lambda s: None,
     )
     pap(holder["executor"], "white cube 2", "white cube 1")
     ok, message = holder["pose"]
@@ -239,17 +259,17 @@ def test_report_state_on_a_fresh_table():
     ok, message = executor.run_tool("report_state", {})
     assert ok and calls == []
     assert "No cubes are stacked" in message
-    assert "white cube 2" in message and "blue cube 4" in message
+    assert "white cube 2" in message and "blue cube 8" in message
     assert "not holding anything" in message and "ready" in message
 
 
 def test_report_state_follows_the_stacks_and_the_gripper():
     executor, _ = make(place=[(True, "ok"), (False, "no")])
     pap(executor, "white cube 2", "white cube 1")
-    pap(executor, "blue cube 2", "white cube 2")  # place fails, still holding
+    pap(executor, "blue cube 6", "white cube 2")  # place fails, still holding
     _, message = executor.run_tool("report_state", {})
-    assert "the white cube 1 has white cube 2 on top" in message
-    assert "holding the blue cube 2" in message
+    assert "white cube 1 then white cube 2, bottom to top" in message
+    assert "holding the blue cube 6" in message
 
 
 def test_report_state_knows_about_stop_and_resume():
@@ -271,8 +291,73 @@ def test_report_state_takes_no_arguments():
 def test_fake_executor_runs_every_tool():
     fake = FakeExecutor(LOG)
     assert fake.run_tool(
-        "pick_and_place", {"object": "blue cube 2", "destination": "blue cube 1"}
+        "pick_and_place", {"object": "blue cube 6", "destination": "blue cube 5"}
     )[0]
     assert fake.run_tool("go_to_pose", {"pose": "home"})[0]
     assert fake.run_tool("release_cube", {})[0]
     assert fake.run_tool("report_state", {})[0]
+
+
+# ------------------------------------------- the motion server refuses a bad place
+def test_pick_and_place_tells_the_server_where_the_cube_will_go():
+    arm = FakeArm(LOG)
+    seen = []
+    real = arm.do_pick
+    arm.do_pick = lambda frame, place_frame="": (
+        seen.append(place_frame) or real(frame, place_frame)
+    )
+    pap(arm.executor(), "white cube 3", "white cube 1")
+    assert seen == ["tag_1"]
+
+
+def test_a_place_the_server_cannot_reach_is_refused_before_anything_is_picked_up():
+    arm = FakeArm(LOG, unplaceable=["tag_1"])
+    ok, message = pap(arm.executor(), "white cube 3", "white cube 1")
+    assert not ok and "Could not pick up the white cube 3" in message
+    assert "No safe arm pose to place on tag_1" in message
+    assert arm.calls == [("pick refused", "tag_3", "tag_1")]
+    # nothing was picked, so the arm is not holding anything and can try again
+    assert pap(arm.executor(), "white cube 3", "white cube 2")[0]
+
+
+def test_stack_cube_stops_when_the_server_cannot_place_on_the_stack():
+    arm = FakeArm(LOG, unplaceable=["tag_1"])
+    ok, message = arm.executor().run_tool("stack_cube", {"color": "white", "count": 2})
+    assert not ok and "No safe arm pose to place on tag_1" in message
+    assert arm.calls == [("pick refused", "tag_2", "tag_1")]
+
+
+def test_the_arm_goes_home_after_a_job_so_the_camera_sees_the_table():
+    arm = FakeArm(LOG)
+    executor = arm.executor(clear_view_pose="home")
+    ok, _ = executor.run_tool(
+        "pick_and_place", {"object": "white cube 2", "destination": "white cube 1"}
+    )
+    assert ok and arm.calls[-1] == ("move_to", "home")
+    arm.calls.clear()
+    ok, _ = executor.run_tool("stack_cube", {"color": "blue", "count": 2})
+    assert ok and arm.calls[-1] == ("move_to", "home")
+
+
+def test_no_home_move_while_a_cube_is_held_or_the_arm_is_stopped():
+    arm = FakeArm(LOG, place=[(False, "no")])
+    executor = arm.executor(clear_view_pose="home")
+    executor.run_tool(
+        "pick_and_place", {"object": "white cube 2", "destination": "white cube 1"}
+    )
+    assert ("move_to", "home") not in arm.calls  # the place failed, the cube is held
+    arm2 = FakeArm(LOG)
+    executor2 = arm2.executor(clear_view_pose="home")
+    executor2.run_tool("stop_robot", {})
+    executor2.set_stopped(True)
+    executor2._clear_view()
+    assert ("move_to", "home") not in arm2.calls
+
+
+def test_without_a_clear_view_pose_the_arm_stays_where_the_job_ended():
+    arm = FakeArm(LOG)
+    executor = arm.executor()
+    executor.run_tool(
+        "pick_and_place", {"object": "white cube 2", "destination": "white cube 1"}
+    )
+    assert ("move_to", "home") not in arm.calls

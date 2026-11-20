@@ -8,17 +8,17 @@ runs without ROS or an arm (the node's dry_run mode).
 """
 
 import threading
+import time
 
-from colman_llm.stack_state import StackState
-from colman_llm.tools import (
-    DESTINATION_FRAMES,
-    MAX_STACK,
-    OBJECT_FRAMES,
-    POSES,
-    STACKS,
-)
+from colman_llm.tools import COLORS, CUBE_NAMES, CUBES_PER_COLOR, MIN_STACK, POSES
+from colman_llm.world_view import NAME_OF
 
 HELD_HINT = "The arm may still be holding it. Say release to let go of it."
+NO_VIEW = "I can't see the table right now, so I won't move."
+CONFIRM_TRIES = 20  # how many times to look for a placed cube before giving up
+CONFIRM_WAIT_S = 0.4
+MOVING_TOOLS = ("stack_cube", "pick_and_place", "go_to_pose")
+SETTLE_TRIES = 12  # how long to wait for a cube that is not in view yet
 
 
 def validate_pick_and_place(args):
@@ -26,11 +26,11 @@ def validate_pick_and_place(args):
     if not isinstance(args, dict) or set(args) != {"object", "destination"}:
         return None, None, "pick_and_place needs exactly an object and a destination."
     obj, dest = args["object"], args["destination"]
-    if not isinstance(obj, str) or obj not in OBJECT_FRAMES:
+    if not isinstance(obj, str) or obj not in CUBE_NAMES:
         return None, None, f"I don't know an object called {obj}."
-    if not isinstance(dest, str) or dest not in DESTINATION_FRAMES:
+    if not isinstance(dest, str) or dest not in CUBE_NAMES:
         return None, None, f"I don't know a destination called {dest}."
-    return OBJECT_FRAMES[obj], DESTINATION_FRAMES[dest], None
+    return CUBE_NAMES[obj], CUBE_NAMES[dest], None
 
 
 def validate_go_to_pose(args):
@@ -48,32 +48,67 @@ def validate_stack_cube(args):
     if not isinstance(args, dict) or set(args) != {"color", "count"}:
         return None, None, "stack_cube needs exactly a color and a count."
     color, count = args["color"], args["count"]
-    if not isinstance(color, str) or color not in STACKS:
+    if not isinstance(color, str) or color not in COLORS:
         return None, None, f"I don't have {color} cubes."
     if isinstance(count, bool) or not isinstance(count, int):
         return None, None, "The count must be a whole number."
-    if not 1 <= count <= MAX_STACK:
-        return None, None, f"I can stack between 1 and {MAX_STACK} cubes at a time."
+    if not MIN_STACK <= count <= CUBES_PER_COLOR:
+        return (
+            None,
+            None,
+            (
+                f"A stack needs between {MIN_STACK} and {CUBES_PER_COLOR} cubes of one "
+                "colour."
+            ),
+        )
     return color, count, None
 
 
 class PickAndPlaceExecutor:
-    """pick(frame) and place(frame) each return (ok, message) and may block."""
+    """pick(frame, place_frame) and place(frame) return (ok, message) and may block.
+
+    pick is told which cube the picked one will go on, so the motion server can refuse
+    before it lifts anything if it cannot place there.
+
+    world() returns the latest WorldView (what the overhead camera sees), or None if
+    there is none. Which cube is on which is read from it every time, never remembered.
+    """
 
     def __init__(
-        self, pick, place, logger, stop=None, resume=None, release=None, move_to=None
+        self,
+        pick,
+        place,
+        logger,
+        world,
+        stop=None,
+        resume=None,
+        release=None,
+        move_to=None,
+        clear_view_pose=None,
+        sleep=time.sleep,
     ):
+        self._world = world
+        self._sleep = sleep
         self._pick = pick
         self._place = place
         self._stop = stop
         self._resume = resume
         self._release = release
         self._move_to = move_to
+        self._clear_view_pose = clear_view_pose  # where the arm waits after a job
         self._log = logger
         self._busy = threading.Lock()
-        self._stacks = StackState()
         self._held = None  # frame of the cube the arm believes it is holding
         self._stopped = False
+
+    @property
+    def stopped(self):
+        return self._stopped
+
+    @property
+    def busy(self):
+        """True while a tool call is running, so the arm's own moves are not news."""
+        return self._busy.locked()
 
     def set_stopped(self, stopped):
         """The node calls this when a spoken stop reaches the arm outside run_tool."""
@@ -103,26 +138,97 @@ class PickAndPlaceExecutor:
         if not self._busy.acquire(blocking=False):
             return False, "The arm is already busy with another stacking job."
         try:
+            if self._held is not None:
+                return False, self._holding_message()
             return self._stack(color, count)
         finally:
             self._busy.release()
 
+    def _clear_view(self):
+        """Move the arm home after a job, so it is not left over the cubes.
+
+        The overhead camera cannot see a cube the arm covers, so a cube next to where a
+        job ended drops out of view until the arm moves. Not done while a cube is held
+        or the arm is stopped, and skipped if another job has already started.
+        """
+        if (
+            self._clear_view_pose is None
+            or self._move_to is None
+            or self._held is not None
+            or self._stopped
+        ):
+            return
+        if not self._busy.acquire(blocking=False):
+            return
+        try:
+            ok, message = self._move_to(self._clear_view_pose)
+            if not ok:
+                self._log.warning(f"Could not clear the view: {message}")
+        finally:
+            self._busy.release()
+
+    def _look(self):
+        return self._world()
+
+    def _look_until(self, verdict):
+        """Look until verdict(view) has no "can't see" complaint, for a few seconds.
+
+        The cameras need a moment after the arm moves, so a cube that is not seen yet
+        is usually seen a second later. Returns (view, complaint).
+        """
+        for _ in range(SETTLE_TRIES):
+            view = self._look()
+            complaint = verdict(view) if view is not None else None
+            if view is None or not complaint or "can't see" not in complaint:
+                return view, complaint
+            self._sleep(CONFIRM_WAIT_S)
+        view = self._look()
+        return view, (verdict(view) if view is not None else None)
+
+    def _confirm(self, cube, target):
+        """Wait until the camera sees the cube on top of the target's column."""
+        for _ in range(CONFIRM_TRIES):
+            view = self._look()
+            if view is not None and view.on_top_of(cube, target):
+                return view
+            self._sleep(CONFIRM_WAIT_S)
+        return None
+
     def _stack(self, color, count):
-        state = self._stacks
+        """Grow the colour's tallest stack to count cubes, one cube at a time."""
         done = 0
+        why = ""
         for _ in range(count):
-            move = state.next_move(color)
-            if move is None:
+            view, _ = self._look_until(lambda v: v.next_move(color, count)[2])
+            if view is None:
+                return False, self._partial(color, done, count, NO_VIEW)
+            cube, target, reason = view.next_move(color, count)
+            if cube is None:
+                if done == 0:
+                    already = view.height(color) >= count
+                    return already, reason
+                why = reason
                 break
-            cube, target = move
-            name = state.cube_name(color, cube)
+            name = view.name_of(cube)
             self._log.info(f"stack_cube: {name} ({cube}) onto {target}")
-            ok, message = self._pick(cube)
+            ok, message = self._pick(cube, target)
             if not ok:
                 return False, self._partial(
                     color, done, count, f"Could not pick up the {name}. {message}"
                 )
             self._held = cube
+            # Someone may have changed the stack while the arm was picking.
+            view = self._look()
+            new_target, reason = (
+                (None, NO_VIEW) if view is None else view.target_of(color)
+            )
+            if new_target is None:
+                return False, self._partial(
+                    color, done, count, f"Picked up the {name}. {reason} {HELD_HINT}"
+                )
+            if new_target != target:
+                self._log.info(f"stack_cube: top changed, {target} -> {new_target}")
+                target = new_target
             ok, message = self._place(target)
             if not ok:
                 return False, self._partial(
@@ -133,21 +239,31 @@ class PickAndPlaceExecutor:
                     f"{message} {HELD_HINT}",
                 )
             self._held = None
-            state.confirm(color)
+            if self._confirm(cube, target) is None:
+                return False, self._partial(
+                    color,
+                    done,
+                    count,
+                    f"I placed the {name} but the camera does not see it on the "
+                    f"{view.name_of(target)}.",
+                )
             done += 1
-        height = state.height(color)
-        if done == 0:
-            return False, f"The {color} stack is already full."
-        message = f"Stacked {done} {color} cube{'s' if done != 1 else ''}. "
-        message += f"The {color} stack now has {height} on top of its base."
-        if done < count:
-            message += " It is full, so I stopped."
+        view = self._look()
+        height = view.height(color) if view is not None else 0
+        message = (
+            f"Added {done} {color} cube{'s' if done != 1 else ''}. "
+            f"The tallest {color} stack now has {height}."
+        )
+        if height < count:
+            message += f" {why} I stopped."
         return True, message
 
     def _partial(self, color, done, count, reason):
+        view = self._look()
+        height = view.height(color) if view is not None else 0
         return (
-            f"Stacked {done} of {count} {color} cubes. {reason} "
-            f"The {color} stack has {self._stacks.height(color)} on top of its base."
+            f"Added {done} {color} cubes toward a stack of {count}. {reason} "
+            f"The tallest {color} stack has {height}."
         )
 
     def _pick_and_place(self, args):
@@ -160,7 +276,11 @@ class PickAndPlaceExecutor:
         try:
             if self._held is not None:
                 return False, self._holding_message()
-            reason = self._stacks.check_move(obj_frame, dest_frame)
+            view, reason = self._look_until(
+                lambda v: v.check_move(obj_frame, dest_frame)
+            )
+            if view is None:
+                return False, NO_VIEW
             if reason:
                 self._log.warning(f"Rejected pick_and_place {args}: {reason}")
                 return False, reason
@@ -168,10 +288,17 @@ class PickAndPlaceExecutor:
             self._log.info(
                 f"pick_and_place: {obj} ({obj_frame}) -> {dest} ({dest_frame})"
             )
-            ok, message = self._pick(obj_frame)
+            ok, message = self._pick(obj_frame, dest_frame)
             if not ok:
                 return False, f"Could not pick up the {obj}. {message}"
             self._held = obj_frame
+            # Someone may have changed the destination while the arm was picking.
+            view = self._look()
+            if view is None or view.top_of(dest_frame) != dest_frame:
+                return False, (
+                    f"Picked up the {obj} but the {dest} is no longer free to place "
+                    f"on. {HELD_HINT}"
+                )
             ok, message = self._place(dest_frame)
             if not ok:
                 return False, (
@@ -179,13 +306,16 @@ class PickAndPlaceExecutor:
                     f"{message} {HELD_HINT}"
                 )
             self._held = None
-            self._stacks.move(obj_frame, dest_frame)
+            if self._confirm(obj_frame, dest_frame) is None:
+                return False, (
+                    f"I placed the {obj} but the camera does not see it on the {dest}."
+                )
             return True, f"Picked up the {obj} and placed it on the {dest}."
         finally:
             self._busy.release()
 
     def _holding_message(self):
-        name = self._stacks.name_of(self._held)
+        name = NAME_OF[self._held]
         return f"The arm is still holding the {name}. Release it first. {HELD_HINT}"
 
     def _release_cube(self, args):
@@ -202,8 +332,7 @@ class PickAndPlaceExecutor:
                 return False, message
             if self._held is None:
                 return True, "The vacuum is off. I wasn't holding a cube."
-            name = self._stacks.name_of(self._held)
-            self._stacks.drop(self._held)
+            name = NAME_OF[self._held]
             self._held = None
             return True, f"Released the {name}. It is loose on the table."
         finally:
@@ -235,13 +364,15 @@ class PickAndPlaceExecutor:
     def _report_state(self, args):
         if args:
             return False, "report_state takes no arguments."
+        view = self._look()
         if self._held is None:
             holding = "The arm is not holding anything."
         else:
-            holding = f"The arm is holding the {self._stacks.name_of(self._held)}."
+            holding = f"The arm is holding the {NAME_OF[self._held]}."
         arm = "The arm is stopped." if self._stopped else "The arm is ready."
         busy = " The arm is busy with a job." if self._busy.locked() else ""
-        return True, f"{self._stacks.describe()} {holding} {arm}{busy}"
+        seen = view.describe() if view is not None else NO_VIEW
+        return True, f"{seen} {holding} {arm}{busy}"
 
     def run_tool(self, name, args):
         """Return (ok, message) for a tool call."""
@@ -256,27 +387,22 @@ class PickAndPlaceExecutor:
         }
         if name not in handlers:
             return False, f"Unknown tool {name}."
-        return handlers[name](args)
+        if self._stopped and name in MOVING_TOOLS:
+            # A new command to move is a new decision: it ends the stop, no "resume"
+            # needed. A stop heard while it runs still stops it.
+            ok, message = self._stop_or_resume("resume_robot", {})
+            if not ok:
+                return False, f"The arm is stopped and could not resume. {message}"
+            self._log.info(f"{name}: a new command ended the stop")
+        result = handlers[name](args)
+        if name in ("stack_cube", "pick_and_place"):
+            self._clear_view()
+        return result
 
 
-class FakeExecutor(PickAndPlaceExecutor):
-    """Canned results: every pick, place, stop, resume, release and move succeeds."""
+def FakeExecutor(logger):  # noqa: N802
+    """Dry run: every pick, place, stop, resume, release and move succeeds, and the
+    cubes really move on a pretend table."""
+    from colman_llm.fake_arm import FakeArm
 
-    def __init__(self, logger):
-        def pick(frame):
-            logger.info(f"FAKE pick {frame}")
-            return True, "ok"
-
-        def place(frame):
-            logger.info(f"FAKE place {frame}")
-            return True, "ok"
-
-        super().__init__(
-            pick,
-            place,
-            logger,
-            stop=lambda: (True, "Stopped"),
-            resume=lambda: (True, "Resumed"),
-            release=lambda: (True, "Released"),
-            move_to=lambda pose: (logger.info(f"FAKE move_to {pose}") or True, "ok"),
-        )
+    return FakeArm(logger).executor()

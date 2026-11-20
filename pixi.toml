@@ -19,14 +19,18 @@ select = ["E", "F", "I"]
 sim = "ros2 launch colman_bringup colman.launch.py sim:=true"
 sim-depth = "ros2 launch colman_bringup colman.launch.py sim:=true depth:=true"
 sim-yolo = "ros2 launch colman_bringup colman.launch.py sim:=true yolo:=true"
-sim-calibration = "ros2 launch colman_bringup colman.launch.py sim:=true depth:=true world:=$PIXI_PROJECT_ROOT/src/colman_gazebo/colman_gazebo/worlds/calibration_world.sdf"
+sim-apriltag-20-panel = "ros2 launch colman_bringup colman.launch.py sim:=true depth:=true world:=$PIXI_PROJECT_ROOT/src/colman_gazebo/colman_gazebo/worlds/world_with_apriltag_20_panel.sdf"
 mock = "ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur3e robot_ip:=0.0.0.0 use_mock_hardware:=true launch_dashboard_client:=false description_launchfile:=$(ros2 pkg prefix colman_bringup)/share/colman_bringup/launch/rsp.launch.py"
 driver = "ros2 run colman_bringup driver_supervisor --ros-args -p robot_ip:=192.168.56.101"
 
 detect = "ros2 run colman_perception camera_publisher & ros2 run colman_perception world_state & ros2 launch colman_bringup apriltag.launch.py"
 overhead = "ros2 launch colman_bringup overhead.launch.py"
-calibrate = "ros2 run colman_motion eye_in_hand"
-solve = "python src/colman_motion/colman_motion/hand_eye_solve.py"
+record-wrist-hand-eye-samples = "ros2 run colman_motion record_wrist_hand_eye_samples"
+solve-wrist-mount-from-hand-eye-samples = "python src/colman_motion/colman_motion/solve_wrist_mount_from_hand_eye_samples.py"
+capture-wrist-table-edge-views = "ros2 run colman_motion capture_wrist_table_edge_views"
+capture-wrist-views-of-touched-circles = "ros2 run colman_motion capture_wrist_views_of_touched_circles camera_pose_calibration/data/wrist_mount_check_with_touched_circle_views"
+score-wrist-mounts-against-touched-circles = "ros2 run colman_perception score_wrist_mounts_against_touched_circles camera_pose_calibration/data/wrist_mount_check_with_touched_circle_views"
+check-overhead-pose-against-touched-points = "ros2 run colman_perception check_overhead_pose_against_touched_points camera_pose_calibration/data/overhead_pose_from_touched_points/overhead_capture camera_pose_calibration/data/overhead_pose_from_touched_points/touched_points_set2_after_table_leg_fix.yaml camera_pose_calibration/results/overhead_camera_pose_in_base_link.yaml --pixels camera_pose_calibration/data/overhead_pose_from_touched_points/circle_centres_in_overhead_image.yaml"
 motion = "ros2 launch colman_motion motion_server.launch.py gripper_type:=vacuum"
 demo = "ros2 run colman_motion pick_and_place"
 demo-turns = "ros2 launch colman_motion demo.launch.py demo:=demo_turns"
@@ -39,7 +43,8 @@ llm = "ros2 run colman_llm llm_node"
 stack = "ros2 launch colman_bringup stack.launch.py"
 stack-dry = "ros2 launch colman_bringup stack.launch.py dry_run:=true driver:=false"
 
-kill-all = "bash scripts/kill_all.sh"
+hil-check = "python scripts/hil_check.py"
+test-hil = "pytest -v scripts/test_hil_check.py"
 stop = "ros2 service call /stop std_srvs/srv/Trigger"
 resume = "ros2 service call /resume std_srvs/srv/Trigger"
 build = "colcon build --symlink-install --base-paths src"
@@ -49,12 +54,14 @@ gz-list = "gz topic -l"
 image-view = "ros2 run rqt_image_view rqt_image_view"
 graph = "rqt_graph"
 
-fmt  = "ruff format src/"
-lint = "ruff check --fix src/"
+fmt  = "ruff format src/ scripts/"
+lint = "ruff check --fix src/ scripts/"
 test-integration = "pytest -v -s --basetemp=build/integration_logs src/colman_motion/test/integration"
 clean = "rm -rf build install log"
 
 [activation.env]
+# Lets large camera images reach other ROS processes; see the comments in the file.
+FASTRTPS_DEFAULT_PROFILES_FILE = "$PIXI_PROJECT_ROOT/config/fastdds_shared_memory_large_images.xml"
 # Tells gazebo to look in these directories for models.
 GZ_SIM_RESOURCE_PATH = "$GZ_SIM_RESOURCE_PATH:$PIXI_PROJECT_ROOT/src/colman_gazebo/colman_gazebo/models:$PIXI_PROJECT_ROOT/src/oakd_gazebo/oakd_gazebo/models:$PIXI_PROJECT_ROOT/install/oakd_description/share:$PIXI_PROJECT_ROOT/install/gripper_description/share:$PIXI_PROJECT_ROOT/install/colman_description/share"
 

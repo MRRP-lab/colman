@@ -1,3 +1,7 @@
+from collections import deque, namedtuple
+from concurrent.futures import Future, ThreadPoolExecutor
+
+import cv2
 import depthai as dai
 import numpy as np
 import rclpy
@@ -11,6 +15,13 @@ from colman_perception.camera_names import device_info
 
 CONTINUOUS_AF = dai.CameraControl.AutoFocusMode.CONTINUOUS_VIDEO
 
+# Cameras whose focus is locked at this lens position (0 to 255) instead of running
+# autofocus. The overhead camera works out a tag's height from how big the tag looks,
+# and continuous autofocus changes the image scale, so every tag's height jumped by
+# centimetres together whenever a hand moved over the table. 118 is where its
+# autofocus settles on the table.
+LOCKED_LENS_POSITION = {"overhead": 118}
+
 # How often to retry while no camera is connected.
 RECONNECT_S = 2.0
 
@@ -19,31 +30,95 @@ RECONNECT_S = 2.0
 # nothing.
 STALL_S = 3.0
 
-# Topic prefix, frame, image size and frame rate for each named camera (names are in
-# config/cameras.yaml). The wrist camera keeps the names the rest of the stack already
-# uses. The overhead camera is 1.83 m from the table, where a 39 mm tag is only ~30 px
-# wide at 1080p, so it runs at 4K. A 4K BGR frame is ~25 MB, so the rate is kept low to
-# stay inside USB3 bandwidth; the cubes are static.
+# How often the camera's queue is read. A frame is read as soon as it is waiting, so
+# this only has to be well above the frame rate.
+POLL_HZ = 200.0
+
+# Frames read in one poll before ROS callbacks (such as the refocus service) get a turn.
+MAX_FRAMES_PER_POLL = 8
+
+# Compressed frames being decoded at once. More than this means the computer cannot keep
+# up, and new frames are dropped instead of building up delay.
+MAX_IN_FLIGHT = 12
+
+# The settings of each named camera (names are in config/cameras.yaml). The wrist camera
+# keeps the topic names the rest of the stack already uses.
+#
+# size, fps:       the resolution and frame rate the camera is asked for.
+# jpeg_quality:    0 sends raw frames. 1 to 100 has the camera compress each frame as
+#                  MJPEG at that quality and this node decode it again.
+# decode_threads:  threads that decode compressed frames.
+#
+# Both cameras are on USB 3 (5 Gbps), which carries about 270 MB/s, and were tested
+# together with both detectors running:
+#   wrist    1080p at 60 fps (the camera's maximum for 1080p) sends raw frames of
+#            3.1 MB, 187 MB/s, with no dropped frames and about 50 ms of delay.
+#   overhead 4K at 30 fps (the camera's maximum at 4K is 42). A 4K tag is about 62 px
+#            wide at 1.83 m, so it needs 4K. Raw frames are 12.4 MB, which is 373 MB/s,
+#            more than the link carries: 27% of frames were dropped. MJPEG at quality 90
+#            is 1.6 MB per frame and had no drops when decoded on 3 threads; one thread
+#            decodes too slowly (it dropped 8 to 24%). Lower qualities did no better,
+#            because the limit is the decoding, not the link.
+CameraSettings = namedtuple(
+    "CameraSettings",
+    ["prefix", "frame_id", "size", "fps", "jpeg_quality", "decode_threads"],
+)
 CAMERAS = {
-    "wrist": (
+    "wrist": CameraSettings(
         "/oakd_pro",
         "oakd_pro_camera_rgb_optical_frame_wrist",
-        (1280, 720),
-        15.0,
+        (1920, 1080),
+        60.0,
+        0,
+        1,
     ),
-    "overhead": ("/overhead", "overhead_camera_optical_frame", (3840, 2160), 5.0),
+    "overhead": CameraSettings(
+        "/overhead", "overhead_camera_optical_frame", (3840, 2160), 30.0, 90, 3
+    ),
 }
 
 
+def decode_jpeg(data):
+    """A compressed frame as a BGR image, or None if it is damaged."""
+    return cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+
+
 class CameraPublisher(Node):
-    def __init__(self):
-        super().__init__("camera_publisher")
+    def __init__(self, **node_options):
+        super().__init__("camera_publisher", **node_options)
 
         self.declare_parameter("camera", "wrist")  # a name from config/cameras.yaml
         self.camera = self.get_parameter("camera").value
         if self.camera not in CAMERAS:
             raise ValueError(f"no topics set up for camera '{self.camera}'")
-        prefix, self.frame_id, self.size, self.fps = CAMERAS[self.camera]
+        settings = CAMERAS[self.camera]
+        prefix, self.frame_id, self.size = (
+            settings.prefix,
+            settings.frame_id,
+            settings.size,
+        )
+
+        # These default to the camera's own settings in CAMERAS above.
+        self.declare_parameter("fps", settings.fps)
+        self.declare_parameter("jpeg_quality", settings.jpeg_quality)
+        self.declare_parameter("decode_threads", settings.decode_threads)
+        self.fps = float(self.get_parameter("fps").value)
+        self.jpeg_quality = int(self.get_parameter("jpeg_quality").value)
+        self.decode_threads = int(self.get_parameter("decode_threads").value)
+        if self.fps <= 0:
+            raise ValueError(f"fps must be above 0, got {self.fps}")
+        if not 0 <= self.jpeg_quality <= 100:
+            raise ValueError(f"jpeg_quality must be 0 to 100, got {self.jpeg_quality}")
+        if self.decode_threads < 1:
+            raise ValueError(
+                f"decode_threads must be 1 or more, got {self.decode_threads}"
+            )
+        self.pool = (
+            ThreadPoolExecutor(self.decode_threads) if self.jpeg_quality else None
+        )
+        # Frames waiting to be published, oldest first: (arrival time, a decoded image
+        # or a future that will hold one). They go out in arrival order.
+        self.pending = deque()
 
         self.image_pub = self.create_publisher(
             Image, f"{prefix}/rgb/image", qos_profile_sensor_data
@@ -71,7 +146,7 @@ class CameraPublisher(Node):
         self._info_ready = False
 
         self.connect()
-        self.create_timer(1.0 / 30.0, self.timer_callback)
+        self.create_timer(1.0 / POLL_HZ, self.timer_callback)
         self.create_timer(RECONNECT_S, self.reconnect_callback)
 
     def open_camera(self):
@@ -87,10 +162,34 @@ class CameraPublisher(Node):
             # Autofocus and autoexposure are set explicitly, so they never depend on
             # the camera's defaults. Both keep adjusting as the arm moves and the view
             # changes.
-            cam.initialControl.setAutoFocusMode(CONTINUOUS_AF)
+            if self.camera in LOCKED_LENS_POSITION:
+                cam.initialControl.setManualFocus(LOCKED_LENS_POSITION[self.camera])
+            else:
+                cam.initialControl.setAutoFocusMode(CONTINUOUS_AF)
             cam.initialControl.setAutoExposureEnable()
             control_queue = cam.inputControl.createInputQueue()
-            out = cam.requestOutput(self.size, enableUndistortion=True, fps=self.fps)
+            if self.jpeg_quality == 0:
+                out = cam.requestOutput(
+                    self.size, enableUndistortion=True, fps=self.fps
+                )
+            else:
+                # The camera's encoder takes NV12 and compresses each frame on its own.
+                nv12 = cam.requestOutput(
+                    self.size,
+                    type=dai.ImgFrame.Type.NV12,
+                    enableUndistortion=True,
+                    fps=self.fps,
+                )
+                out = (
+                    pipeline.create(dai.node.VideoEncoder)
+                    .build(
+                        nv12,
+                        frameRate=self.fps,
+                        profile=dai.VideoEncoderProperties.Profile.MJPEG,
+                        quality=self.jpeg_quality,
+                    )
+                    .out
+                )
             queue = out.createOutputQueue(maxSize=4, blocking=False)
             pipeline.start()
         except BaseException:
@@ -108,7 +207,7 @@ class CameraPublisher(Node):
             self.device, self.pipeline, self.queue, self.control_queue = (
                 self.open_camera()
             )
-        except RuntimeError as e:
+        except Exception as e:  # noqa: BLE001 - whatever an unplugged camera raises
             self.get_logger().warn(
                 f"No {self.camera} camera yet ({e}), retrying",
                 throttle_duration_sec=30.0,
@@ -126,6 +225,7 @@ class CameraPublisher(Node):
         self.control_queue = None
         self.pipeline = None
         self.device = None
+        self.pending.clear()
         for closer in (
             getattr(pipeline, "stop", None),
             getattr(device, "close", None),
@@ -151,8 +251,11 @@ class CameraPublisher(Node):
             response.message = f"{self.camera} camera is not connected"
             return response
         ctrl = dai.CameraControl()
-        ctrl.setAutoFocusMode(CONTINUOUS_AF)
-        ctrl.setAutoFocusTrigger()
+        if self.camera in LOCKED_LENS_POSITION:
+            ctrl.setManualFocus(LOCKED_LENS_POSITION[self.camera])
+        else:
+            ctrl.setAutoFocusMode(CONTINUOUS_AF)
+            ctrl.setAutoFocusTrigger()
         ctrl.setAutoExposureEnable()
         try:
             self.control_queue.send(ctrl)
@@ -170,60 +273,100 @@ class CameraPublisher(Node):
         try:
             if self.device.isClosed():
                 raise RuntimeError("device closed")
-            packet = self.queue.tryGet()
-        except RuntimeError as e:
+            packets = []
+            while len(packets) < MAX_FRAMES_PER_POLL:
+                packet = self.queue.tryGet()
+                if packet is None:
+                    break
+                packets.append(packet)
+        except Exception as e:  # noqa: BLE001 - an unplugged camera raises many things
             self.get_logger().warn(f"Camera lost ({e}), reconnecting")
             self.disconnect()
             return
 
         now = self.get_clock().now()
-        if packet is None:
+        if not packets:
             if (now - self.last_frame).nanoseconds > STALL_S * 1e9:
                 self.get_logger().warn("Camera stalled, reconnecting")
                 self.disconnect()
+            else:
+                self.publish_ready()
             return
         self.last_frame = now
+        for packet in packets:
+            try:
+                self.accept(packet)
+            except RuntimeError as e:
+                self.get_logger().warn(f"Camera lost while reading ({e}), reconnecting")
+                self.disconnect()
+                return
+            except AttributeError:  # a packet with no frame in it
+                self.get_logger().warn(
+                    "Camera sent an empty frame", throttle_duration_sec=5
+                )
+        self.publish_ready()
 
-        try:
+    def accept(self, packet):
+        """Take one frame from the camera: use it now, or give it to a decode thread."""
+        stamp = self.get_clock().now().to_msg()
+        self.last_meta = (
+            f"lens {packet.getLensPosition()}, "
+            f"exposure {packet.getExposureTime().total_seconds() * 1e6:.0f} us, "
+            f"iso {packet.getSensitivity()}"
+        )
+        frame = None
+        if self.pool is None:
             frame = packet.getCvFrame()
-            meta = (
-                f"lens {packet.getLensPosition()}, "
-                f"exposure {packet.getExposureTime().total_seconds() * 1e6:.0f} us, "
-                f"iso {packet.getSensitivity()}"
-            )
-            # The size can differ from the configured one (a reconnect may come back at
-            # another resolution), and the intrinsics belong to the frame's size.
-            height, width = frame.shape[:2]
-            if (width, height) != (self.info_msg.width, self.info_msg.height):
-                self._info_ready = False
-            if not self._info_ready:
-                k = np.array(packet.getTransformation().getIntrinsicMatrix())
-        except RuntimeError as e:
-            self.get_logger().warn(f"Camera lost while reading ({e}), reconnecting")
-            self.disconnect()
-            return
-        except AttributeError:  # no frame (None) in the packet
-            self.get_logger().warn(
-                "Camera sent an empty frame", throttle_duration_sec=5
-            )
-            return
-        self.last_meta = meta
-        stamp = now.to_msg()
-
+            if frame is not None:
+                # The size can differ from the configured one (a reconnect may come back
+                # at another resolution), and the intrinsics belong to the frame's size.
+                height, width = frame.shape[:2]
+                if (width, height) != (self.info_msg.width, self.info_msg.height):
+                    self.info_msg.width, self.info_msg.height = width, height
+                    self._info_ready = False
         if not self._info_ready:
-            self.info_msg.width, self.info_msg.height = width, height
+            k = np.array(packet.getTransformation().getIntrinsicMatrix())
             self.info_msg.k = k.flatten().tolist()
             self.info_msg.p = np.hstack([k, np.zeros((3, 1))]).flatten().tolist()
             self._info_ready = True
 
-        msg = self.bridge.cv2_to_imgmsg(frame, encoding="bgr8")
-        msg.header.stamp = stamp
-        msg.header.frame_id = self.frame_id
+        if self.pool is None:
+            self.pending.append((stamp, frame))
+        elif len(self.pending) >= MAX_IN_FLIGHT:
+            self.get_logger().warn(
+                "Decoding cannot keep up, dropping frames",
+                throttle_duration_sec=10.0,
+            )
+        else:
+            future = self.pool.submit(decode_jpeg, bytes(packet.getData()))
+            self.pending.append((stamp, future))
 
-        self.info_msg.header.stamp = stamp
+    def publish_ready(self):
+        """Publish the oldest frames that are ready, never ahead of an earlier one."""
+        while self.pending:
+            stamp, item = self.pending[0]
+            if isinstance(item, Future):
+                if not item.done():
+                    return
+                try:
+                    frame = item.result()
+                except Exception:  # noqa: BLE001 - a bad frame must not stop the stream
+                    frame = None
+            else:
+                frame = item
+            self.pending.popleft()
+            if frame is None:
+                self.get_logger().warn(
+                    "Dropped a frame that would not decode", throttle_duration_sec=10.0
+                )
+                continue
 
-        self.image_pub.publish(msg)
-        self.info_pub.publish(self.info_msg)
+            msg = self.bridge.cv2_to_imgmsg(frame, encoding="bgr8")
+            msg.header.stamp = stamp
+            msg.header.frame_id = self.frame_id
+            self.info_msg.header.stamp = stamp
+            self.image_pub.publish(msg)
+            self.info_pub.publish(self.info_msg)
 
 
 def main():
@@ -235,6 +378,8 @@ def main():
         pass
     finally:
         node.disconnect()
+        if node.pool is not None:
+            node.pool.shutdown(wait=False, cancel_futures=True)
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()

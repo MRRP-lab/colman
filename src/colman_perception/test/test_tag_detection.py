@@ -1,12 +1,15 @@
 """AprilTag detection regression on synthetic frames.
 
-The stack runs apriltag_ros (the C apriltag library, tag36h11, max_hamming 0, no
-decimation, edge refinement; see config/apriltag*.yaml). The same library is available
-to Python as `apriltag`, so these tests run it on rendered scenes and check the ids and
-the pose recovered by planar PnP, as apriltag_ros does with pose_estimation_method
-"pnp". The apriltag_ros node itself needs a running ROS graph and is not started here.
-Offline, GPU-free; the 4K cases take a fraction of a second each.
+The stack runs apriltag_ros (the C apriltag library, tag36h11, max_hamming 0, edge
+refinement; see config/apriltag*.yaml). The same library is available to Python as
+`apriltag`, so these tests run it on rendered scenes, at decimate 1 as the accurate
+reference, and check the ids and the pose recovered by planar PnP, as apriltag_ros
+does with pose_estimation_method "pnp". The apriltag_ros node itself needs a running
+ROS graph and is not started here. Offline, GPU-free; the 4K cases take a fraction of a
+second.
 """
+
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -29,11 +32,16 @@ from tag_scene import (  # noqa: E402
 
 from colman_perception import camera_publisher  # noqa: E402
 
+CONFIG = Path(__file__).resolve().parents[1] / "colman_perception" / "config"
+
 # 1080p: tag ~30 px wide at the overhead camera's 1.83 m; 4K doubles that.
 OVERHEAD_Z = 1.83
 LATERAL_TOL_M = 0.003
 DEPTH_TOL_M = 0.012
-ROT_TOL_DEG = 3.0
+# A tag that faces the camera nearly square on has its tilt poorly constrained by
+# planar PnP, so the rotation tolerance is wide. Position, and the yaw the arm squares
+# cubes by, are tight.
+ROT_TOL_DEG = 6.0
 
 
 @pytest.fixture(scope="module")
@@ -65,16 +73,14 @@ def check_pose(
 
 
 def test_detector_settings_match_the_launch_config():
-    from ament_index_python.packages import get_package_share_directory
-
-    path = (
-        get_package_share_directory("colman_perception")
-        + "/config/apriltag_overhead.yaml"
-    )
-    params = yaml.safe_load(open(path))["apriltag_overhead"]["ros__parameters"]
+    # The pose tests above run at decimate 1, the accurate reference. The stack runs the
+    # overhead detector at decimate 3, which is faster and moves a tag's height by up to
+    # 1.5 mm (see the note in apriltag_overhead.yaml).
+    path = CONFIG / "apriltag_overhead.yaml"
+    params = yaml.safe_load(path.read_text())["apriltag_overhead"]["ros__parameters"]
     assert params["family"] == "36h11"
     assert params["max_hamming"] == 0
-    assert params["detector"]["decimate"] == 1.0
+    assert params["detector"]["decimate"] == 3.0
     assert set(params["tag"]["sizes"]) == {TAG_SIZE_M}
 
 

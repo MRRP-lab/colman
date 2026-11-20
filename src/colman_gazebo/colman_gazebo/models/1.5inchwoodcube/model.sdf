@@ -7,18 +7,18 @@
       <inertial>
         <mass>0.04</mass>
         <inertia>
-          <ixx>0.00000968</ixx>
+          <ixx>0.00001667</ixx>
           <ixy>0.0</ixy>
           <ixz>0.0</ixz>
-          <iyy>0.00000968</iyy>
+          <iyy>0.00001667</iyy>
           <iyz>0.0</iyz>
-          <izz>0.00000968</izz>
+          <izz>0.00001667</izz>
         </inertia>
       </inertial>
       <collision name="collision">
         <geometry>
           <box>
-            <size>0.0381 0.0381 0.0381</size>
+            <size>0.05 0.05 0.05</size>
           </box>
         </geometry>
       </collision>
@@ -26,6 +26,7 @@
         <geometry>
           <mesh>
             <uri>model://1.5inchwoodcube/meshes/1.5inchwoodcube.glb</uri>
+            <scale>1.31234 1.31234 1.31234</scale>
           </mesh>
         </geometry>
       </visual>

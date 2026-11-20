@@ -295,7 +295,10 @@ def main():
     except KeyboardInterrupt:
         pass
     except RuntimeError as exc:
+        # Exit non-zero so `ros2 run`, launch and supervisors see the failure
+        # instead of a missing microphone looking like a clean shutdown.
         print(exc)
+        raise SystemExit(1)
     finally:
         if node is not None:
             node.destroy_node()

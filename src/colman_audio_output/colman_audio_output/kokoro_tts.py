@@ -14,6 +14,7 @@ on the PATH. These come with the pixi env.
 import hashlib
 import os
 import queue
+import re
 import shutil
 import subprocess
 import threading
@@ -38,8 +39,8 @@ class KokoroTTSNode(Node):
 
         # ---- Parameters ----
         self.declare_parameter("input_topic", "llm_response")
-        self.declare_parameter("voice", "am_echo")  # Kokoro voice pack name
-        self.declare_parameter("lang_code", "a")  # 'a' = American, 'b' = British
+        self.declare_parameter("voice", "bm_fable")  # Kokoro voice pack name
+        self.declare_parameter("lang_code", "b")  # 'a' = American, 'b' = British
         self.declare_parameter("speed", 1.0)
         self.declare_parameter("mode", "stream")  # stream | play | save
         self.declare_parameter("output_dir", "/tmp/tts")  # used when mode == save
@@ -132,7 +133,9 @@ class KokoroTTSNode(Node):
 
     # ---------------------------------------------------------------- callbacks
     def _on_text(self, msg: String):
-        text = msg.data.strip()
+        # Claude sometimes writes markdown; the voice would read "**" as "asterisk".
+        text = re.sub(r"[*_`#>]+", "", msg.data)
+        text = re.sub(r"^\s*-\s+", "", text, flags=re.M).strip()
         if not text:
             return
         try:
@@ -179,6 +182,13 @@ class KokoroTTSNode(Node):
         except queue.Full:
             pass  # worker is a daemon thread; it exits with the process
         self._worker.join(timeout=2.0)
+        # The worker skips its closing False while the sentinel is still queued,
+        # so release the mic ourselves; otherwise a running speech_to_text stays
+        # muted until its mute_max_s timeout after we exit mid-utterance.
+        try:
+            self._set_speaking(False)
+        except Exception as e:  # noqa: BLE001 - context may already be shut down
+            self.get_logger().warn(f"Could not publish final tts_speaking=False: {e}")
 
 
 def main(args=None):

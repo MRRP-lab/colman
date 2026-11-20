@@ -3,6 +3,7 @@ import threading
 import time
 
 import numpy as np
+from colman_description.workcell import CUBE_SIZE_M
 from geometry_msgs.msg import Pose, PoseStamped
 from moveit.planning import PlanRequestParameters
 from moveit_msgs.msg import AttachedCollisionObject, CollisionObject
@@ -10,6 +11,7 @@ from rclpy.node import Node
 from shape_msgs.msg import SolidPrimitive
 from std_srvs.srv import Trigger
 
+from colman_motion.geometry import yawed
 from colman_motion.poses import ARM_JOINTS, HOME_POSE
 
 FAST_SCALING = 0.7
@@ -25,8 +27,11 @@ TIP_LINK = "vacuum_tip_link"
 
 # A cube held on the vacuum tip is part of the arm while it moves, so planning and
 # the collision checks have to know about it.
+# The tool is tried turned these ways about the vertical axis, in this order, when a
+# pick or place is planned. Quarter turns keep a placed cube square with the one below.
+TOOL_YAWS_DEG = (0, 180, 90, -90)
 HELD_CUBE_ID = "held_cube"
-HELD_CUBE_SIDE_M = 0.05
+HELD_CUBE_SIDE_M = CUBE_SIZE_M
 # Margin all round the cube, for the error in where the cube sits on the tip.
 HELD_CUBE_BUFFER_M = 0.01
 HELD_CUBE_TOUCH_LINKS = [
@@ -155,7 +160,10 @@ class ArmControl(Node):
     def is_valid(self, state):
         psm = self.moveit.get_planning_scene_monitor()
         with psm.read_only() as scene:
-            return scene.is_state_valid(state, "ur_arm")
+            if scene.is_state_valid(state, "ur_arm"):
+                return True
+            scene.is_state_valid(state, "ur_arm", True)  # prints the contacts
+            return False
 
     def state_from_ik(self, pose, seed=None):
         """Joint state for pose on the IK branch nearest the seed (default: now).
@@ -171,13 +179,37 @@ class ArmControl(Node):
         return state
 
     def vertical_pair(self, x, y, z_low, z_high, orientation):
-        """(state at z_high, state at z_low) over (x, y), on one IK branch.
+        """(state at z_high, state at z_low, tool orientation) over (x, y).
+
+        The tool is tried as given and then turned about the vertical axis
+        (TOOL_YAWS_DEG). The suction cup is round, so a turned tool grasps the same,
+        but the wrist sticks out to one side, and a neighbouring stack can block it
+        from one side and not from another. Returns None if no turn has a solution
+        that is clear of everything.
+        """
+        reason = "No IK solution"
+        for degrees in TOOL_YAWS_DEG:
+            turned = yawed(orientation, degrees)
+            pair, why = self.vertical_pair_at(x, y, z_low, z_high, turned)
+            if pair is not None:
+                if degrees:
+                    self.get_logger().info(
+                        f"Tool turned {degrees} degrees to clear a neighbour"
+                    )
+                return (*pair, turned)
+            if reason == "No IK solution" or why != "No IK solution":
+                reason = why
+        self.get_logger().error(f"{reason} at every tool rotation")
+        return None
+
+    def vertical_pair_at(self, x, y, z_low, z_high, orientation):
+        """((state at z_high, state at z_low), None), or (None, why not).
 
         The low state is solved first, seeded by the arm's current joints so it stays on
         the branch the arm is on, and the high state is solved from it. Solving the high
         one first and the low one from that can land on a different branch, and the
         straight drop between them then swings the arm through a large sweep (up to 3
-        rad). Returns None if either has no solution or is in collision.
+        rad).
         """
         # Seed from where the arm is, so it stays on its branch. If that has no
         # solution (the arm can be in an awkward pose), seed from the home pose.
@@ -186,16 +218,13 @@ class ArmControl(Node):
         if low is None:
             low = self.state_from_ik(low_pose, self.state_from_joints(HOME_POSE))
         if low is None:
-            self.get_logger().error(f"No IK solution at z={z_low:.3f}")
-            return None
+            return None, "No IK solution"
         high = self.state_from_ik(self.pose_at(x, y, z_high, orientation), low)
         if high is None:
-            self.get_logger().error(f"No IK solution at z={z_high:.3f}")
-            return None
+            return None, "No IK solution"
         if not (self.is_valid(low) and self.is_valid(high)):
-            self.get_logger().error("Vertical pair is in collision or out of bounds")
-            return None
-        return high, low
+            return None, "In collision or out of bounds"
+        return (high, low), None
 
     @staticmethod
     def pose_at(x, y, z, orientation):

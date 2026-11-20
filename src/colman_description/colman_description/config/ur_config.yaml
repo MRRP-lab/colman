@@ -1,4 +1,4 @@
-# Kinematics calibration for the UR arm with serial number 20245300947.
+# The kinematic parameters (factory-measured link offsets) of the UR arm with serial number 20245300947.
 kinematics:
   shoulder:
     x: 0

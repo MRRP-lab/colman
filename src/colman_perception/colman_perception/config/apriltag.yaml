@@ -5,8 +5,14 @@ apriltag:
     size: 0.098
     max_hamming: 0
     detector:
-      threads: 2
-      decimate: 1.0
+      threads: 8
+      # Quads are found on an image shrunk by this factor, and the corners are then
+      # refined on the full-size image. At 1080p a tag is about 190 px wide at 0.3 m and
+      # 90 px at 0.65 m, so at 3 it stays above 16 px out to about 1.2 m. Measured on a
+      # 1080p still: 27 detections per second at 1, 80 at 2 and 141 at 3; live on the
+      # camera (1080p, 60 fps) it keeps up at 60 per second. Not yet checked on real tags:
+      # the wrist camera was looking at the room when this was measured.
+      decimate: 3.0
       blur: 0.0
       refine: true
       sharpening: 0.25
@@ -15,4 +21,5 @@ apriltag:
     tag:
       ids:    [1, 2, 3, 4, 5, 6, 7, 8]
       frames: ["wrist_tag_1", "wrist_tag_2", "wrist_tag_3", "wrist_tag_4", "wrist_tag_5", "wrist_tag_6", "wrist_tag_7", "wrist_tag_8"]
-      sizes:  [0.039, 0.039, 0.039, 0.039, 0.039, 0.039, 0.039, 0.039]
+      # The black square of the cube tags (1 to 8) measures 39.2 mm.
+      sizes:  [0.0392, 0.0392, 0.0392, 0.0392, 0.0392, 0.0392, 0.0392, 0.0392]

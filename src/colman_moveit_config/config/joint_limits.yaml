@@ -80,9 +80,9 @@ joint_limits:
     has_position_limits: true
     has_velocity_limits: true
     max_effort: 12.0
-    # wrist 2 stays within +-150 degrees, through 0
-    min_position: -2.6179938779914944
-    max_position: 2.6179938779914944
+    # wrist 2 stays within +-167 degrees, through 0
+    min_position: -2.9146998508305302
+    max_position: 2.9146998508305302
     max_velocity:  6.283185307179586
   wrist_3_joint:
     # acceleration limits are not publicly available
@@ -92,9 +92,10 @@ joint_limits:
     has_position_limits: true
     has_velocity_limits: true
     max_effort: 12.0
-    # wrist 3 stays between -90 and +90 degrees, through 0 (it does not spin)
-    min_position: -1.5707963267948966
-    max_position: 1.5707963267948966
+    # wrist 3 stays between -130 and +140 degrees, through 0 (it does not spin).
+    # -130 deg is the same position as 230 deg on a 0-360 readout.
+    min_position: -2.2689280275926285
+    max_position: 2.443460952792061
     max_velocity:  6.283185307179586
 
   servotodrivegear:

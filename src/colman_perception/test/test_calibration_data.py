@@ -1,8 +1,9 @@
-"""The checked-in overhead calibration files are well formed and physically sane.
+"""The checked-in camera pose calibration files are well formed and physically sane.
 
-grid_data/ holds single grid fits, merged_data/ the merged result. The one the stack
-uses is colman_perception/config/overhead_camera.yaml, which must agree with the merged
-fit. No hardware is needed.
+The overhead camera's pose is in colman_perception/config/ (the file the stack uses)
+and a copy in camera_pose_calibration/results/. The wrist camera's mount is in
+camera_pose_calibration/results/ and is copied into colman.urdf.xacro. No hardware is
+needed.
 """
 
 from pathlib import Path
@@ -13,9 +14,10 @@ import yaml
 
 REPO = Path(__file__).resolve().parents[3]
 CONFIG = Path(__file__).resolve().parents[1] / "colman_perception" / "config"
-FILES = sorted((REPO / "grid_data").glob("*.yaml")) + sorted(
-    (REPO / "merged_data").glob("*.yaml")
-)
+POSE = "overhead_camera_pose_in_base_link.yaml"
+RESULTS = REPO / "camera_pose_calibration" / "results"
+FILES = [CONFIG / POSE, RESULTS / POSE]
+XACRO = REPO / "src" / "colman_description" / "colman_description" / "urdf"
 
 # The camera hangs ~1.83 m above the table, near the robot base.
 MAX_TRANSLATION_M = 3.0
@@ -43,12 +45,11 @@ def angle_between(r1, r2):
 
 
 def test_calibration_files_exist():
-    assert FILES, "no calibration yaml found in grid_data/ or merged_data/"
-    assert any("merged_data" in str(f) for f in FILES)
-    assert any("grid_data" in str(f) for f in FILES)
+    for path in FILES + [RESULTS / "wrist_camera_mount_on_tool_flange.yaml"]:
+        assert path.is_file(), f"missing {path.relative_to(REPO)}"
 
 
-@pytest.fixture(params=FILES, ids=lambda p: f"{p.parent.name}/{p.name}")
+@pytest.fixture(params=FILES, ids=lambda p: f"{p.parent.parent.name}/{p.name}")
 def calib(request):
     return load(request.param)
 
@@ -106,7 +107,6 @@ def test_static_transform_args_are_well_formed(calib):
 
 
 def test_static_transform_args_are_close_to_the_fit(calib):
-    # Grid fits keep the start-pose x, y and yaw in the args, so only close, not equal.
     args = calib["static_transform_args"]
     t = np.array(calib["translation_m"], dtype=float)
     assert np.linalg.norm(np.array(args[:3], dtype=float) - t) < 0.03
@@ -127,19 +127,47 @@ def test_intrinsics_are_positive_when_present(calib):
     assert i["fx"] == pytest.approx(i["fy"], rel=0.01)  # square pixels
 
 
-def test_active_config_matches_the_merged_fit():
-    active = load(CONFIG / "overhead_camera.yaml")
-    merged = load(REPO / "merged_data" / "overhead_merged_1080p.yaml")
+def test_active_config_is_the_same_as_the_results_copy():
+    active = load(CONFIG / POSE)
+    kept = load(RESULTS / POSE)
     for key in ("rotation_matrix", "quaternion_xyzw", "translation_m"):
-        assert np.allclose(active[key], merged[key]), key
-    assert active["static_transform_args"] == merged["static_transform_args"]
+        assert np.allclose(active[key], kept[key]), key
+    assert active["static_transform_args"] == kept["static_transform_args"]
 
 
 def test_active_config_args_match_its_own_fit():
-    active = load(CONFIG / "overhead_camera.yaml")
+    active = load(CONFIG / POSE)
     args = active["static_transform_args"]
     # args are rounded to 5 decimals in the file
     assert np.allclose([float(a) for a in args[:3]], active["translation_m"], atol=1e-4)
     assert np.allclose(
         [float(a) for a in args[3:7]], active["quaternion_xyzw"], atol=1e-4
     )
+
+
+# ------------------------------------------------------------------ wrist camera
+@pytest.fixture
+def wrist():
+    return load(RESULTS / "wrist_camera_mount_on_tool_flange.yaml")
+
+
+def test_the_wrist_mount_is_a_small_unit_transform_from_the_flange(wrist):
+    assert wrist["parent_frame"] == "tool0"
+    q = np.array(wrist["quaternion_xyzw"], dtype=float)
+    assert q.shape == (4,) and np.linalg.norm(q) == pytest.approx(1.0, abs=1e-6)
+    t = np.array(wrist["translation_m"], dtype=float)
+    assert t.shape == (3,) and np.all(np.isfinite(t)) and np.linalg.norm(t) < 0.3
+
+
+def test_the_urdf_uses_the_fitted_wrist_mount(wrist):
+    import re
+
+    text = (XACRO / "colman.urdf.xacro").read_text()
+    live = re.sub(
+        r"<!--.*?-->", "", text, flags=re.DOTALL
+    )  # not the old, commented ones
+    joints = re.findall(r"<xacro:oakd_pro_joint\s+([^>]*?)/>", live)
+    assert len(joints) == 1, "expected one live oakd_pro_joint"
+    values = dict(re.findall(r'(\w+)="([^"]*)"', joints[0]))
+    xyz = [float(values[k]) for k in "xyz"]
+    assert np.allclose(xyz, wrist["translation_m"], atol=1e-5)

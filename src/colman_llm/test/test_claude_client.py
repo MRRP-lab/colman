@@ -47,6 +47,24 @@ def status_error(cls, code):
     return cls("error", response=response, body=None)
 
 
+@pytest.mark.parametrize("text", ["IGNORE", "ignore.", " IGNORE\n", '"IGNORE"'])
+def test_ignore_reply_is_silent(text):
+    client, _ = make(reply(text))
+    assert client.say("what's for lunch") == ""
+
+
+def test_ignore_is_not_remembered():
+    client, messages = make(reply(claude_client.IGNORE_TOKEN), reply("Hi."))
+    assert client.say("did you push the branch?") == ""
+    assert client.say("hello robot") == "Hi."
+    assert len(messages.calls[1]["messages"]) == 1
+
+
+def test_ignore_only_matches_whole_reply():
+    client, _ = make(reply("I will not ignore that."))
+    assert client.say("hello") == "I will not ignore that."
+
+
 def test_plain_reply_and_request_settings():
     client, messages = make(reply("Hi."))
     assert client.say("hello") == "Hi."
@@ -109,7 +127,8 @@ def test_tools_and_known_names_are_sent():
     client.say("hello", lambda name, args: (True, "ok"))
     call = messages.calls[0]
     assert call["tools"][0]["name"] == "stack_cube"
-    assert "white cube" in call["system"] and "blue cube" in call["system"]
+    system = system_text(call)
+    assert "white cube" in system and "blue cube" in system
 
 
 def test_tool_call_runs_and_result_goes_back_to_claude():
@@ -188,15 +207,135 @@ def test_demo_tools_are_strict_and_sent():
         "compact",
     ]
     pick = tools["pick_and_place"]["input_schema"]["properties"]
-    assert "white cube 1" not in pick["object"]["enum"]  # a base never moves
-    assert "white cube 1" in pick["destination"]["enum"]
-    assert len(pick["object"]["enum"]) == 6 and len(pick["destination"]["enum"]) == 8
-    assert tools["stack_cube"]["input_schema"]["properties"]["count"]["enum"] == [
-        1,
-        2,
-        3,
-    ]
+    assert pick["object"]["enum"] == pick["destination"]["enum"]  # no special cube
+    assert len(pick["object"]["enum"]) == 8
+    stack = tools["stack_cube"]["input_schema"]["properties"]
+    assert stack["count"]["enum"] == [2, 3, 4]
     assert tools["stack_cube"]["input_schema"]["properties"]["color"]["enum"] == [
         "white",
         "blue",
     ]
+
+
+def spoken_tool_reply(words):
+    response = tool_reply()
+    response.content.insert(0, SimpleNamespace(type="text", text=words))
+    return response
+
+
+def test_words_before_a_tool_call_are_spoken_before_the_tool_runs():
+    client, _ = make(spoken_tool_reply("Stacking the white cubes now."), reply("Done."))
+    events = []
+
+    def run_tool(name, args):
+        events.append(("tool", name))
+        return True, "ok"
+
+    result = client.say(
+        "stack the white cubes", run_tool, lambda text: events.append(("say", text))
+    )
+    assert events == [
+        ("say", "Stacking the white cubes now."),
+        ("tool", "pick_and_place"),
+    ]
+    assert result == "Done."  # only the words after the tool result are returned
+
+
+def test_a_tool_call_with_no_words_says_nothing_first():
+    client, _ = make(tool_reply(), reply("Done."))
+    said = []
+    client.say("go", lambda n, a: (True, "ok"), said.append)
+    assert said == []
+
+
+def test_an_ignore_before_a_tool_call_is_not_spoken():
+    client, _ = make(spoken_tool_reply("IGNORE"), reply("Done."))
+    said = []
+    client.say("go", lambda n, a: (True, "ok"), said.append)
+    assert said == []
+
+
+def test_the_system_prompt_has_no_fixed_acknowledgement_and_no_base_cube():
+    prompt = claude_client.SYSTEM_PROMPT
+    assert "On it." not in prompt and "No cube is a base" in prompt
+    assert "say one short sentence" in prompt
+
+
+# ------------------------------------------------ the table is read fresh every request
+def system_text(call):
+    return " ".join(b["text"] for b in call["system"])
+
+
+def test_every_request_carries_the_table_as_it_is_now():
+    messages = FakeMessages(reply("a"), reply("b"))
+    tables = iter(["Stacks: none.", "Stacks: red on blue."])
+    client = ClaudeClient(
+        "m", LOG, client=SimpleNamespace(messages=messages), world=lambda: next(tables)
+    )
+    client.say("one")
+    client.say("two")
+    assert "Stacks: none." in system_text(messages.calls[0])
+    assert "Stacks: red on blue." in system_text(messages.calls[1])
+    assert "Stacks: none." not in system_text(messages.calls[1])
+
+
+def test_the_table_is_read_again_after_each_tool_call():
+    tool = SimpleNamespace(type="tool_use", id="t1", name="report_state", input={})
+    first = SimpleNamespace(
+        content=[tool], stop_reason="tool_use", usage="u", _request_id="r"
+    )
+    messages = FakeMessages(first, reply("done"))
+    tables = iter(["before the move", "after the move"])
+    client = ClaudeClient(
+        "m", LOG, client=SimpleNamespace(messages=messages), world=lambda: next(tables)
+    )
+    client.say("move it", lambda name, args: (True, "ok"))
+    assert "before the move" in system_text(messages.calls[0])
+    assert "after the move" in system_text(messages.calls[1])
+
+
+def test_the_table_is_never_kept_in_the_history():
+    messages = FakeMessages(reply("a"), reply("b"))
+    client = ClaudeClient(
+        "m",
+        LOG,
+        client=SimpleNamespace(messages=messages),
+        world=lambda: "UNIQUE-TABLE-TEXT",
+    )
+    client.say("one")
+    client.say("two")
+    assert "UNIQUE-TABLE-TEXT" not in str(messages.calls[1]["messages"])
+
+
+def test_no_view_is_said_plainly_and_a_failing_view_does_not_stop_it():
+    messages = FakeMessages(reply("a"), reply("b"))
+    client = ClaudeClient(
+        "m", LOG, client=SimpleNamespace(messages=messages), world=lambda: None
+    )
+    client.say("one")
+    assert claude_client.NO_TABLE_VIEW in system_text(messages.calls[0])
+
+    def broken():
+        raise ValueError("bad")
+
+    client = ClaudeClient(
+        "m", LOG, client=SimpleNamespace(messages=messages), world=broken
+    )
+    assert client.say("two") == "b"
+
+
+def test_a_spoken_announcement_is_in_the_history_for_the_next_reply():
+    messages = FakeMessages(reply("ok"))
+    client = ClaudeClient("m", LOG, client=SimpleNamespace(messages=messages))
+    client.note_spoken("I can't see the blue cube.")
+    client.say("where did it go")
+    sent = messages.calls[0]["messages"]
+    assert sent[1] == {"role": "assistant", "content": "I can't see the blue cube."}
+    assert sent[-1]["content"] == "where did it go"
+
+
+def test_announcements_do_not_grow_the_history_without_limit():
+    client = ClaudeClient("m", LOG, client=SimpleNamespace(messages=FakeMessages()))
+    for i in range(20):
+        client.note_spoken(f"change {i}")
+    assert len(client._exchanges) == claude_client.MAX_EXCHANGES

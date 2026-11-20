@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  Fast DDS settings so that large camera images reach the other ROS processes.
+
+  Loaded for every pixi task through FASTRTPS_DEFAULT_PROFILES_FILE (see [activation.env]
+  in pixi.toml).
+
+  Why: with Fast DDS's default settings, a 4K colour image (24.9 MB) published at 30 Hz was
+  received by another process at only 9 images per second, and a 1080p colour image
+  (6.2 MB) published at 60 Hz at 28 per second. This profile uses only shared memory, with
+  a segment large enough to hold several images, and recovered about 92% of both streams
+  (27.7 and 55.4 per second) in the same test. Shared memory only works between processes
+  on one machine, which is how the stack runs.
+-->
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <transport_descriptors>
+    <transport_descriptor>
+      <transport_id>shared_memory_large_images</transport_id>
+      <type>SHM</type>
+      <!-- 512 MB: about 20 4K colour images -->
+      <segment_size>536870912</segment_size>
+    </transport_descriptor>
+  </transport_descriptors>
+
+  <participant profile_name="shared_memory_large_images" is_default_profile="true">
+    <rtps>
+      <userTransports>
+        <transport_id>shared_memory_large_images</transport_id>
+      </userTransports>
+      <useBuiltinTransports>false</useBuiltinTransports>
+    </rtps>
+  </participant>
+</profiles>

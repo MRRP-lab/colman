@@ -7,9 +7,9 @@ perception tests (not a test file itself).
 
 import cv2
 import numpy as np
+from colman_description.workcell import TAG_SIZE_M  # the cubes' tags: 39.2 mm
 
 FAMILY_DICT = cv2.aruco.DICT_APRILTAG_36h11
-TAG_SIZE_M = 0.039  # the cubes' tags, as in config/apriltag*.yaml
 
 # The overhead camera's 1080p intrinsics (merged calibration); 4K is exactly 2x.
 K_1080P = np.array([[1460.5, 0, 962.4], [0, 1459.9, 547.1], [0, 0, 1.0]])

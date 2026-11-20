@@ -4,25 +4,23 @@ The enum values are human names. The node maps them to frames, so Claude never s
 or sends a raw frame name.
 """
 
-# Tag IDs 1-4 are the white cubes and 5-8 the blue cubes. Cube 1 of each colour is the
-# base of that colour's stack and never moves. The other three are stacked on top.
-STACKS = {
-    "white": {"base": "tag_1", "cubes": ["tag_2", "tag_3", "tag_4"]},
-    "blue": {"base": "tag_5", "cubes": ["tag_6", "tag_7", "tag_8"]},
+# Tag IDs 1-4 are the white cubes and 5-8 the blue cubes. No cube is special: any cube
+# can be moved, and a stack can hold any cubes in any order.
+COLORS = {
+    "white": ["tag_1", "tag_2", "tag_3", "tag_4"],
+    "blue": ["tag_5", "tag_6", "tag_7", "tag_8"],
 }
-MAX_STACK = 3  # cubes on top of a base
+CUBES_PER_COLOR = 4
+MIN_STACK = 2  # the smallest stack stack_cube can be asked for
 
-# Every cube by its spoken name; "white cube 1" is the base of the white stack.
+# Every cube by its spoken name. The number is the tag's number, so the white cubes are
+# 1 to 4 and the blue cubes 5 to 8 and no two cubes share a number: "white cube 1" is
+# tag_1 and "blue cube 8" is tag_8. The number does not rank a cube.
 CUBE_NAMES = {
-    f"{color} cube {number}": frame
-    for color, stack in STACKS.items()
-    for number, frame in enumerate([stack["base"], *stack["cubes"]], start=1)
+    f"{color} cube {frame.split('_')[1]}": frame
+    for color, frames in COLORS.items()
+    for frame in frames
 }
-BASE_FRAMES = {stack["base"] for stack in STACKS.values()}
-
-# pick_and_place moves one loose cube (a base never moves) onto any cube.
-OBJECT_FRAMES = {n: f for n, f in CUBE_NAMES.items() if f not in BASE_FRAMES}
-DESTINATION_FRAMES = dict(CUBE_NAMES)
 
 # Named arm poses go_to_pose may use, by spoken name. The values are the pose names in
 # colman_moveit_config/srdf/arm.srdf.xacro.
@@ -34,18 +32,18 @@ POSES = {
 PICK_AND_PLACE = {
     "name": "pick_and_place",
     "description": (
-        "Pick up one loose cube and place it on top of another cube. Cube 1 of each "
-        "colour is a base and cannot be picked up. A cube with another on top, or a "
-        f"stack already {MAX_STACK} high, cannot be built on. To stack several cubes "
-        "of one colour use stack_cube instead. Takes about a minute and blocks other "
-        "arm commands."
+        "Pick up one cube and place it on top of another cube. Either cube can be any "
+        "colour and either can already be part of a stack, but the cube picked up must "
+        "have nothing on top of it and so must the cube it goes on. To stack several "
+        "cubes of one colour use stack_cube instead. Takes about a minute and blocks "
+        "other arm commands."
     ),
     "strict": True,
     "input_schema": {
         "type": "object",
         "properties": {
-            "object": {"type": "string", "enum": list(OBJECT_FRAMES)},
-            "destination": {"type": "string", "enum": list(DESTINATION_FRAMES)},
+            "object": {"type": "string", "enum": list(CUBE_NAMES)},
+            "destination": {"type": "string", "enum": list(CUBE_NAMES)},
         },
         "required": ["object", "destination"],
         "additionalProperties": False,
@@ -72,16 +70,21 @@ GO_TO_POSE = {
 STACK_CUBE = {
     "name": "stack_cube",
     "description": (
-        "Pick up loose cubes of one colour and stack them on that colour's base cube. "
-        "Each cube is picked and placed on the top of the stack in turn. Takes about "
-        "a minute per cube and blocks other arm commands."
+        "Build a stack of cubes of one colour. count is how many cubes the finished "
+        "stack has. It builds on the tallest stack of that colour already on the "
+        "table, or on any cube of that colour if there is none, and adds cubes of "
+        "that colour one at a time in any order. No cube is the base. Takes about a "
+        "minute per cube and blocks other arm commands."
     ),
     "strict": True,
     "input_schema": {
         "type": "object",
         "properties": {
-            "color": {"type": "string", "enum": list(STACKS)},
-            "count": {"type": "integer", "enum": list(range(1, MAX_STACK + 1))},
+            "color": {"type": "string", "enum": list(COLORS)},
+            "count": {
+                "type": "integer",
+                "enum": list(range(MIN_STACK, CUBES_PER_COLOR + 1)),
+            },
         },
         "required": ["color", "count"],
         "additionalProperties": False,
@@ -161,16 +164,13 @@ TOOLS = [
 def known_things_prompt():
     """Describe the allow-lists for the system prompt so the two never drift apart."""
     lines = []
-    for color, stack in STACKS.items():
-        names = [
-            n for n, f in CUBE_NAMES.items() if f in [stack["base"], *stack["cubes"]]
-        ]
-        lines.append(
-            f"The {color} cubes are {', '.join(names)}; {names[0]} is the base."
-        )
+    for color, frames in COLORS.items():
+        names = [n for n, f in CUBE_NAMES.items() if f in frames]
+        lines.append(f"The {color} cubes are {', '.join(names)}.")
     lines.append(
-        f"A base never moves. Any stack can be built up to {MAX_STACK} cubes on top of "
-        "its first cube."
+        "Any cube can be moved and any cube can go on any other, in any colour or "
+        "order. No cube is a base. Only a cube with nothing on top of it can be moved "
+        "or built on."
     )
     lines.append("Named poses for go_to_pose: " + ", ".join(POSES) + ".")
     return "\n".join(lines) + "\n"

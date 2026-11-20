@@ -8,13 +8,17 @@ from pathlib import Path
 
 import pytest
 import yaml
-from ament_index_python.packages import get_package_share_directory
 from launch import LaunchContext
 from launch.actions import OpaqueFunction
 from launch_ros.actions import Node
 
 LAUNCH = Path(__file__).resolve().parents[1] / "colman_bringup" / "launch"
-PERCEPTION = Path(get_package_share_directory("colman_perception")) / "config"
+PERCEPTION = (
+    Path(__file__).resolve().parents[2]
+    / "colman_perception"
+    / "colman_perception"
+    / "config"
+)
 
 
 def load_launch(name):
@@ -53,7 +57,9 @@ def test_overhead_tf_builds_a_static_publisher_from_the_calibration():
     assert len(args) == 9
     assert args[-2:] == ["base_link", "overhead_camera_optical_frame"]
     assert all(isinstance(float(a), float) for a in args[:7])
-    calibration = yaml.safe_load((PERCEPTION / "overhead_camera.yaml").read_text())
+    calibration = yaml.safe_load(
+        (PERCEPTION / "overhead_camera_pose_in_base_link.yaml").read_text()
+    )
     assert args == [str(a) for a in calibration["static_transform_args"]]
 
 
@@ -106,7 +112,7 @@ def test_apriltag_launch_rejects_an_unknown_camera():
 @pytest.mark.parametrize(
     "file, node_name, prefix",
     [
-        ("apriltag.yaml", "apriltag", "tag_"),
+        ("apriltag.yaml", "apriltag", "wrist_tag_"),
         ("apriltag_overhead.yaml", "apriltag_overhead", "ovh_tag_"),
     ],
 )

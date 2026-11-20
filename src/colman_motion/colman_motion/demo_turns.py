@@ -1,6 +1,7 @@
 import threading
 
 import rclpy
+from colman_description.workcell import CUBE_SIZE_M
 from moveit.planning import MoveItPy, PlanRequestParameters
 from rclpy.executors import MultiThreadedExecutor
 
@@ -112,7 +113,7 @@ def main():
                     drop_off = (
                         drop_pose.translation.x,
                         drop_pose.translation.y,
-                        drop_pose.translation.z + 0.05,
+                        drop_pose.translation.z + CUBE_SIZE_M,
                     )
 
                 drop_off_approach = (

@@ -21,7 +21,11 @@ pixi run ros2 run colman_audio_input speech_to_text
 Optional parameters: `topic` (default `speech_text`), `mute_topic`
 (default `tts_speaking`, mutes the mic while the robot speaks),
 `mute_max_s` (default 60, unmutes if the speaking-done message never arrives), and
-`input_device` (sounddevice index or name; empty uses the default mic).
+`input_device` (sounddevice index or name; empty uses the default mic). `pixi run stack`
+starts this node with the TONOR USB mic, found by name, because a device's index differs
+between computers and shifts when USB audio devices are replugged. Use another mic with
+`pixi run stack mic:=<name or index>`, or `mic:=` for the system default; check
+`python -m sounddevice` for the names.
 
 ```bash
 pixi run ros2 run colman_audio_input speech_to_text --ros-args \
