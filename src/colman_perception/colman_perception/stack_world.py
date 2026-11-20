@@ -23,7 +23,9 @@ LOST_S = 10.0  # how long a tag may vanish with no explanation before it is lost
 # cannot be found when the place looks for it.
 ARM_HIDE_MAX_S = 120.0
 CARRY_MEMORY_S = 60.0  # how long a stack's covered cubes are remembered for a slide
-RESTORE_S = 8.0  # a deleted tag comes back if a cube lands on its spot within this
+# A deleted tag comes back if a cube lands on its spot within this. The arm that placed
+# the cube hides it for the length of its retreat and its move home, so it is not short.
+RESTORE_S = 45.0
 OUTAGE_S = 10.0  # after the camera was down this long, remembered cubes are doubted
 # The sources of a tag pose that can still be trusted while the overhead camera is down.
 TRUSTED_WITHOUT_OVERHEAD = ("wrist", "held")
@@ -57,6 +59,21 @@ MOVED_Z_M = 0.04  # ... or its height changes by this much
 def shifted(a, b, xy_m, z_m):
     """True if poses a and b differ by xy_m sideways or z_m in height."""
     return math.hypot(a[0] - b[0], a[1] - b[1]) >= xy_m or abs(a[2] - b[2]) >= z_m
+
+
+def moved_away(fresh_poses, believed, arm_over_it):
+    """True if a fresh reading puts a tag somewhere other than where it is believed.
+
+    A tag the arm is over is not judged: the arm and the cube it holds partly cover it,
+    its corners are read badly, and the reading jumps. Treating that as the tag having
+    moved deleted the cube under a cube just placed on it.
+    """
+    if arm_over_it:
+        return False
+    return any(
+        p is not None and shifted(p, believed, MOVED_XY_M, MOVED_Z_M)
+        for p in fresh_poses
+    )
 
 
 def level_of(z):
