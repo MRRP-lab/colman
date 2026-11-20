@@ -38,6 +38,11 @@ TOOL_YAWS_DEG = (0, 180, 90, -90)  # arm_control.py
 
 PICK_SLACK_M = 0.015
 PLACE_MARGIN_M = 0.01
+# The arm folds against itself and its base close in. The kinematic model is too
+# optimistic there and does not model the collision, so nothing within this distance of
+# the base counts. 0.16 m is where docs/arm_reach, which was checked more carefully,
+# finds the nearest reachable cube along the forward axis.
+MIN_RADIUS_M = 0.16
 
 # The factory-measured link offsets of the arm, from ur_config.yaml, as
 # (x, y, z, roll, pitch, yaw) for shoulder, upper arm, forearm and wrist 1 to 3.
@@ -252,14 +257,22 @@ def level_tag_z(level):
     return cube_top_z(level)
 
 
+def _too_close(x, y):
+    return math.hypot(x, y) < MIN_RADIUS_M
+
+
 def can_pick(x, y, tag_z):
     """Can the arm pick the cube whose tag is at (x, y, tag_z)? Lenient at the edge."""
+    if _too_close(x, y):
+        return False
     low, high = tag_z - EE_OFFSET_M, tag_z + APPROACH_OFFSET_M
     return any(_reachable(px, py, low, high) for px, py in _around(x, y, PICK_SLACK_M))
 
 
 def can_place_on(x, y, tag_z):
     """Can the arm place a cube on the cube whose tag is at (x, y, tag_z)? Strict."""
+    if _too_close(x, y):
+        return False
     low = tag_z + DROP_OFFSET_M
     high = low + PLACE_APPROACH_OFFSET_M
     return all(

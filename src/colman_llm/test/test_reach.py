@@ -93,7 +93,9 @@ def test_cubes_in_front_of_the_arm_are_reachable(x, y, level):
     assert reach.can_place_on(x, y, z)
 
 
-@pytest.mark.parametrize("x, y", [(0.8, 0.0), (0.0, 0.8), (0.05, 0.0), (0.6, 0.5)])
+@pytest.mark.parametrize(
+    "x, y", [(0.8, 0.0), (0.0, 0.8), (0.05, 0.0), (0.14, 0.0), (0.6, 0.5)]
+)
 def test_cubes_too_far_or_too_near_the_base_are_not(x, y):
     z = cube_top_z(1)
     assert not reach.can_pick(x, y, z)

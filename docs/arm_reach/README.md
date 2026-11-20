@@ -31,3 +31,7 @@ The picture is an overhead 4K still with the reach drawn on the table plane. The
 - It is kinematics only. MoveIt collision checks, the table and the held cube's planning box, the wrist camera's view and motion-planner failures are not modelled, so the real usable area can be smaller.
 - The solver is not TRAC-IK, so points near an edge may flip either way. Treat the outlines as +-2 to 3 cm.
 - This replaces an earlier version of this map that wrongly used 39.2 mm cubes.
+
+## Where the node uses it
+
+`colman_llm/reach.py` is a numpy model of the same arm that the LLM node asks before it picks anything up: can the arm pick this cube, and can it place on the top of that stack? It uses the same joint chain, joint limits, tool tip and quarter turns as above and refuses anything within 0.16 m of the base, which matches the near edge of this map. At the far edge it is within about 2 cm of the map. See the Cube stacking demo section of [`../plan.md`](../plan.md).
