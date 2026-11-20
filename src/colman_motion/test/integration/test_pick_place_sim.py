@@ -148,10 +148,11 @@ def release(node):
     rclpy.spin_until_future_complete(node, future, timeout_sec=10)
 
 
-def pick(node, frame):
+def pick(node, frame, place_location=""):
     from colman_interfaces.action import Pick
 
-    return send_goal(node, Pick, "/pick", Pick.Goal(frame=frame))
+    goal = Pick.Goal(frame=frame, place_location=place_location)
+    return send_goal(node, Pick, "/pick", goal)
 
 
 def place(node, location):
@@ -163,6 +164,19 @@ def place(node, location):
 def test_pick_loose_cube(node):
     try:
         success, message = pick(node, "tag_2")
+        assert success, message
+    finally:
+        release(node)
+
+
+def test_pick_is_refused_before_it_starts_if_the_place_cannot_be_reached(node):
+    try:
+        success, message = pick(node, "tag_2", place_location="tag_9")
+        assert not success
+        assert "No safe arm pose to place on tag_9" in message
+        assert "tag_2 was not picked up" in message
+        # nothing was picked up, so the arm is free to pick again
+        success, message = pick(node, "tag_2", place_location="tag_1")
         assert success, message
     finally:
         release(node)

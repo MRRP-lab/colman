@@ -31,3 +31,7 @@ The picture is an overhead 4K still with the reach drawn on the table plane. The
 - It is kinematics only. MoveIt collision checks, the table and the held cube's planning box, the wrist camera's view and motion-planner failures are not modelled, so the real usable area can be smaller.
 - The solver is not TRAC-IK, so points near an edge may flip either way. Treat the outlines as +-2 to 3 cm.
 - This replaces an earlier version of this map that wrongly used 39.2 mm cubes.
+
+## Where the node uses it
+
+The map is a kinematic estimate. The real check is made by the motion server: the LLM node puts the destination in the `Pick` goal's `place_location`, and the server solves the place with MoveIt's IK and collision checks before it picks, so a place outside this map is refused before the cube is lifted. See the Cube stacking demo section of [`../plan.md`](../plan.md).

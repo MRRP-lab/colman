@@ -160,7 +160,9 @@ class LlmNode(Node):
         place_s = self.get_parameter("place_timeout_s").value
         move_s = self.get_parameter("move_timeout_s").value
         return PickAndPlaceExecutor(
-            lambda frame: pick.call(Pick.Goal(frame=frame), pick_s),
+            lambda frame, place_frame="": pick.call(
+                Pick.Goal(frame=frame, place_location=place_frame), pick_s
+            ),
             lambda frame: place.call(Place.Goal(location=frame), place_s),
             log,
             self._world,

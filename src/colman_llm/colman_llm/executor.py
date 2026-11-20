@@ -65,7 +65,10 @@ def validate_stack_cube(args):
 
 
 class PickAndPlaceExecutor:
-    """pick(frame) and place(frame) each return (ok, message) and may block.
+    """pick(frame, place_frame) and place(frame) return (ok, message) and may block.
+
+    pick is told which cube the picked one will go on, so the motion server can refuse
+    before it lifts anything if it cannot place there.
 
     world() returns the latest WorldView (what the overhead camera sees), or None if
     there is none. Which cube is on which is read from it every time, never remembered.
@@ -183,7 +186,7 @@ class PickAndPlaceExecutor:
                 break
             name = view.name_of(cube)
             self._log.info(f"stack_cube: {name} ({cube}) onto {target}")
-            ok, message = self._pick(cube)
+            ok, message = self._pick(cube, target)
             if not ok:
                 return False, self._partial(
                     color, done, count, f"Could not pick up the {name}. {message}"
@@ -260,7 +263,7 @@ class PickAndPlaceExecutor:
             self._log.info(
                 f"pick_and_place: {obj} ({obj_frame}) -> {dest} ({dest_frame})"
             )
-            ok, message = self._pick(obj_frame)
+            ok, message = self._pick(obj_frame, dest_frame)
             if not ok:
                 return False, f"Could not pick up the {obj}. {message}"
             self._held = obj_frame

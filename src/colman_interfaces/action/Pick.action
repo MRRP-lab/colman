@@ -1,4 +1,7 @@
 string frame
+# Optional. The frame of the cube this one will be placed on. If set, the server checks
+# that it can place there before it picks, and refuses without moving if it cannot.
+string place_location
 ---
 bool success
 string message

@@ -199,6 +199,40 @@ class MotionServer(Node):
                 return None, f"{tag_frame} not visible"
         return None, "Stopped during detect"
 
+    def check_place(self, goal_handle, feedback, tag_frame, place_location):
+        """Return why a cube picked from tag_frame cannot be placed on place_location.
+
+        Returns None if it can. Nothing moves: this solves the same drop and approach
+        poses that /place will, with the cube modelled on the tip and the column being
+        placed on left out of the scene, so a cube is never picked up that cannot then
+        be put down. The tool's square-to-the-cube turn is not known until the cube is
+        grasped, so it is left out; the four quarter turns are tried either way.
+        """
+        self.arm.attach_cube()
+        self.keep_clear([place_location])
+        try:
+            tag_pose, error = self.find_tag(goal_handle, feedback, place_location)
+            if error:
+                return error
+            drop = tag_pose.translation
+            drop_off = (drop.x, drop.y, drop.z + DROP_OFFSET_M)
+            pair = self.arm.vertical_pair(
+                drop_off[0],
+                drop_off[1],
+                drop_off[2],
+                drop_off[2] + PLACE_APPROACH_OFFSET_M,
+                EE_DOWN,
+            )
+        finally:
+            self.arm.detach_cube()
+            self.keep_clear([tag_frame])
+        if pair is None:
+            return (
+                f"No safe arm pose to place on {place_location}, "
+                f"so {tag_frame} was not picked up"
+            )
+        return None
+
     def move_cb(self, goal_handle):
         result = MoveTo.Result()
         self.arm.running = True
@@ -303,6 +337,14 @@ class MotionServer(Node):
                     goal_handle, result, f"No safe arm pose to reach {tag_frame}"
                 )
             approach_state, _, tool = pair
+
+            place_location = goal_handle.request.place_location
+            if place_location:
+                error = self.check_place(
+                    goal_handle, feedback, tag_frame, place_location
+                )
+                if error:
+                    return self.fail(goal_handle, result, error)
 
             self.stage(goal_handle, feedback, "approaching")
             if not self.arm.move_to_state(approach_state, self.arm.fast):

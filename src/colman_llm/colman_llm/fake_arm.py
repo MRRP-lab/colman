@@ -11,8 +11,19 @@ from colman_llm.world_view import FakeWorld
 
 
 class FakeArm:
-    def __init__(self, logger, pick=None, place=None, release=None, move=None):
+    def __init__(
+        self,
+        logger,
+        pick=None,
+        place=None,
+        release=None,
+        move=None,
+        unplaceable=(),
+    ):
         self.log = logger
+        # Frames the pretend motion server cannot place on, so a pick that is going
+        # there is refused before it lifts anything.
+        self.unplaceable = set(unplaceable)
         self.world = FakeWorld()
         self.calls = []
         self._picks = list(pick or [])
@@ -20,7 +31,13 @@ class FakeArm:
         self._release = release or (True, "off")
         self._move = move or (True, "ok")
 
-    def do_pick(self, frame):
+    def do_pick(self, frame, place_frame=""):
+        if place_frame in self.unplaceable:
+            self.calls.append(("pick refused", frame, place_frame))
+            return False, (
+                f"No safe arm pose to place on {place_frame}, "
+                f"so {frame} was not picked up"
+            )
         self.calls.append(("pick", frame))
         ok, message = self._picks.pop(0) if self._picks else (True, "ok")
         if ok:
