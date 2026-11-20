@@ -579,3 +579,51 @@ def test_a_lost_tag_is_never_restored():
     assert snap.lost == ["tag_7"]
     snap = w.settle({"tag_1": at(0.2, -0.3, 1), "tag_8": at(0.4, 0.2, 2)})
     assert snap.restored == {}
+
+
+# ----------------------------------- covers judged by level, partial carries, notes
+def test_a_cover_one_level_up_counts_even_when_the_heights_wobble():
+    w = World()
+    # cube 7 reads a little high and cube 8 a little low, 2 cm apart
+    w.settle({"tag_7": (0.4, 0.2, 0.16), "tag_1": at(0.2, -0.3, 1)})
+    w.settle({"tag_1": at(0.2, -0.3, 1), "tag_8": (0.4, 0.2, 0.18)})
+    snap = w.settle(
+        {"tag_1": at(0.2, -0.3, 1), "tag_8": (0.4, 0.2, 0.18)}, seconds=LOST_S * 3
+    )
+    assert snap.lost == []
+    assert snap.column_of("tag_7") is not None
+
+
+def test_a_tag_at_the_same_level_does_not_cover_a_neighbour():
+    w = World()
+    w.settle({"tag_7": at(0.4, 0.2, 2), "tag_8": at(0.41, 0.2, 2)})
+    w.take("tag_7")
+    snap = w.settle({"tag_8": at(0.41, 0.2, 2)}, seconds=1.0)
+    snap = w.settle({"tag_8": at(0.41, 0.2, 2)}, seconds=1.0)
+    assert snap.column_of("tag_7") is None
+
+
+def test_a_slide_carries_the_cubes_still_remembered_when_one_was_lost():
+    w = World()
+    tall_stack(w)
+    w.take("tag_6")  # the middle cube's belief is gone
+    snap = w.settle({"tag_7": at(0.35, 0.05, 3)})
+    assert set(snap.relocated) == {"tag_5"}
+    assert snap.column_of("tag_7").tags[0] == "tag_5"
+
+
+def test_a_refused_slide_is_noted_once_not_every_frame():
+    w = World()
+    tall_stack(w)
+    first = w.settle({"tag_7": at(0.4, 0.2, 1)})
+    again = w.settle({"tag_7": at(0.4, 0.2, 1)})
+    assert any("not carried" in n for n in first.notes)
+    assert not any("not carried" in n for n in again.notes)
+
+
+def test_two_cubes_lifted_off_a_stack_together_are_not_a_slide():
+    w = World()
+    tall_stack(w)
+    # the top two are lifted off together and laid down 2 high at a new spot
+    snap = w.settle({"tag_7": at(0.4, 0.2, 2)})
+    assert snap.relocated == {}

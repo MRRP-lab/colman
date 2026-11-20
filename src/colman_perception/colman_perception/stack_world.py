@@ -13,7 +13,6 @@ from dataclasses import dataclass, field
 
 CUBE_M = 0.05  # a cube is 5 cm, so a tag on the top of level n is n * CUBE_M high
 XY_TOL_M = 0.03  # tags closer than this in x, y are in the same column
-COVER_M = 0.035  # a tag this much higher over another covers it
 LOST_S = 10.0  # how long a tag may vanish with no explanation before it is lost
 # A cube placed on another can take several seconds to be detected, and its hand may
 # linger over it, so a covered tag must outlast that before it is called lost.
@@ -107,10 +106,18 @@ class StackModel:
         self.uncertain = set()  # tags placed by a slide guess, not seen to go there
         self.prev_beliefs = {}  # the beliefs of the last update
         self.gone = {}  # tag -> (pose, when) of a belief dropped without being lost
+        self.refused = {}  # top tag -> the last reason its slide was not carried
 
     def covered(self, tag, pos, visible):
+        """True if a seen tag sits over this one, at a higher cube level.
+
+        Levels, not raw heights: a height reading wobbles by about 2 cm, which is
+        enough to hide a cover that is exactly one cube higher.
+        """
         return any(
-            other != tag and xy_gap(pos, p) <= XY_TOL_M and p[2] >= pos[2] + COVER_M
+            other != tag
+            and xy_gap(pos, p) <= XY_TOL_M
+            and level_of(p[2]) > level_of(pos[2])
             for other, p in visible.items()
         )
 
@@ -253,10 +260,17 @@ class StackModel:
             moved_cm = xy_gap(q, old_xy) * 100
 
             def refuse(why, top=top, moved_cm=moved_cm):
-                notes.append(f"{top} moved {moved_cm:.0f} cm, not carried: {why}")
+                if (
+                    self.refused.get(top) != why
+                ):  # say each reason once, not every frame
+                    self.refused[top] = why
+                    notes.append(f"{top} moved {moved_cm:.0f} cm, not carried: {why}")
 
-            if any(t not in beliefs for t in under):
-                refuse("a cube under it is no longer remembered")
+            under = [
+                t for t in under if t in beliefs
+            ]  # carry the ones still remembered
+            if not under:
+                refuse("no cube under it is remembered")
                 continue
             if level_of(q[2]) != height:
                 refuse(f"its height changed from {height} to {level_of(q[2])}")
@@ -281,6 +295,7 @@ class StackModel:
                 self.unexplained.pop(tag, None)
                 self.arm_hidden.pop(tag, None)
             self.uncertain.update(under)
+            self.refused.pop(top, None)
             carried.add(top)
             notes.append(f"{top} moved {moved_cm:.0f} cm, carried {', '.join(under)}")
             # Keep following this top. While it is still being pushed it has no settled
