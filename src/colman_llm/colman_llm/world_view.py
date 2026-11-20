@@ -9,6 +9,8 @@ mode and the tests move cubes around on.
 
 from dataclasses import dataclass, field
 
+from colman_description.workcell import cube_top_z
+
 from colman_llm.tools import COLORS, CUBE_NAMES
 
 UNKNOWN = "unknown"
@@ -22,6 +24,7 @@ class Column:
     height: int
     order_known: bool = True
     top_seen: bool = True
+    position: tuple = None  # (x, y) of the column in base_link, None if not known
 
 
 @dataclass
@@ -33,7 +36,13 @@ class WorldView:
     @classmethod
     def from_msg(cls, msg):
         columns = [
-            Column(list(s.tags), s.height, s.order_known, s.top_seen)
+            Column(
+                list(s.tags),
+                s.height,
+                s.order_known,
+                s.top_seen,
+                (s.position.x, s.position.y),
+            )
             for s in msg.stacks
         ]
         return cls(columns, msg.held, list(msg.missing))
@@ -44,6 +53,18 @@ class WorldView:
 
     def column_of(self, tag):
         return next((c for c in self.columns if tag in c.tags), None)
+
+    def tag_point(self, tag):
+        """(x, y, z) of the tag on top of this cube in base_link, or None if unknown.
+
+        x and y are the column's. z is the top of the cube at its level in the column,
+        counting from the table, because the cubes are exactly one size.
+        """
+        column = self.column_of(tag)
+        if column is None or column.position is None:
+            return None
+        level = column.tags.index(tag) + 1
+        return (*column.position, cube_top_z(level))
 
     def top_of(self, tag):
         column = self.column_of(tag)
@@ -75,11 +96,13 @@ class WorldView:
             return None, f"I can't see the top of the {color} stack."
         return target, None
 
-    def next_move(self, color, count):
+    def next_move(self, color, count, can_pick=None):
         """(cube, target, None), or (None, None, why not), to grow the stack to count.
 
         The target is the top of the colour's tallest stack. The cube is the top of
         the shortest other stack made only of that colour, so loose cubes go first.
+        can_pick(tag) says whether the arm can reach a cube; cubes it cannot reach are
+        skipped.
         """
         columns = self.pure_columns(color)
         if not columns:
@@ -96,6 +119,17 @@ class WorldView:
         sources = [c for c in columns[1:] if c.top_seen and c.tags[-1] != UNKNOWN]
         if not sources:
             return None, None, f"There are no other free {color} cubes to add."
+        if can_pick is not None:
+            sources = [c for c in sources if can_pick(c.tags[-1])]
+            if not sources:
+                return (
+                    None,
+                    None,
+                    (
+                        f"None of the other free {color} cubes is within "
+                        "the arm's reach."
+                    ),
+                )
         source = min(sources, key=lambda c: (c.height, min(c.tags)))
         return source.tags[-1], target, None
 
@@ -166,18 +200,32 @@ class WorldView:
 class FakeWorld:
     """A table that holds cubes, for dry-run mode and the tests. Not the camera."""
 
+    # Where each cube starts, in base_link: the white cubes in a row at x = 0.25 m and
+    # the blue cubes behind them, all well inside what the arm can reach.
+    START = {
+        **{f: (0.25, y) for f, y in zip(COLORS["white"], (0.2, 0.07, -0.07, -0.2))},
+        **{f: (0.35, y) for f, y in zip(COLORS["blue"], (0.2, 0.07, -0.07, -0.2))},
+    }
+
     def __init__(self):
         self.columns = [[frame] for frame in sorted(NAME_OF)]
+        self.xy = dict(self.START)  # position of each column, by its bottom cube
         self.held = ""
+        self._held_xy = None
 
     def view(self):
-        return WorldView([Column(list(c), len(c)) for c in self.columns], self.held, [])
+        return WorldView(
+            [Column(list(c), len(c), position=self.xy[c[0]]) for c in self.columns],
+            self.held,
+            [],
+        )
 
     def column(self, frame):
         return next(c for c in self.columns if frame in c)
 
     def pick(self, frame):
         column = self.column(frame)
+        self._held_xy = self.xy[column[0]]
         column.remove(frame)
         if not column:
             self.columns.remove(column)
@@ -190,4 +238,5 @@ class FakeWorld:
     def drop(self):
         if self.held:
             self.columns.append([self.held])
+            self.xy[self.held] = self._held_xy
             self.held = ""

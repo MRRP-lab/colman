@@ -217,7 +217,12 @@ def test_from_msg_carries_the_visibility_of_the_top():
     from types import SimpleNamespace
 
     stack = SimpleNamespace(
-        tags=["tag_1", "tag_2"], height=2, order_known=True, top_seen=False
+        tags=["tag_1", "tag_2"],
+        height=2,
+        order_known=True,
+        top_seen=False,
+        position=SimpleNamespace(x=0.3, y=-0.1),
     )
     view = WorldView.from_msg(SimpleNamespace(stacks=[stack], held="", missing=[]))
     assert view.columns[0].top_seen is False
+    assert view.columns[0].position == (0.3, -0.1)

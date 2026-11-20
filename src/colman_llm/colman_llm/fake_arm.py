@@ -11,8 +11,11 @@ from colman_llm.world_view import FakeWorld
 
 
 class FakeArm:
-    def __init__(self, logger, pick=None, place=None, release=None, move=None):
+    def __init__(
+        self, logger, pick=None, place=None, release=None, move=None, reach=None
+    ):
         self.log = logger
+        self.reach = reach  # see PickAndPlaceExecutor; None checks nothing
         self.world = FakeWorld()
         self.calls = []
         self._picks = list(pick or [])
@@ -55,4 +58,5 @@ class FakeArm:
             release=self.do_release,
             move_to=self.do_move,
             sleep=sleep if sleep is not None else time.sleep,
+            reach=self.reach,
         )
