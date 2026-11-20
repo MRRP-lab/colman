@@ -919,3 +919,14 @@ def test_the_cube_under_one_just_placed_is_restored_after_the_arm_has_retreated(
     snap = w.settle({"tag_1": at(0.2, -0.3, 1), "tag_8": at(0.4, 0.2, 2)})
     assert set(snap.restored) == {"tag_7"}
     assert snap.column_of("tag_8").tags == ["tag_7", "tag_8"]
+
+
+def test_a_cube_just_placed_under_the_arm_is_not_dropped_for_being_too_tall():
+    w = World()
+    w.settle({"tag_1": at(0.4, 0.2, 1), "tag_2": at(0.3, -0.2, 1)})
+    w.settle({"tag_1": at(0.4, 0.2, 1), "tag_2": at(0.4, 0.2, 2)})
+    # The arm now covers the new top: only the bottom cube is seen, at level 1.
+    snap = w.settle({"tag_1": at(0.4, 0.2, 1)}, arm=lambda xy: True, seconds=1)
+    assert snap.lost == []
+    column = snap.column_of("tag_2")
+    assert column is not None and column.tags == ["tag_1", "tag_2"]
