@@ -325,3 +325,39 @@ def test_stack_cube_stops_when_the_server_cannot_place_on_the_stack():
     ok, message = arm.executor().run_tool("stack_cube", {"color": "white", "count": 2})
     assert not ok and "No safe arm pose to place on tag_1" in message
     assert arm.calls == [("pick refused", "tag_2", "tag_1")]
+
+
+def test_the_arm_goes_home_after_a_job_so_the_camera_sees_the_table():
+    arm = FakeArm(LOG)
+    executor = arm.executor(clear_view_pose="home")
+    ok, _ = executor.run_tool(
+        "pick_and_place", {"object": "white cube 2", "destination": "white cube 1"}
+    )
+    assert ok and arm.calls[-1] == ("move_to", "home")
+    arm.calls.clear()
+    ok, _ = executor.run_tool("stack_cube", {"color": "blue", "count": 2})
+    assert ok and arm.calls[-1] == ("move_to", "home")
+
+
+def test_no_home_move_while_a_cube_is_held_or_the_arm_is_stopped():
+    arm = FakeArm(LOG, place=[(False, "no")])
+    executor = arm.executor(clear_view_pose="home")
+    executor.run_tool(
+        "pick_and_place", {"object": "white cube 2", "destination": "white cube 1"}
+    )
+    assert ("move_to", "home") not in arm.calls  # the place failed, the cube is held
+    arm2 = FakeArm(LOG)
+    executor2 = arm2.executor(clear_view_pose="home")
+    executor2.run_tool("stop_robot", {})
+    executor2.set_stopped(True)
+    executor2._clear_view()
+    assert ("move_to", "home") not in arm2.calls
+
+
+def test_without_a_clear_view_pose_the_arm_stays_where_the_job_ended():
+    arm = FakeArm(LOG)
+    executor = arm.executor()
+    executor.run_tool(
+        "pick_and_place", {"object": "white cube 2", "destination": "white cube 1"}
+    )
+    assert ("move_to", "home") not in arm.calls

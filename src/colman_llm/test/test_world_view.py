@@ -217,7 +217,6 @@ def test_from_msg_carries_the_visibility_of_the_top():
     )
     view = WorldView.from_msg(SimpleNamespace(stacks=[stack], held="", missing=[]))
     assert view.columns[0].top_seen is False
-from colman_llm.world_view import Column, WorldView
 
 
 def test_status_says_what_the_arm_holds():
