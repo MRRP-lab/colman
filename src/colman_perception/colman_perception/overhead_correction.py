@@ -8,8 +8,9 @@ moves the tag along the camera's line of sight, so x and y are moved back along 
 line to where it meets the corrected height.
 """
 
-# The overhead camera's position in base_link, from config/overhead_camera.yaml.
-CAMERA_XYZ = (0.34221, 0.04809, 1.83012)
+# The overhead camera's position in base_link: the static_transform_args in
+# config/overhead_camera_pose_in_base_link.yaml (a test keeps them in step).
+CAMERA_XYZ = (0.33275, 0.05225, 1.82645)
 
 # true z = Z_SLOPE * measured z + Z_OFFSET, fitted at 4K.
 Z_SLOPE = 0.985
