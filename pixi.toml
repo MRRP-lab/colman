@@ -60,6 +60,8 @@ test-integration = "pytest -v -s --basetemp=build/integration_logs src/colman_mo
 clean = "rm -rf build install log"
 
 [activation.env]
+# Lets large camera images reach other ROS processes; see the comments in the file.
+FASTRTPS_DEFAULT_PROFILES_FILE = "$PIXI_PROJECT_ROOT/config/fastdds_shared_memory_large_images.xml"
 # Tells gazebo to look in these directories for models.
 GZ_SIM_RESOURCE_PATH = "$GZ_SIM_RESOURCE_PATH:$PIXI_PROJECT_ROOT/src/colman_gazebo/colman_gazebo/models:$PIXI_PROJECT_ROOT/src/oakd_gazebo/oakd_gazebo/models:$PIXI_PROJECT_ROOT/install/oakd_description/share:$PIXI_PROJECT_ROOT/install/gripper_description/share:$PIXI_PROJECT_ROOT/install/colman_description/share"
 
