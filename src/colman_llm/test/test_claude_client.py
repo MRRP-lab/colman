@@ -206,15 +206,55 @@ def test_demo_tools_are_strict_and_sent():
         "compact",
     ]
     pick = tools["pick_and_place"]["input_schema"]["properties"]
-    assert "white cube 1" not in pick["object"]["enum"]  # a base never moves
-    assert "white cube 1" in pick["destination"]["enum"]
-    assert len(pick["object"]["enum"]) == 6 and len(pick["destination"]["enum"]) == 8
-    assert tools["stack_cube"]["input_schema"]["properties"]["count"]["enum"] == [
-        1,
-        2,
-        3,
-    ]
+    assert pick["object"]["enum"] == pick["destination"]["enum"]  # no special cube
+    assert len(pick["object"]["enum"]) == 8
+    stack = tools["stack_cube"]["input_schema"]["properties"]
+    assert stack["count"]["enum"] == [2, 3, 4]
     assert tools["stack_cube"]["input_schema"]["properties"]["color"]["enum"] == [
         "white",
         "blue",
     ]
+
+
+def spoken_tool_reply(words):
+    response = tool_reply()
+    response.content.insert(0, SimpleNamespace(type="text", text=words))
+    return response
+
+
+def test_words_before_a_tool_call_are_spoken_before_the_tool_runs():
+    client, _ = make(spoken_tool_reply("Stacking the white cubes now."), reply("Done."))
+    events = []
+
+    def run_tool(name, args):
+        events.append(("tool", name))
+        return True, "ok"
+
+    result = client.say(
+        "stack the white cubes", run_tool, lambda text: events.append(("say", text))
+    )
+    assert events == [
+        ("say", "Stacking the white cubes now."),
+        ("tool", "pick_and_place"),
+    ]
+    assert result == "Done."  # only the words after the tool result are returned
+
+
+def test_a_tool_call_with_no_words_says_nothing_first():
+    client, _ = make(tool_reply(), reply("Done."))
+    said = []
+    client.say("go", lambda n, a: (True, "ok"), said.append)
+    assert said == []
+
+
+def test_an_ignore_before_a_tool_call_is_not_spoken():
+    client, _ = make(spoken_tool_reply("IGNORE"), reply("Done."))
+    said = []
+    client.say("go", lambda n, a: (True, "ok"), said.append)
+    assert said == []
+
+
+def test_the_system_prompt_has_no_fixed_acknowledgement_and_no_base_cube():
+    prompt = claude_client.SYSTEM_PROMPT
+    assert "On it." not in prompt and "No cube is a base" in prompt
+    assert "say one short sentence" in prompt

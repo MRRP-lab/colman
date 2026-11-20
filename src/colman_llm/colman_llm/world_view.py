@@ -9,12 +9,11 @@ mode and the tests move cubes around on.
 
 from dataclasses import dataclass, field
 
-from colman_llm.tools import BASE_FRAMES, CUBE_NAMES, MAX_STACK, STACKS
+from colman_llm.tools import COLORS, CUBE_NAMES
 
 UNKNOWN = "unknown"
 NAME_OF = {frame: name for name, frame in CUBE_NAMES.items()}
-COLOR_OF = {f: c for c, s in STACKS.items() for f in [s["base"], *s["cubes"]]}
-MAX_HEIGHT = MAX_STACK + 1  # a base plus the cubes that go on top of it
+COLOR_OF = {f: c for c, frames in COLORS.items() for f in frames}
 
 
 @dataclass
@@ -50,49 +49,61 @@ class WorldView:
         column = self.column_of(tag)
         return column.tags[-1] if column else None
 
-    def height(self, color):
-        """Cubes on top of the colour's base, or 0 if the base is not in view."""
-        column = self.column_of(STACKS[color]["base"])
-        return column.height - 1 if column else 0
+    def pure_columns(self, color):
+        """Columns made only of cubes of this colour, tallest first, then by tag."""
+        frames = set(COLORS[color])
+        columns = [c for c in self.columns if c.tags and set(c.tags) <= frames]
+        return sorted(columns, key=lambda c: (-c.height, min(c.tags)))
 
-    def anchor(self, color):
-        """(column, reason): the column the colour's cubes are stacked onto."""
-        base = STACKS[color]["base"]
-        column = self.column_of(base)
-        if column is None:
-            return None, f"I can't see the {color} base cube, so I can't stack on it."
-        return column, None
+    def height(self, color):
+        """Cubes in the tallest stack made only of this colour, or 0 if none."""
+        columns = self.pure_columns(color)
+        return columns[0].height if columns else 0
 
     # --------------------------------------------------------------- stack_cube
     def target_of(self, color):
-        """(target, None): the top cube of the colour's stack, or (None, why not)."""
-        column, reason = self.anchor(color)
-        if column is None:
-            return None, reason
-        if column.height >= MAX_HEIGHT:
-            return None, f"The {color} stack is already full."
+        """(target, None): the top cube of the colour's tallest stack, or why not.
+
+        No cube is a base: the stack is whichever column of this colour is tallest.
+        """
+        columns = self.pure_columns(color)
+        if not columns:
+            return None, f"I can't see any {color} cubes."
+        column = columns[0]
         target = column.tags[-1]
         if target == UNKNOWN or not column.top_seen:
             return None, f"I can't see the top of the {color} stack."
         return target, None
 
-    def next_move(self, color):
-        """(cube, target, None), or (None, None, why not)."""
+    def next_move(self, color, count):
+        """(cube, target, None), or (None, None, why not), to grow the stack to count.
+
+        The target is the top of the colour's tallest stack. The cube is the top of
+        the shortest other stack made only of that colour, so loose cubes go first.
+        """
+        columns = self.pure_columns(color)
+        if not columns:
+            return None, None, f"I can't see any {color} cubes."
+        if columns[0].height >= count:
+            return (
+                None,
+                None,
+                (f"There is already a stack of {columns[0].height} {color} cubes."),
+            )
         target, reason = self.target_of(color)
         if target is None:
             return None, None, reason
-        column = self.column_of(target)
-        for cube in STACKS[color]["cubes"]:
-            own = self.column_of(cube)
-            if own is not None and own is not column and own.tags == [cube]:
-                return cube, target, None
-        return None, None, f"There are no loose {color} cubes left to stack."
+        sources = [c for c in columns[1:] if c.top_seen and c.tags[-1] != UNKNOWN]
+        if not sources:
+            return None, None, f"There are no other free {color} cubes to add."
+        source = min(sources, key=lambda c: (c.height, min(c.tags)))
+        return source.tags[-1], target, None
 
     # ----------------------------------------------------------- pick_and_place
     def check_move(self, cube, target):
         """Return None if cube can go on target, else why not, in plain language."""
-        if cube in BASE_FRAMES or cube not in NAME_OF:
-            return f"The {self.name_of(cube)} is a base and never moves."
+        if cube not in NAME_OF:
+            return "I don't know that cube."
         if cube == target:
             return "A cube cannot be placed on itself."
         own = self.column_of(cube)
@@ -118,11 +129,6 @@ class WorldView:
                 f"The {self.name_of(dest.tags[-1])} is already on top of the "
                 f"{self.name_of(target)}."
             )
-        if dest.height + 1 > MAX_HEIGHT:
-            return (
-                f"That stack is already {MAX_HEIGHT} cubes high, so the "
-                f"{self.name_of(target)} cannot take another."
-            )
         return None
 
     def on_top_of(self, cube, target):
@@ -139,10 +145,8 @@ class WorldView:
             names = [self.name_of(t) for t in column.tags]
             if column.height > 1:
                 note = "" if column.order_known else " (I am not sure of the order)"
-                stacks.append(
-                    f"the {names[0]} has {' then '.join(names[1:])} on top{note}"
-                )
-            elif column.tags[0] not in BASE_FRAMES:
+                stacks.append(f"{' then '.join(names)}, bottom to top{note}")
+            else:
                 loose.append(names[0])
         lines = [
             "Stacks: " + "; ".join(stacks) + "." if stacks else "No cubes are stacked."

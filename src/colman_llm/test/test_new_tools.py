@@ -27,12 +27,44 @@ def test_any_loose_cube_goes_on_any_cube():
     assert calls == [("pick", "tag_7"), ("place", "tag_1")]
 
 
-def test_a_manual_move_is_remembered_by_stack_cube():
+def test_a_manual_move_is_seen_by_stack_cube():
     executor, calls = make()
     pap(executor, "white cube 2", "white cube 1")
-    executor.run_tool("stack_cube", {"color": "white", "count": 1})
-    # white cube 3 goes on the cube that is now on top, not on the base again.
+    executor.run_tool("stack_cube", {"color": "white", "count": 3})
+    # white cube 3 goes on the cube that is now on top of the stack.
     assert calls[-2:] == [("pick", "tag_3"), ("place", "tag_2")]
+
+
+def test_stack_cube_builds_on_the_tallest_stack_whichever_cubes_it_holds():
+    executor, calls = make()
+    pap(executor, "white cube 3", "white cube 4")
+    del calls[:]
+    ok, message = executor.run_tool("stack_cube", {"color": "white", "count": 3})
+    # The stack with white cube 4 at the bottom is the tallest, so it grows. The
+    # cubes added are the other loose ones, in tag order.
+    assert ok and calls == [("pick", "tag_1"), ("place", "tag_3")]
+    assert "tallest white stack now has 3" in message
+
+
+def test_stack_cube_only_uses_cubes_of_its_colour():
+    executor, calls = make()
+    pap(executor, "white cube 2", "blue cube 1")  # a mixed stack
+    del calls[:]
+    ok, _ = executor.run_tool("stack_cube", {"color": "white", "count": 4})
+    # The mixed stack's white cube is not free and its blue base is not white.
+    assert calls == [
+        ("pick", "tag_3"),
+        ("place", "tag_1"),
+        ("pick", "tag_4"),
+        ("place", "tag_3"),
+    ]
+    assert ok
+
+
+def test_a_former_base_can_be_moved():
+    executor, calls = make()
+    assert pap(executor, "white cube 1", "blue cube 3")[0]
+    assert calls == [("pick", "tag_1"), ("place", "tag_7")]
 
 
 def test_blocked_moves_never_reach_the_arm():
@@ -58,17 +90,18 @@ def test_a_covered_cube_cannot_be_picked_up():
     assert calls == []
 
 
-def test_stacks_stop_at_the_height_limit():
+def test_stacks_can_mix_colours_and_grow_past_one_colour():
     executor, calls = make()
     for obj, dest in [
         ("white cube 2", "white cube 1"),
-        ("white cube 3", "white cube 2"),
-        ("white cube 4", "white cube 3"),
+        ("blue cube 2", "white cube 2"),
+        ("white cube 3", "blue cube 2"),
+        ("blue cube 4", "white cube 3"),
+        ("white cube 4", "blue cube 4"),
     ]:
         assert pap(executor, obj, dest)[0]
-    del calls[:]
-    ok, message = pap(executor, "blue cube 2", "white cube 4")
-    assert not ok and "4 cubes high" in message and calls == []
+    _, message = executor.run_tool("report_state", {})
+    assert "white cube 1 then white cube 2 then blue cube 2" in message
 
 
 def test_failed_pick_changes_nothing():
@@ -97,7 +130,7 @@ def test_failed_place_leaves_the_cube_held_until_released():
 
 def test_stack_cube_failed_place_also_holds_the_cube():
     executor, _ = make(place=[(False, "no")])
-    ok, _ = executor.run_tool("stack_cube", {"color": "white", "count": 1})
+    ok, _ = executor.run_tool("stack_cube", {"color": "white", "count": 2})
     assert not ok
     ok, message = pap(executor, "blue cube 2", "blue cube 1")
     assert not ok and "still holding the white cube 2" in message
@@ -235,7 +268,7 @@ def test_report_state_follows_the_stacks_and_the_gripper():
     pap(executor, "white cube 2", "white cube 1")
     pap(executor, "blue cube 2", "white cube 2")  # place fails, still holding
     _, message = executor.run_tool("report_state", {})
-    assert "the white cube 1 has white cube 2 on top" in message
+    assert "white cube 1 then white cube 2, bottom to top" in message
     assert "holding the blue cube 2" in message
 
 
