@@ -20,8 +20,9 @@ LOST_S = 10.0  # how long a tag may vanish with no explanation before it is lost
 # linger over it, so a covered tag must outlast that before it is called lost.
 # The arm may explain a missing tag for this long, no longer. A pick or a place keeps
 # the arm over the table for a minute or more, and a cube dropped in the middle of one
-# cannot be found when the place looks for it.
-ARM_HIDE_MAX_S = 120.0
+# cannot be found when the place looks for it. The arm can also stay parked over a stack
+# between commands, and a cube cannot move while it is covered, so this is long.
+ARM_HIDE_MAX_S = 1800.0
 CARRY_MEMORY_S = 60.0  # how long a stack's covered cubes are remembered for a slide
 # A deleted tag comes back if a cube lands on its spot within this. The arm that placed
 # the cube hides it for the length of its retreat and its move home, so it is not short.
