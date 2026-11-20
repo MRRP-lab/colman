@@ -20,6 +20,7 @@ from colman_motion.robot_ready import wait_for_robot
 from colman_motion.scene_manager import SceneManager
 from colman_motion.tag_lookup import TagLookup
 from colman_motion.vacuum_control import VacuumControl
+from colman_motion.world_scene import WorldScene
 
 REFOCUS_SERVICE = "/oakd_pro/refocus"
 FIND_TIMEOUT_S = 4.0
@@ -39,11 +40,14 @@ SIGNALS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
 
 
 class MotionServer(Node):
-    def __init__(self, arm, tag, vacuum):
+    def __init__(self, arm, tag, vacuum, world=None):
         super().__init__("motion_server")
         self.arm = arm
         self.tag = tag
         self.vacuum = vacuum
+        # Keeps the cubes and stacks in the planning scene. None: the scene has only the
+        # table and the cube in the gripper.
+        self.world = world
         # Asks the wrist camera for a fresh autofocus and autoexposure pass.
         self.refocus = self.create_client(Trigger, REFOCUS_SERVICE)
 
@@ -108,6 +112,18 @@ class MotionServer(Node):
         self.arm.request_stop()
         threading.Thread(target=self.arm.halt, daemon=True).start()
         return CancelResponse.ACCEPT
+
+    def keep_clear(self, tags):
+        """Leave the columns holding these tags out of the planning scene for a move."""
+        if self.world is None:
+            return
+        if not self.world.current_world():
+            self.get_logger().warn("No current world state: planning without the cubes")
+        self.world.exclude(tags)
+
+    def stop_keeping_clear(self):
+        if self.world is not None:
+            self.world.clear_exclusions()
 
     def stage(self, goal_handle, feedback, name):
         feedback.stage = name
@@ -228,8 +244,10 @@ class MotionServer(Node):
             tag_frame = goal_handle.request.frame
             if self.vacuum.holding:
                 return self.fail(goal_handle, result, "Already holding, call /release")
-            # Nothing is held, so no cube is modelled while picking.
+            # Nothing is held, so no cube is modelled while picking, and the column
+            # being picked from is not an obstacle the arm may not touch.
             self.arm.detach_cube()
+            self.keep_clear([tag_frame])
 
             tag_pose, error = self.find_tag(goal_handle, feedback, tag_frame)
             if error:
@@ -287,6 +305,7 @@ class MotionServer(Node):
             goal_handle.succeed(result)
             return result
         finally:
+            self.stop_keeping_clear()
             if goal_handle.is_active:
                 self.finish()
 
@@ -303,6 +322,8 @@ class MotionServer(Node):
             # The cube is part of the arm from here until it is released, including
             # a move out of the overhead camera's view.
             self.arm.attach_cube()
+            if location:
+                self.keep_clear([location])
 
             if location:
                 tag_pose, error = self.find_tag(goal_handle, feedback, location)
@@ -364,6 +385,7 @@ class MotionServer(Node):
             goal_handle.succeed(result)
             return result
         finally:
+            self.stop_keeping_clear()
             if goal_handle.is_active:
                 self.finish()
 
@@ -389,13 +411,15 @@ def main():
         scene = SceneManager(ur)
         tag = TagLookup()
         vacuum = VacuumControl()
-        motion = MotionServer(arm, tag, vacuum)
+        world = WorldScene(scene)
+        motion = MotionServer(arm, tag, vacuum, world)
 
         executor = MultiThreadedExecutor()
         executor.add_node(arm)
         executor.add_node(scene)
         executor.add_node(tag)
         executor.add_node(vacuum)
+        executor.add_node(world)
         executor.add_node(motion)
 
         scene.add_box(
