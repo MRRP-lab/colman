@@ -124,6 +124,15 @@ class MotionServer(Node):
             self.get_logger().warn("No current world state: planning without the cubes")
         self.world.exclude(tags)
 
+    def drop_stale_held_cube(self):
+        """Forget the cube on the tip if the vacuum let go of it (/release, a stop).
+
+        Only a place detaches it, so a cube let go of any other way would stay in the
+        planning scene and collide with the cube the camera now sees on the table.
+        """
+        if not self.vacuum.holding:
+            self.arm.detach_cube()
+
     def stop_keeping_clear(self):
         if self.world is not None:
             self.world.clear_exclusions()
@@ -185,6 +194,7 @@ class MotionServer(Node):
         result = MoveTo.Result()
         self.arm.running = True
         try:
+            self.drop_stale_held_cube()
             result.success = self.arm.go_to_configured_pose(
                 goal_handle.request.pose_name, self.arm.fast
             )
@@ -210,6 +220,7 @@ class MotionServer(Node):
         result = MovePose.Result()
         self.arm.running = True
         try:
+            self.drop_stale_held_cube()
             pose = goal_handle.request.pose
             params = self.arm.slow if goal_handle.request.slow else self.arm.fast
             position = pose.position

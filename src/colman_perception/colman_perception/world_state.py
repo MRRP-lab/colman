@@ -19,16 +19,19 @@ from colman_interfaces.msg import WorldState as WorldStateMsg
 from colman_perception.overhead_correction import correct_position
 from colman_perception.stack_world import (
     ARM_CLEAR_M,
+    CUBE_M,
     SETTLE_XY_M,
     SETTLE_Z_M,
     StackModel,
     exact_heights,
+    level_height,
     moved_away,
     shifted,
     should_publish,
 )
 
 BASE_FRAME = "base_link"
+MAX_LEVELS = 4  # the tallest stack the arm builds
 TIP_FRAME = "vacuum_tip_link"
 OVERHEAD_FRAME = "overhead_camera_optical_frame"
 TAG_HEIGHT_M = 0.04  # about where a cube tag is, for the arm's shadow
@@ -270,7 +273,11 @@ class WorldState(Node):
         # The cube is where the arm let go of it. Remember that, so a cube the arm still
         # hides is not lost; the camera corrects it, or drops it, once it can see.
         if pose is not None:
-            self.belief[tag_frame] = (tuple(pose[0]), pose[1])
+            position = list(pose[0])
+            if position[2] > level_height(MAX_LEVELS) + CUBE_M / 2:
+                # Let go in the air, so it falls: it is at the table, not at the tip.
+                position[2] = level_height(1)
+            self.belief[tag_frame] = (tuple(position), pose[1])
         else:
             self.belief.pop(tag_frame, None)
         for source in SOURCES:
