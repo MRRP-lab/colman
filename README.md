@@ -4,6 +4,7 @@
 ![ROS 2 Jazzy](https://img.shields.io/badge/ROS_2-Jazzy-22314E)
 ![Python 3.12](https://img.shields.io/badge/python-3.12-3776AB)
 ![Platform](https://img.shields.io/badge/platform-linux--64-lightgrey)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
 A voice-controlled **UR3e** robot arm that stacks cubes. You talk to it, a language model
 (Claude Sonnet 5.5) decides what you meant, and the arm picks up and places tagged cubes
@@ -137,7 +138,7 @@ All commands run from the repository root. See every task with `pixi task list`.
 ```bash
 pixi run sim                 # Gazebo + MoveIt + the simulated UR3e
 pixi run sim-depth           # ... with the depth camera
-pixi run sim-yolo            # ... with YOLO object detection
+pixi run -e yolo sim-yolo    # ... with YOLO (optional; installs AGPL-3.0 ultralytics)
 ```
 
 ### Voice and LLM only, no arm
@@ -196,7 +197,7 @@ Every command above is a pixi task defined in [`pixi.toml`](pixi.toml).
 | --- | --- | --- |
 | **Build** | `build` | `colcon build --symlink-install --base-paths src` |
 | | `clean` | Remove `build/`, `install/` and `log/` |
-| **Simulation** | `sim`, `sim-depth`, `sim-yolo` | Gazebo with the UR3e, optionally with depth or YOLO |
+| **Simulation** | `sim`, `sim-depth`, `sim-yolo` | Gazebo with the UR3e, optionally with depth or YOLO. `sim-yolo` is only in the optional `yolo` environment: `pixi run -e yolo sim-yolo` |
 | | `sim-apriltag-20-panel` | Gazebo with a 20-tag panel world |
 | | `mock` | UR driver with mock hardware (no robot) |
 | **Real arm** | `stack` | Whole voice-controlled pipeline |
@@ -472,8 +473,6 @@ colman/
 **Status.** The full voice-to-arm pipeline is on `main` and has been run on the real arm.
 Known open items:
 
-- **License.** The repository has no `LICENSE` file, and every `package.xml` and `setup.py`
-  still says `TODO: License declaration`. Choose one before reusing the code.
 - **Overhead exposure.** The overhead camera clips the white tag cells and its raw tag
   depth reads low; the height correction hides this rather than fixing the exposure.
 - **Calibration at height.** The camera fits are checked only at table height.
@@ -484,5 +483,16 @@ Known open items:
   camera and `world_state`.
 - **CI scope.** Lint covers `src/` only, and the ament flake8 and pep257 tests are skipped.
 
-**Third-party.** Kokoro-82M (Apache 2.0), NVIDIA Parakeet, Anthropic's Claude API, the
-Universal Robots ROS 2 driver, MoveIt 2, TRAC-IK and `apriltag_ros`.
+### License
+
+The `colman_*` packages are released under the **[Apache License 2.0](LICENSE)**. Four packages keep
+the licences they came with: `colman_moveit_config` (BSD-3-Clause), `gripper_description` and
+`gripper_gazebo` (MIT), and `oakd_description` and `oakd_gazebo` (BSD-2-Clause).
+
+| Third-party component | Licence | Notes |
+| --- | --- | --- |
+| ROS 2 Jazzy, MoveIt 2, TRAC-IK, `apriltag_ros`, the UR ROS 2 driver | BSD / Apache-2.0 | Installed by pixi |
+| Kokoro-82M (text-to-speech) | Apache-2.0 | Weights download on first run |
+| NVIDIA Parakeet TDT 0.6B (speech-to-text) | CC-BY-4.0 | Weights download on first run; credit NVIDIA |
+| Anthropic Claude API | Anthropic's terms | Needs your own `ANTHROPIC_API_KEY` |
+| `ultralytics` (YOLO) | **AGPL-3.0** | **Optional.** Only in the `yolo` pixi environment, never in the default one |

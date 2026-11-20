@@ -21,8 +21,8 @@ setup(
     zip_safe=True,
     maintainer="pierce",
     maintainer_email="dev@piercecoyle.com",
-    description="OAK-D, AprilTag and YOLO perception for the Colman robot",
-    license="TODO: License declaration",
+    description="OAK-D, AprilTag and optional YOLO perception for the Colman robot",
+    license="Apache-2.0",
     extras_require={
         "test": [
             "pytest",

@@ -30,7 +30,7 @@ setup(
     maintainer="pierce",
     maintainer_email="dev@piercecoyle.com",
     description="URDF/Xacro description of the Colman UR3e robot",
-    license="TODO: License declaration",
+    license="Apache-2.0",
     extras_require={
         "test": [
             "pytest",
