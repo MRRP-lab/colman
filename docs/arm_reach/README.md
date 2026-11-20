@@ -2,43 +2,32 @@
 
 ![Arm reach on the table](arm_reach_on_table.jpg)
 
-The picture is an overhead 4K still with the reach drawn on the table plane. The grid is every 10 cm in `base_link`: x is forward from the arm base and y is to the arm's left (left of the picture).
+The picture is an overhead 4K still with the reach drawn on the table plane. The grid is every 10 cm in `base_link`: x is forward from the arm base and y is to the arm's left (left of the picture). Cubes are 50 mm (`workcell.py`; 39.2 mm is the tag's black square), and the table top is at z = -0.005 m.
 
-| Colour | Meaning |
-| --- | --- |
-| Green | The arm can pick a cube whose tag is on top of a 4-cube stack (tag z about 0.150 m). |
-| Amber | The arm can pick a cube on the table (tag z about 0.033 m), but not from the top of a tall stack. |
-| Red | The arm cannot reach, with the nozzle straight down. |
-
-## Limits on the table (x from 0.09 to 0.63 m, y within +-0.565 m)
-
-| | Cube on the table | Top of a 4-cube stack |
+| Colour | Share of the table | Meaning |
 | --- | --- | --- |
-| Furthest forward, y = 0 | x = 0.53 m | x = 0.47 m |
-| Furthest forward, y = +0.2 | 0.47 m | 0.39 m |
-| Furthest forward, y = -0.2 | 0.50 m | 0.44 m |
-| Furthest left (+y), x = 0.25 | y = +0.42 m | y = +0.34 m |
-| Furthest right (-y), x = 0.25 | y = -0.42 m | y = -0.42 m |
-| Nearest to the base, y = 0 | x = 0.14 m | x = 0.14 m |
+| Green | 34% | A stack of 4 cubes can be built here: cubes can be picked up from here, and a cube can be placed on top of a 1-, 2- and 3-cube stack here. |
+| Yellow | 11% | A stack of 2 or 3 cubes can be built here, but not 4. |
+| Orange | 1% | A cube can be picked up here, but nothing can be stacked on it. |
+| Red | 54% | A cube here cannot be picked up. |
 
-- Under half the table is reachable: 52% for a cube on the table, 39% for the top of a 4-stack.
-- Nothing at x = 0.55 m or further, and nothing beyond about |y| 0.45 m.
-- The far third of the table (x above 0.5 m) and both far side strips can't be used.
-- Cubes should sit roughly within x 0.15 to 0.45 m and y -0.3 to +0.3 m. The tall stack is safest at x 0.15 to 0.35 m.
-- A strip around the base (about 0.14 m in front of it at y = 0) is also unreachable.
-- Reach is asymmetric: the arm reaches further left (+y) near the base and further forward on the right, because the nozzle yaw is fixed and wrist 3 is limited to -130..+140 degrees.
-- The calibration marks #1 (y +0.51) and #8 (y -0.51) are outside the green area. They were touched with a free tool orientation, not with the nozzle straight down.
+## What it means for stacking
+
+- **The usable area is a ring around the base.** At y = 0 a cube on the table can be picked from x = 0.16 to 0.52 m. A stack of 4 can be built from x = 0.16 to 0.46 m.
+- **Sides:** at y = +0.3 a cube can be picked from x = 0.10 to 0.38 m and a 4-stack built from x = 0.10 to 0.32 m. At y = -0.3 the ranges are x = 0.10 to 0.44 m (pick) and 0.18 to 0.34 m (4-stack). Nothing beyond about |y| 0.45 m is reachable.
+- **Taller stacks shrink the area.** The share of the table where a stack of N cubes can be built is about 46% for 1, 45% for 2, 39% for 3, 34% for 4, 29% for 5, 20% for 6 and 10% for 7.
+- **Not reachable at all:** the far third of the table (x above about 0.52 m), both far side strips, and a patch right in front of the base (x below about 0.16 m near y = 0).
+- **Practical rule:** keep cubes within roughly x 0.18 to 0.45 m and y -0.3 to +0.3 m, and build tall stacks near the middle of that.
 
 ## How it was computed
 
-- **Arm:** the URDF chain from `base_link` to `vacuum_tip_link`, with the kinematic parameters in `ur_config.yaml` and the joint limits in `colman_moveit_config/config/joint_limits.yaml` as on `main` after #44.
-- **Pose:** a pick is the nozzle straight down (`EE_DOWN`, quaternion (1, 0, 0, 0)) at the tag z minus 0.01 m. The approach is 0.10 m above the tag, on the same IK solution. The table counts as reachable at a point only if both poses are found. Each point was tried from 24 starting joint configurations with a numerical 6D solver (position within 1 mm, orientation within 0.01 rad).
-- **Heights:** the table plane is at z = -0.0066 m, from the touch-off points. A cube is 39.2 mm.
-- **Projection:** the overhead pose in `camera_pose_calibration/results/overhead_camera_pose_in_base_link.yaml`, with the 4K intrinsics from `overhead_capture.npz`. Re-projecting the eight touched points lands within about 2 px of their marked centres.
+- **Arm:** the URDF chain from `base_link` to `vacuum_tip_link` with the factory kinematics in `ur_config.yaml` and the joint limits in `colman_moveit_config/config/joint_limits.yaml` as on `main` after #44.
+- **Poses:** the nozzle points straight down (`EE_DOWN`, quaternion (1, 0, 0, 0)). A pick is feasible if the grab pose (tag z - 0.01 m) and the approach pose (tag z + 0.10 m) both have an IK solution on the same branch. A place onto a stack is feasible if the drop pose (top tag z + 0.05 m) and the approach 0.05 m above it do. A cube at level n has its tag at z = -0.005 + 0.05 n. A numerical 6D solver was run on a 2 cm grid from 20 starting joint configurations per point (position within 1 mm, orientation within 0.01 rad). The grid and the isolated speckles near the edge come from this solver and the 2 cm cell size.
+- **Projection:** the overhead pose in `camera_pose_calibration/results/overhead_camera_pose_in_base_link.yaml` with the 4K intrinsics from `overhead_capture.npz`.
 - **Still:** `colman_calibration_archive/overhead_4k_capture/overhead_rgb.png`.
 
 ## What this does not include
 
-- It is kinematics only. MoveIt collision checks, the table and the held cube's planning box, the wrist camera's view and motion-planner failures are not modelled, so the real usable area can be somewhat smaller. It does not include the place poses (0.05 m approach), only the pick poses.
-- The solver is not TRAC-IK, so points near the green edge may flip either way. Treat the outline as +-1 to 2 cm.
-- Only these two heights were tested. A stack of 2 or 3 cubes falls between the green and amber areas.
+- It is kinematics only. MoveIt collision checks, the table and the held cube's planning box, the wrist camera's view and motion-planner failures are not modelled, so the real usable area can be smaller.
+- The solver is not TRAC-IK, so points near an edge may flip either way. Treat the outlines as +-2 to 3 cm.
+- This replaces an earlier version of this map that wrongly used 39.2 mm cubes.
