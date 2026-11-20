@@ -163,10 +163,10 @@ tag_1   white cube 1
 tag_2   white cube 2
 tag_3   white cube 3
 tag_4   white cube 4
-tag_5   blue cube 1
-tag_6   blue cube 2
-tag_7   blue cube 3
-tag_8   blue cube 4
+tag_5   blue cube 5
+tag_6   blue cube 6
+tag_7   blue cube 7
+tag_8   blue cube 8
 ```
 
 That is important for the LLM design: the LLM should map natural language like “the red block” to a known object/frame name. It should not directly invent arbitrary coordinates.

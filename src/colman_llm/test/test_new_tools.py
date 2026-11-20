@@ -22,8 +22,8 @@ def pap(executor, obj, dest):
 # ------------------------------------------------------------------ pick_and_place
 def test_any_loose_cube_goes_on_any_cube():
     executor, calls = make()
-    ok, message = pap(executor, "blue cube 3", "white cube 1")
-    assert ok and "blue cube 3" in message and "white cube 1" in message
+    ok, message = pap(executor, "blue cube 7", "white cube 1")
+    assert ok and "blue cube 7" in message and "white cube 1" in message
     assert calls == [("pick", "tag_7"), ("place", "tag_1")]
 
 
@@ -48,7 +48,7 @@ def test_stack_cube_builds_on_the_tallest_stack_whichever_cubes_it_holds():
 
 def test_stack_cube_only_uses_cubes_of_its_colour():
     executor, calls = make()
-    pap(executor, "white cube 2", "blue cube 1")  # a mixed stack
+    pap(executor, "white cube 2", "blue cube 5")  # a mixed stack
     del calls[:]
     ok, _ = executor.run_tool("stack_cube", {"color": "white", "count": 4})
     # The mixed stack's white cube is not free and its blue base is not white.
@@ -63,7 +63,7 @@ def test_stack_cube_only_uses_cubes_of_its_colour():
 
 def test_a_former_base_can_be_moved():
     executor, calls = make()
-    assert pap(executor, "white cube 1", "blue cube 3")[0]
+    assert pap(executor, "white cube 1", "blue cube 7")[0]
     assert calls == [("pick", "tag_1"), ("place", "tag_7")]
 
 
@@ -85,7 +85,7 @@ def test_a_covered_cube_cannot_be_picked_up():
     executor, calls = make()
     pap(executor, "white cube 3", "white cube 2")
     del calls[:]
-    ok, message = pap(executor, "white cube 2", "blue cube 1")
+    ok, message = pap(executor, "white cube 2", "blue cube 5")
     assert not ok and "white cube 3 is on top of the white cube 2" in message
     assert calls == []
 
@@ -94,14 +94,14 @@ def test_stacks_can_mix_colours_and_grow_past_one_colour():
     executor, calls = make()
     for obj, dest in [
         ("white cube 2", "white cube 1"),
-        ("blue cube 2", "white cube 2"),
-        ("white cube 3", "blue cube 2"),
-        ("blue cube 4", "white cube 3"),
-        ("white cube 4", "blue cube 4"),
+        ("blue cube 6", "white cube 2"),
+        ("white cube 3", "blue cube 6"),
+        ("blue cube 8", "white cube 3"),
+        ("white cube 4", "blue cube 8"),
     ]:
         assert pap(executor, obj, dest)[0]
     _, message = executor.run_tool("report_state", {})
-    assert "white cube 1 then white cube 2 then blue cube 2" in message
+    assert "white cube 1 then white cube 2 then blue cube 6" in message
 
 
 def test_failed_pick_changes_nothing():
@@ -132,7 +132,7 @@ def test_stack_cube_failed_place_also_holds_the_cube():
     executor, _ = make(place=[(False, "no")])
     ok, _ = executor.run_tool("stack_cube", {"color": "white", "count": 2})
     assert not ok
-    ok, message = pap(executor, "blue cube 2", "blue cube 1")
+    ok, message = pap(executor, "blue cube 6", "blue cube 5")
     assert not ok and "still holding the white cube 2" in message
 
 
@@ -259,17 +259,17 @@ def test_report_state_on_a_fresh_table():
     ok, message = executor.run_tool("report_state", {})
     assert ok and calls == []
     assert "No cubes are stacked" in message
-    assert "white cube 2" in message and "blue cube 4" in message
+    assert "white cube 2" in message and "blue cube 8" in message
     assert "not holding anything" in message and "ready" in message
 
 
 def test_report_state_follows_the_stacks_and_the_gripper():
     executor, _ = make(place=[(True, "ok"), (False, "no")])
     pap(executor, "white cube 2", "white cube 1")
-    pap(executor, "blue cube 2", "white cube 2")  # place fails, still holding
+    pap(executor, "blue cube 6", "white cube 2")  # place fails, still holding
     _, message = executor.run_tool("report_state", {})
     assert "white cube 1 then white cube 2, bottom to top" in message
-    assert "holding the blue cube 2" in message
+    assert "holding the blue cube 6" in message
 
 
 def test_report_state_knows_about_stop_and_resume():
@@ -291,7 +291,7 @@ def test_report_state_takes_no_arguments():
 def test_fake_executor_runs_every_tool():
     fake = FakeExecutor(LOG)
     assert fake.run_tool(
-        "pick_and_place", {"object": "blue cube 2", "destination": "blue cube 1"}
+        "pick_and_place", {"object": "blue cube 6", "destination": "blue cube 5"}
     )[0]
     assert fake.run_tool("go_to_pose", {"pose": "home"})[0]
     assert fake.run_tool("release_cube", {})[0]

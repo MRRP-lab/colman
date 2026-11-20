@@ -125,9 +125,9 @@ PICK_AND_PLACE = {
 The enum values are human names. The node maps them to frames, so Claude never sees or sends a raw frame name:
 
 ```python
-# The eight tagged cubes: tags 1 to 4 are white cubes 1 to 4, tags 5 to 8 blue cubes 1 to 4.
+# The eight tagged cubes: tags 1 to 4 are white cubes 1 to 4, tags 5 to 8 blue cubes 5 to 8.
 # No cube is special: any cube can be picked and any cube can be placed on.
-CUBE_NAMES = {"white cube 1": "tag_1", "white cube 2": "tag_2", ..., "blue cube 4": "tag_8"}
+CUBE_NAMES = {"white cube 1": "tag_1", "white cube 2": "tag_2", ..., "blue cube 8": "tag_8"}
 
 POSES = {"home": "home", "compact": "Compact"}
 ```
@@ -216,7 +216,7 @@ User: "Put white cube three on blue cube one."
 /speech_text
     |
     v
-Claude returns tool_use: pick_and_place(object="white cube 3", destination="blue cube 1")
+Claude returns tool_use: pick_and_place(object="white cube 3", destination="blue cube 5")
     |
     v
 node validates -> /pick tag_3 -> /place tag_5
@@ -225,7 +225,7 @@ node validates -> /pick tag_3 -> /place tag_5
 Claude receives success/failure as tool_result
     |
     v
-/llm_response: "I picked up white cube 3 and placed it on blue cube 1."
+/llm_response: "I picked up white cube 3 and placed it on blue cube 5."
     |
     v
 Kokoro speaks the response

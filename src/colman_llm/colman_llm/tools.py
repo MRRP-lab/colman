@@ -13,12 +13,13 @@ COLORS = {
 CUBES_PER_COLOR = 4
 MIN_STACK = 2  # the smallest stack stack_cube can be asked for
 
-# Every cube by its spoken name: "white cube 1" is tag_1 and "blue cube 4" is tag_8.
-# The number only tells cubes of one colour apart. It does not rank them.
+# Every cube by its spoken name. The number is the tag's number, so the white cubes are
+# 1 to 4 and the blue cubes 5 to 8 and no two cubes share a number: "white cube 1" is
+# tag_1 and "blue cube 8" is tag_8. The number does not rank a cube.
 CUBE_NAMES = {
-    f"{color} cube {number}": frame
+    f"{color} cube {frame.split('_')[1]}": frame
     for color, frames in COLORS.items()
-    for number, frame in enumerate(frames, start=1)
+    for frame in frames
 }
 
 # Named arm poses go_to_pose may use, by spoken name. The values are the pose names in
