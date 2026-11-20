@@ -3,6 +3,8 @@
 Arm driver, wrist and overhead cameras, AprilTag detectors, motion server, speech in,
 LLM and speech out. Run with `pixi run stack`. Pass `dry_run:=true` for canned LLM tool
 results (no arm moves) or `driver:=false` if the arm driver is already running.
+The microphone is found by name (`mic:=TONOR` by default); pass `mic:=<name or index>`
+for another one, or `mic:=` for the system default. `python -m sounddevice` lists them.
 """
 
 from ament_index_python.packages import get_package_share_directory
@@ -27,12 +29,14 @@ def generate_launch_description():
     dry_run = LaunchConfiguration("dry_run")
     driver = LaunchConfiguration("driver")
     robot_ip = LaunchConfiguration("robot_ip")
+    mic = LaunchConfiguration("mic")
 
     return LaunchDescription(
         [
             DeclareLaunchArgument("dry_run", default_value="false"),
             DeclareLaunchArgument("driver", default_value="true"),
             DeclareLaunchArgument("robot_ip", default_value="192.168.56.101"),
+            DeclareLaunchArgument("mic", default_value="TONOR"),
             # Arm
             Node(
                 package="colman_bringup",
@@ -74,10 +78,10 @@ def generate_launch_description():
                 package="colman_audio_input",
                 executable="speech_to_text",
                 output="screen",
-                # sounddevice index of the TONOR USB mic; the built-in input
-                # doesn't support 16 kHz. Indices can shift if USB audio
-                # devices are replugged.
-                parameters=[{"input_device": 10}],
+                # The TONOR USB mic, found by name: the built-in input does not
+                # support 16 kHz, and a device's index differs between computers and
+                # changes when USB audio devices are replugged.
+                parameters=[{"input_device": mic}],
             ),
             Node(
                 package="colman_llm",

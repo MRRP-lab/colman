@@ -36,6 +36,7 @@ from colman_llm.env_file import load_env_file
 from colman_llm.executor import FakeExecutor, PickAndPlaceExecutor
 from colman_llm.service_call import ServiceCall
 from colman_llm.stop_words import is_stop_command
+from colman_llm.tools import POSES
 from colman_llm.world_view import NAME_OF, WorldView
 from colman_llm.world_watch import WorldWatch
 
@@ -170,6 +171,7 @@ class LlmNode(Node):
             resume=resume.call,
             release=release.call,
             move_to=lambda pose: move.call(MoveTo.Goal(pose_name=pose), move_s),
+            clear_view_pose=POSES["home"],
         )
 
     def _on_speech(self, msg):

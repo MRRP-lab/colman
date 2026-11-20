@@ -219,8 +219,6 @@ def test_from_msg_carries_the_visibility_of_the_top():
     assert view.columns[0].top_seen is False
 
 
-
-
 def test_status_says_what_the_arm_holds():
     view = WorldView([Column(["tag_1"], 1)], held="tag_2")
     assert "The arm is holding the" in view.status()

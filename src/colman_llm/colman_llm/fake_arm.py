@@ -61,7 +61,7 @@ class FakeArm:
         self.calls.append(("move_to", pose))
         return self._move
 
-    def executor(self, stop=True, sleep=lambda s: None):
+    def executor(self, stop=True, sleep=lambda s: None, clear_view_pose=None):
         return PickAndPlaceExecutor(
             self.do_pick,
             self.do_place,
@@ -71,5 +71,6 @@ class FakeArm:
             resume=(lambda: (True, "resumed")) if stop else None,
             release=self.do_release,
             move_to=self.do_move,
+            clear_view_pose=clear_view_pose,
             sleep=sleep if sleep is not None else time.sleep,
         )
