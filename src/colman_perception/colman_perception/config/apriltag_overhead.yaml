@@ -8,8 +8,15 @@ apriltag_overhead:
     size: 0.0392  # the black square of the cube tags measures 39.2 mm
     max_hamming: 0
     detector:
-      threads: 2
-      decimate: 1.0  # the tags are only about 30 px wide, so never decimate
+      threads: 8
+      # Quads are found on an image shrunk by this factor, and the corners are then
+      # refined on the full-size image. A tag is about 62 px wide at 4K, so about 21 px at
+      # 3. Measured: on a 4K still the detector did 8 detections per second at 1 and about
+      # 40 at 3; live on the camera (4K, 30 fps) it keeps up at 30 per second. Corners
+      # moved at most 0.08 px (0.05 mm at the table) against decimate 1, but a tag's
+      # height moved by up to 1.5 mm. Above 6 the corners drift (1.9 mm at 8) and at 10
+      # tags are lost. Keep refine on: with it off, corners moved 0.6 to 0.8 px.
+      decimate: 3.0
       blur: 0.0
       refine: true
       sharpening: 0.25
