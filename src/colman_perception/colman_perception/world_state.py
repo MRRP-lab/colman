@@ -5,12 +5,28 @@ from pathlib import Path
 import rclpy
 import yaml
 from ament_index_python.packages import get_package_share_directory
+from apriltag_msgs.msg import AprilTagDetectionArray
 from geometry_msgs.msg import TransformStamped
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.time import Time
+from sensor_msgs.msg import JointState
 from tf2_ros import Buffer, TransformBroadcaster, TransformException, TransformListener
 from ur_msgs.msg import IOStates
+
+from colman_interfaces.msg import WorldStack
+from colman_interfaces.msg import WorldState as WorldStateMsg
+from colman_perception.overhead_correction import correct_position
+from colman_perception.stack_world import (
+    ARM_CLEAR_M,
+    MOVED_XY_M,
+    MOVED_Z_M,
+    SETTLE_XY_M,
+    SETTLE_Z_M,
+    StackModel,
+    shifted,
+    should_publish,
+)
 
 BASE_FRAME = "base_link"
 TIP_FRAME = "vacuum_tip_link"
@@ -19,7 +35,7 @@ APRILTAG_CONFIGS = ["apriltag.yaml", "apriltag_overhead.yaml"]
 SOURCES = ["wrist", "overhead"]
 PREFIX = {"wrist": "wrist_", "overhead": "ovh_"}
 TOLERANCE_M = 0.003
-FRESH_S = {"wrist": 0.3, "overhead": 0.6}
+FRESH_S = {"wrist": 0.3, "overhead": 2.0}  # 4K detection runs at about 2 Hz
 SETTLE_S = 1.0
 MOVED_M = 0.02
 GRAB_M = 0.03
@@ -29,6 +45,13 @@ STILL_M = 0.001
 STILL_S = 0.3
 RATE_HZ = 30.0
 IO_TOPIC = "/io_and_status_controller/io_states"
+JOINT_TOPIC = "/joint_states"
+ARM_ALIVE_S = 2.0  # the arm position is only trusted while joint states keep arriving
+WORLD_TOPIC = "/world_state"
+DETECTIONS_TOPIC = "/detections"
+OVERHEAD_FRAME_HINT = "overhead"  # the frame_id of the overhead detector's output
+CAMERA_ALIVE_S = 5.0  # the overhead detector counts as stopped after this long
+PUBLISH_EVERY = 3  # ticks of the update timer between /world_state messages
 VACUUM_PIN = 0
 
 
@@ -96,6 +119,17 @@ class WorldState(Node):
         self.camera_track = deque()
         self.held = None
         self.vacuum_on = None
+        self.model = StackModel(self.tag_frames)
+        self.world_pub = self.create_publisher(WorldStateMsg, WORLD_TOPIC, 10)
+        self.ticks = 0
+        self.camera_seen = None
+        self.joints_seen = None
+        self.create_subscription(JointState, JOINT_TOPIC, self.on_joints, 10)
+        # The detector publishes an array for every image it processes, even an empty
+        # one, so these arriving means the camera and detector are both running.
+        self.create_subscription(
+            AprilTagDetectionArray, DETECTIONS_TOPIC, self.on_detections, 10
+        )
         self.create_subscription(IOStates, IO_TOPIC, self.on_io, 10)
         self.create_timer(1.0 / RATE_HZ, self.update)
         self.get_logger().info(f"world state tracking {', '.join(self.tag_frames)}")
@@ -136,9 +170,11 @@ class WorldState(Node):
             return None, None
 
         position = position_of(transform)
+        if source == "overhead":
+            position = correct_position(position)
         samples = self.samples.setdefault(key, deque())
         if not samples or stamp > samples[-1][0]:
-            if samples and moved(position, mean(samples), TOLERANCE_M):
+            if samples and shifted(position, mean(samples), SETTLE_XY_M, SETTLE_Z_M):
                 samples.clear()
             if not samples:
                 self.since[key] = stamp
@@ -149,6 +185,30 @@ class WorldState(Node):
         if seconds(samples[-1][0] - self.since[key]) < SETTLE_S:
             return position, None
         return position, (mean(samples), samples[-1][2])
+
+    def on_joints(self, msg):
+        self.joints_seen = self.get_clock().now()
+
+    def arm_known(self, now):
+        """True only while a real arm is reporting joints.
+
+        robot_state_publisher publishes the arm at its zero pose when nothing sends
+        joint states, and that pose is not where the arm is.
+        """
+        return (
+            self.joints_seen is not None
+            and seconds(now - self.joints_seen) < ARM_ALIVE_S
+        )
+
+    def on_detections(self, msg):
+        if OVERHEAD_FRAME_HINT in msg.header.frame_id:
+            self.camera_seen = self.get_clock().now()
+
+    def camera_alive(self, now):
+        return (
+            self.camera_seen is not None
+            and seconds(now - self.camera_seen) < CAMERA_ALIVE_S
+        )
 
     def on_io(self, msg):
         on = next(
@@ -213,7 +273,7 @@ class WorldState(Node):
 
     def track(self, tag_frame, now, wrist_usable):
         if self.held is not None and self.held[0] == tag_frame:
-            return "held", self.held_pose()
+            return "held", self.held_pose(), None
 
         usable = {"wrist": wrist_usable, "overhead": True}
         fresh = {}
@@ -225,20 +285,22 @@ class WorldState(Node):
         if settled["wrist"] is not None and settled["overhead"] is not None:
             self.check_disagreement(tag_frame, settled["wrist"], settled["overhead"])
 
+        seen = next((p for p in fresh.values() if p is not None), None)
         source = next((s for s in SOURCES if settled[s] is not None), None)
         if source is not None:
             self.belief[tag_frame] = settled[source]
-            return source, settled[source]
+            return source, settled[source], seen
 
         belief = self.belief.get(tag_frame)
         if belief is None:
-            return None, None
+            return None, None, seen
         if any(
-            p is not None and math.dist(p, belief[0]) > MOVED_M for p in fresh.values()
+            p is not None and shifted(p, belief[0], MOVED_XY_M, MOVED_Z_M)
+            for p in fresh.values()
         ):
             del self.belief[tag_frame]
-            return None, None
-        return "remembered", belief
+            return None, None, seen
+        return "remembered", belief, seen
 
     def publish(self, tag_frame, pose, now):
         position, rotation = pose
@@ -252,16 +314,92 @@ class WorldState(Node):
         r.x, r.y, r.z, r.w = rotation
         self.broadcaster.sendTransform(msg)
 
+    def arm_hides(self, tip):
+        """True if (x, y) is within ARM_CLEAR_M of the line from the base to the tip."""
+        if tip is None:
+            return lambda xy: False  # no robot model, so no arm in the way
+        ax, ay = tip[:2]
+        length = ax * ax + ay * ay
+        if length < 1e-9:
+            return lambda xy: False
+
+        def hides(xy):
+            along = max(0.0, min(1.0, (xy[0] * ax + xy[1] * ay) / length))
+            return math.hypot(xy[0] - along * ax, xy[1] - along * ay) < ARM_CLEAR_M
+
+        return hides
+
+    def publish_world(self, snapshot, now):
+        msg = WorldStateMsg()
+        msg.stamp = now.to_msg()
+        msg.held = self.held[0] if self.held is not None else ""
+        msg.stale = snapshot.stale
+        msg.missing = list(snapshot.missing)
+        for column in snapshot.columns:
+            stack = WorldStack()
+            stack.tags = list(column.tags)
+            stack.position.x, stack.position.y = column.position
+            stack.height = column.height
+            stack.order_known = column.order_known
+            stack.top_seen = column.top_seen
+            msg.stacks.append(stack)
+        self.world_pub.publish(msg)
+
     def update(self):
         now = self.get_clock().now()
         wrist_usable = self.arm_still(now)
+        camera_alive = self.camera_alive(now)
+        poses, states, settled, fresh = {}, {}, {}, {}
         for tag_frame in self.tag_frames:
-            state, pose = self.track(tag_frame, now, wrist_usable)
+            state, pose, seen = self.track(tag_frame, now, wrist_usable)
             if state != self.state.get(tag_frame):
                 self.get_logger().info(f"{tag_frame}: {state or 'unknown'}")
                 self.state[tag_frame] = state
             if pose is not None:
+                poses[tag_frame] = pose
+                states[tag_frame] = state
+                if state != "held":
+                    settled[tag_frame] = pose[0]
+            if seen is not None:
+                fresh[tag_frame] = seen
+
+        tip = self.lookup(TIP_FRAME)
+        known = tip is not None and self.arm_known(now)
+        hides = self.arm_hides(position_of(tip) if known else None)
+        held = self.held[0] if self.held is not None else None
+        snapshot = self.model.update(
+            now.nanoseconds / 1e9,
+            settled,
+            fresh,
+            held,
+            hides,
+            camera_alive,
+        )
+        for tag_frame, pose in snapshot.restored.items():
+            if self.belief.get(tag_frame) is None:
+                self.belief[tag_frame] = (list(pose), (0.0, 0.0, 0.0, 1.0))
+        for note in snapshot.notes:
+            self.get_logger().info(note, throttle_duration_sec=0.5)
+        for tag_frame, pose in snapshot.relocated.items():
+            belief = self.belief.get(tag_frame)
+            if belief is not None:
+                self.belief[tag_frame] = (list(pose), belief[1])
+            self.get_logger().info(f"{tag_frame}: carried with a slid stack")
+        for tag_frame in snapshot.lost:
+            why = snapshot.lost_why.get(tag_frame, "no reason recorded")
+            self.get_logger().warn(f"{tag_frame}: lost: {why}")
+            self.belief.pop(tag_frame, None)
+            for source in SOURCES:
+                self.forget((tag_frame, source))
+            self.state[tag_frame] = None
+            poses.pop(tag_frame, None)
+
+        for tag_frame, pose in poses.items():
+            if should_publish(states.get(tag_frame), camera_alive):
                 self.publish(tag_frame, pose, now)
+        self.ticks += 1
+        if self.ticks % PUBLISH_EVERY == 0:
+            self.publish_world(snapshot, now)
 
 
 def main():

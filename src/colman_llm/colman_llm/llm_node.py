@@ -17,6 +17,7 @@ utterance at a time.
 import os
 import queue
 import threading
+import time
 import traceback
 
 import rclpy
@@ -28,14 +29,17 @@ from std_msgs.msg import String
 from std_srvs.srv import Trigger
 
 from colman_interfaces.action import MoveTo, Pick, Place
+from colman_interfaces.msg import WorldState
 from colman_llm.action_call import ActionCall
 from colman_llm.claude_client import ClaudeClient
 from colman_llm.env_file import load_env_file
 from colman_llm.executor import FakeExecutor, PickAndPlaceExecutor
 from colman_llm.service_call import ServiceCall
 from colman_llm.stop_words import is_stop_command
+from colman_llm.world_view import WorldView
 
 QUEUE_SIZE = 10
+WORLD_STALE_S = 2.0  # older than this, the world_state is not trusted
 ERROR_LINE = "Sorry, something went wrong with that."
 
 
@@ -59,6 +63,8 @@ class LlmNode(Node):
         self._claude = ClaudeClient(
             self.get_parameter("model").value, self.get_logger()
         )
+        self._world_msg = None
+        self._world_at = 0.0
         self._pick = self._place = self._move = self._stop_call = None
         self._stop_generation = 0  # bumped by a spoken stop; drops in-flight replies
         self._executor = self._make_executor()
@@ -76,7 +82,21 @@ class LlmNode(Node):
             10,
             callback_group=ReentrantCallbackGroup(),
         )
+        self.create_subscription(WorldState, "/world_state", self._on_world, 10)
         self.get_logger().info("Listening on speech_text.")
+
+    def _on_world(self, msg):
+        self._world_msg = msg
+        self._world_at = time.monotonic()
+
+    def _world(self):
+        """The latest world_state as a WorldView, or None if it is missing or stale."""
+        msg = self._world_msg
+        if msg is None or msg.stale:
+            return None
+        if time.monotonic() - self._world_at > WORLD_STALE_S:
+            return None
+        return WorldView.from_msg(msg)
 
     def _make_executor(self):
         log = self.get_logger()
@@ -108,6 +128,7 @@ class LlmNode(Node):
             lambda frame: pick.call(Pick.Goal(frame=frame), pick_s),
             lambda frame: place.call(Place.Goal(location=frame), place_s),
             log,
+            self._world,
             stop=stop.call,
             resume=resume.call,
             release=release.call,

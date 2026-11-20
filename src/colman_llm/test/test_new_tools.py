@@ -4,41 +4,15 @@ import logging
 
 import pytest
 from colman_llm.executor import FakeExecutor, PickAndPlaceExecutor
+from colman_llm.fake_arm import FakeArm
 
 LOG = logging.getLogger("test")
 
 
 def make(pick=None, place=None, release=(True, "off"), move=(True, "ok"), stop=True):
     """Executor with scripted arm results. Returns (executor, calls)."""
-    calls = []
-    picks, places = list(pick or []), list(place or [])
-
-    def do_pick(frame):
-        calls.append(("pick", frame))
-        return picks.pop(0) if picks else (True, "ok")
-
-    def do_place(frame):
-        calls.append(("place", frame))
-        return places.pop(0) if places else (True, "ok")
-
-    def do_release():
-        calls.append(("release",))
-        return release
-
-    def do_move(pose):
-        calls.append(("move_to", pose))
-        return move
-
-    executor = PickAndPlaceExecutor(
-        do_pick,
-        do_place,
-        LOG,
-        stop=(lambda: (True, "stopped")) if stop else None,
-        resume=(lambda: (True, "resumed")) if stop else None,
-        release=do_release,
-        move_to=do_move,
-    )
-    return executor, calls
+    arm = FakeArm(LOG, pick, place, release, move)
+    return arm.executor(stop=stop), arm.calls
 
 
 def pap(executor, obj, dest):
@@ -94,7 +68,7 @@ def test_stacks_stop_at_the_height_limit():
         assert pap(executor, obj, dest)[0]
     del calls[:]
     ok, message = pap(executor, "blue cube 2", "white cube 4")
-    assert not ok and "3 cubes high" in message and calls == []
+    assert not ok and "4 cubes high" in message and calls == []
 
 
 def test_failed_pick_changes_nothing():
@@ -131,12 +105,15 @@ def test_stack_cube_failed_place_also_holds_the_cube():
 
 def test_pick_and_place_is_rejected_while_busy():
     holder = {}
+    arm = FakeArm(LOG)
 
     def pick(frame):
         holder["second"] = pap(holder["executor"], "white cube 3", "white cube 1")
-        return True, "ok"
+        return arm.do_pick(frame)
 
-    holder["executor"] = PickAndPlaceExecutor(pick, lambda f: (True, "ok"), LOG)
+    holder["executor"] = PickAndPlaceExecutor(
+        pick, arm.do_place, LOG, arm.world.view, sleep=lambda s: None
+    )
     assert pap(holder["executor"], "white cube 2", "white cube 1")[0]
     ok, message = holder["second"]
     assert not ok and "busy" in message
@@ -164,16 +141,20 @@ def test_release_takes_no_arguments():
 def test_release_is_refused_while_the_arm_is_moving():
     holder = {}
 
+    arm = FakeArm(LOG)
+
     def place(frame):
         holder["release"] = holder["executor"].run_tool("release_cube", {})
-        return True, "ok"
+        return arm.do_place(frame)
 
     calls = []
     holder["executor"] = PickAndPlaceExecutor(
-        lambda f: (True, "ok"),
+        arm.do_pick,
         place,
         LOG,
+        arm.world.view,
         release=lambda: calls.append("release") or (True, "off"),
+        sleep=lambda s: None,
     )
     pap(holder["executor"], "white cube 2", "white cube 1")
     ok, message = holder["release"]
@@ -220,13 +201,19 @@ def test_move_failure_is_reported():
 
 def test_go_to_pose_is_refused_while_busy():
     holder = {}
+    arm = FakeArm(LOG)
 
     def pick(frame):
         holder["pose"] = holder["executor"].run_tool("go_to_pose", {"pose": "home"})
-        return True, "ok"
+        return arm.do_pick(frame)
 
     holder["executor"] = PickAndPlaceExecutor(
-        pick, lambda f: (True, "ok"), LOG, move_to=lambda p: (True, "ok")
+        pick,
+        arm.do_place,
+        LOG,
+        arm.world.view,
+        move_to=lambda p: (True, "ok"),
+        sleep=lambda s: None,
     )
     pap(holder["executor"], "white cube 2", "white cube 1")
     ok, message = holder["pose"]
