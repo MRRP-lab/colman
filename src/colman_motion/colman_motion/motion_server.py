@@ -5,6 +5,7 @@ import time
 import traceback
 
 import rclpy
+from colman_description.workcell import CUBE_SIZE_M, TABLE_TOP_Z
 from geometry_msgs.msg import Point
 from moveit.planning import MoveItPy
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
@@ -20,13 +21,15 @@ from colman_motion.robot_ready import wait_for_robot
 from colman_motion.scene_manager import SceneManager
 from colman_motion.tag_lookup import TagLookup
 from colman_motion.vacuum_control import VacuumControl
-from colman_motion.world_scene import TABLE_TOP_Z, WorldScene
+from colman_motion.world_scene import WorldScene
 
 REFOCUS_SERVICE = "/oakd_pro/refocus"
 FIND_TIMEOUT_S = 4.0
 APPROACH_OFFSET_M = 0.1
 EE_OFFSET_M = 0.01
-DROP_OFFSET_M = 0.05
+# The cube is let go this far above the top of the one it goes on: its own height, so
+# that its bottom meets the top of the cube below.
+DROP_OFFSET_M = CUBE_SIZE_M
 # The approach above the drop point is lower than the one above a pick: with the cube
 # in hand a 0.10 m approach over the third cube of a stack is out of the arm's reach.
 PLACE_APPROACH_OFFSET_M = 0.05

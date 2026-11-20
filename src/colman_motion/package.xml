@@ -9,6 +9,7 @@
 
   <depend>rclpy</depend>
   <depend>colman_interfaces</depend>
+  <depend>colman_description</depend>
   <depend>action_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>moveit_msgs</depend>

@@ -13,15 +13,13 @@ import threading
 import time
 from dataclasses import dataclass
 
+from colman_description.workcell import CUBE_SIZE_M, TABLE_TOP_Z
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.node import Node
 
 from colman_interfaces.msg import WorldState
 
-CUBE_M = 0.05
-# The top of the table in base_link: the table box added by the motion server has its
-# top here, and the nozzle touched the table marks at about -0.006.
-TABLE_TOP_Z = -0.005
+CUBE_M = CUBE_SIZE_M  # see colman_description.workcell
 # Added to each side. A tag is placed to a centimetre or two, so a tight box would
 # let the arm graze a stack that is a little further over than it looks.
 MARGIN_M = 0.01

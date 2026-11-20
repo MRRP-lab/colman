@@ -3,6 +3,7 @@ import threading
 import time
 
 import numpy as np
+from colman_description.workcell import CUBE_SIZE_M
 from geometry_msgs.msg import Pose, PoseStamped
 from moveit.planning import PlanRequestParameters
 from moveit_msgs.msg import AttachedCollisionObject, CollisionObject
@@ -26,7 +27,7 @@ TIP_LINK = "vacuum_tip_link"
 # A cube held on the vacuum tip is part of the arm while it moves, so planning and
 # the collision checks have to know about it.
 HELD_CUBE_ID = "held_cube"
-HELD_CUBE_SIDE_M = 0.05
+HELD_CUBE_SIDE_M = CUBE_SIZE_M
 # Margin all round the cube, for the error in where the cube sits on the tip.
 HELD_CUBE_BUFFER_M = 0.01
 HELD_CUBE_TOUCH_LINKS = [

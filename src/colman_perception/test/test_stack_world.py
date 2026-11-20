@@ -879,3 +879,15 @@ def test_every_identified_cube_gets_the_exact_height_of_its_level():
     assert exact["tag_5"] == pytest.approx(level_height(1))
     assert exact["tag_8"] == pytest.approx(level_height(2))  # under it, an unknown cube
     assert set(exact) == {"tag_1", "tag_2", "tag_3", "tag_5", "tag_8"}
+
+
+def test_the_stack_model_takes_the_cube_and_table_sizes_from_the_workcell():
+    from colman_description import workcell
+    from colman_perception import stack_world
+
+    assert stack_world.CUBE_M == workcell.CUBE_SIZE_M == 0.05
+    assert stack_world.TABLE_TOP_Z == workcell.TABLE_TOP_Z
+    for level in range(1, 9):
+        assert stack_world.level_height(level) == pytest.approx(
+            workcell.cube_top_z(level)
+        )

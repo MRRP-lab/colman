@@ -198,3 +198,20 @@ def test_a_fresh_world_after_a_stale_one_warns_again_next_time():
     clock.now += STALE_S + 1
     sync.sync()
     assert len(log.warnings) == 2
+
+
+def test_the_motion_code_takes_the_cube_and_table_sizes_from_the_workcell():
+    from colman_description import workcell
+    from colman_motion import world_scene
+
+    assert world_scene.CUBE_M == workcell.CUBE_SIZE_M == 0.05
+    assert world_scene.TABLE_TOP_Z == workcell.TABLE_TOP_Z
+
+
+def test_the_held_cube_and_the_drop_height_are_a_whole_cube():
+    pytest.importorskip("moveit")
+    from colman_description import workcell
+    from colman_motion import arm_control, motion_server
+
+    assert arm_control.HELD_CUBE_SIDE_M == workcell.CUBE_SIZE_M
+    assert motion_server.DROP_OFFSET_M == workcell.CUBE_SIZE_M

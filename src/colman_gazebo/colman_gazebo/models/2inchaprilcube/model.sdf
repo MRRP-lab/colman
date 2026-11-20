@@ -7,18 +7,18 @@
       <inertial>
         <mass>0.095</mass>
         <inertia>
-          <ixx>0.00004086</ixx>
+          <ixx>0.00003958</ixx>
           <ixy>0.0</ixy>
           <ixz>0.0</ixz>
-          <iyy>0.00004086</iyy>
+          <iyy>0.00003958</iyy>
           <iyz>0.0</iyz>
-          <izz>0.00004086</izz>
+          <izz>0.00003958</izz>
         </inertia>
       </inertial>
       <collision name="collision">
         <geometry>
           <box>
-            <size>0.0508 0.0508 0.0508</size>
+            <size>0.05 0.05 0.05</size>
           </box>
         </geometry>
       </collision>
@@ -26,6 +26,7 @@
         <geometry>
           <mesh>
             <uri>model://2inchaprilcube/meshes/2inchaprilcube.glb</uri>
+            <scale>0.98425 0.98425 0.98425</scale>
           </mesh>
         </geometry>
       </visual>
