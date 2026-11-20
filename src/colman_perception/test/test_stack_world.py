@@ -490,7 +490,7 @@ def test_the_snapshot_says_why_a_move_was_or_was_not_carried():
     w = World()
     tall_stack(w)
     snap = w.settle({"tag_7": at(0.4, 0.2, 1)})
-    assert any("not carried" in n and "height changed" in n for n in snap.notes)
+    assert any("not carried" in n and "landed alone" in n for n in snap.notes)
     w = World()
     tall_stack(w)
     snap = w.settle({"tag_7": at(0.35, 0.05, 3)})
@@ -621,9 +621,38 @@ def test_a_refused_slide_is_noted_once_not_every_frame():
     assert not any("not carried" in n for n in again.notes)
 
 
-def test_two_cubes_lifted_off_a_stack_together_are_not_a_slide():
+def test_the_top_two_cubes_lifted_off_together_go_with_the_top_as_a_pair():
+    w = World()
+    tall_stack(w)  # tag_5, tag_6, tag_7 and a fourth cube on top is tag_8 below
+    w.settle({"tag_8": at(0.2, 0.0, 4), "tag_7": at(0.2, 0.0, 3)})
+    w.settle({"tag_8": at(0.2, 0.0, 4)})
+    snap = w.settle({"tag_8": at(0.4, 0.2, 2)})  # the pair lands two high
+    assert set(snap.relocated) == {"tag_7"}
+    assert snap.column_of("tag_8").tags == ["tag_7", "tag_8"]
+    assert not snap.column_of("tag_8").order_known
+    # what is left behind keeps its own cubes and shows where the pair came from
+    left = snap.column_of("tag_5")
+    assert left.tags[0] == "tag_5" and left.position == (0.2, 0.0)
+    assert left.height == 2 and left.tags == ["tag_5", "tag_6"]
+
+
+def test_the_lower_cubes_are_not_carried_with_a_pair():
     w = World()
     tall_stack(w)
-    # the top two are lifted off together and laid down 2 high at a new spot
-    snap = w.settle({"tag_7": at(0.4, 0.2, 2)})
-    assert snap.relocated == {}
+    w.settle({"tag_8": at(0.2, 0.0, 4), "tag_7": at(0.2, 0.0, 3)})
+    w.settle({"tag_8": at(0.2, 0.0, 4)})
+    snap = w.settle({"tag_8": at(0.4, 0.2, 2)})
+    assert "tag_5" not in snap.relocated and "tag_6" not in snap.relocated
+    assert snap.lost == []
+
+
+def test_a_pair_set_down_keeps_its_cube_while_the_old_stack_is_exposed():
+    w = World()
+    tall_stack(w)
+    w.settle({"tag_8": at(0.2, 0.0, 4), "tag_7": at(0.2, 0.0, 3)})
+    w.settle({"tag_8": at(0.2, 0.0, 4)})
+    w.settle({"tag_8": at(0.4, 0.2, 2)})
+    snap = w.settle({"tag_8": at(0.4, 0.2, 2), "tag_6": at(0.2, 0.0, 2)}, seconds=40.0)
+    assert snap.lost == []
+    assert snap.column_of("tag_8").tags == ["tag_7", "tag_8"]
+    assert snap.column_of("tag_6").tags[-1] == "tag_6"

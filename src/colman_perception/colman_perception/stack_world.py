@@ -139,7 +139,7 @@ class StackModel:
         beliefs = {t: p for t, p in settled.items() if t != held}
         visible = {t: p for t, p in fresh.items() if t != held}
         lost = []
-        relocated, carried, notes = {}, set(), []
+        relocated, carried, notes = {}, {}, []
         if camera_alive:
             relocated, carried = self.carry(now_s, beliefs, visible, notes)
         self.uncertain -= set(visible)
@@ -227,8 +227,8 @@ class StackModel:
         for column in columns:
             if not column.top_seen or column.height < 2:
                 continue
-            under = [t for t in column.tags[:-1] if t != UNKNOWN]
-            if under:
+            under = list(column.tags[:-1])  # bottom to top, UNKNOWN for a gap
+            if any(t != UNKNOWN for t in under):
                 self.beneath[column.tags[-1]] = (
                     under,
                     column.position,
@@ -240,18 +240,20 @@ class StackModel:
         }
 
     def carry(self, now_s, beliefs, visible, notes=None):
-        """Move the remembered cubes under a stack's top when the stack slides.
+        """Move the remembered cubes under a stack's top when it is slid or lifted off.
 
-        The top tag shows where the stack went, but the cubes under it stay covered
-        and are never seen to move. They are carried only if the top is now seen
-        somewhere new at the same height, the spot it has gone to is free, and every
-        cube under it is still remembered, unseen, at the old spot. A top lifted off
-        and put on the table, or on another stack, does not qualify. Returns the new
-        poses of the carried cubes and the tops that carried them.
+        The top tag shows where it went, and how high it now sits says how many cubes
+        went with it: a whole stack slid keeps its height, and the top two cubes
+        lifted off together land two high, so one cube went along under the top. The
+        cubes under it stay covered and are never seen to move, so they are carried
+        only if the top is seen somewhere new, the spot is free, and each of them is
+        still remembered, unseen, at the old spot. A top that landed alone or on
+        another stack does not qualify. Returns the new poses of the carried cubes and
+        {top: how many cubes were carried with it}.
         """
-        relocated, carried = {}, set()
+        relocated, carried = {}, {}
         notes = [] if notes is None else notes
-        for top, (under, old_xy, height, _) in list(self.beneath.items()):
+        for top, (slots, old_xy, height, _) in list(self.beneath.items()):
             if top not in visible:
                 continue
             q = visible[top]
@@ -266,14 +268,18 @@ class StackModel:
                     self.refused[top] = why
                     notes.append(f"{top} moved {moved_cm:.0f} cm, not carried: {why}")
 
-            under = [
-                t for t in under if t in beliefs
-            ]  # carry the ones still remembered
+            level = level_of(q[2])
+            k = level - 1  # cubes that went with the top, in the stack under it
+            if k < 1:
+                refuse("it landed alone, nothing went with it")
+                continue
+            if k > len(slots):
+                refuse(f"it sits higher than its stack was ({level} against {height})")
+                continue
+            moving = slots[-k:]
+            under = [t for t in moving if t != UNKNOWN and t in beliefs]
             if not under:
                 refuse("no cube under it is remembered")
-                continue
-            if level_of(q[2]) != height:
-                refuse(f"its height changed from {height} to {level_of(q[2])}")
                 continue
             if any(t in visible for t in under):
                 refuse("a cube under it is now seen")
@@ -288,40 +294,41 @@ class StackModel:
             if crowded:
                 refuse("another cube is at the new spot")
                 continue
-            for tag in under:
-                z = beliefs[tag][2]
-                beliefs[tag] = (q[0], q[1], z)
-                relocated[tag] = beliefs[tag]
-                self.unexplained.pop(tag, None)
-                self.arm_hidden.pop(tag, None)
+            for i, tag in enumerate(moving):
+                if tag in under:
+                    beliefs[tag] = (q[0], q[1], CUBE_M * (i + 1))
+                    relocated[tag] = beliefs[tag]
+                    self.unexplained.pop(tag, None)
+                    self.arm_hidden.pop(tag, None)
             self.uncertain.update(under)
             self.refused.pop(top, None)
-            carried.add(top)
+            carried[top] = k
             notes.append(f"{top} moved {moved_cm:.0f} cm, carried {', '.join(under)}")
             # Keep following this top. While it is still being pushed it has no settled
             # pose, so the carried cubes form a column with no top and nothing else
             # would remember that they belong under it.
-            self.beneath[top] = (under, tuple(q[:2]), height, now_s)
+            self.beneath[top] = (moving, tuple(q[:2]), k + 1, now_s)
         return relocated, carried
 
-    def update_ghosts(self, now_s, columns, carried=()):
+    def update_ghosts(self, now_s, columns, carried=None):
         """Keep a stack whose top was removed until its next cube is seen."""
+        carried = carried or {}
 
         def near(a, others):
             return any(xy_gap(a, o) <= XY_TOL_M for o in others)
 
         positions = [c.position for c in columns]
         for prev in self.last_columns:
-            if prev.tags[-1] in carried:
-                continue  # the whole stack slid, nothing is left behind
             if (
                 prev.top_seen
                 and prev.height >= 2
                 and not near(prev.position, positions)
             ):
                 if not near(prev.position, [g.position for g in self.ghosts]):
-                    tags = prev.tags[:-1]
-                    self.ghosts.append(Ghost(tags, prev.position, len(tags), now_s))
+                    # the top left, and so did any cubes carried with it
+                    tags = prev.tags[: -(carried.get(prev.tags[-1], 0) + 1)]
+                    if tags:
+                        self.ghosts.append(Ghost(tags, prev.position, len(tags), now_s))
         self.ghosts = [
             g
             for g in self.ghosts
