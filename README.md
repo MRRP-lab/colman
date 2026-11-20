@@ -290,6 +290,20 @@ How it behaves:
   also tells the motion server where the picked cube will go (`place_location` on the
   `Pick` goal), and the server solves that place with the real MoveIt IK and collision
   checks *before* it picks, so the arm is never left holding a cube it cannot put down.
+- **Seeing the table.** Every request to Claude carries the current table (from
+  `/world_state`, plus what the arm holds) as a system block that is rebuilt each time and
+  never kept in the history.
+- **Speaking up.** Between requests the node watches `/world_state` and says so when the
+  table changes by itself: a cube lost or found, one moved by someone, or the camera lost or
+  back. It stays quiet while the arm works, holds a cube or is being spoken to, and waits for
+  the table to be still for 3 s before taking a baseline. Turn it off with
+  `-p announce_changes:=false`.
+- **Getting out of the way.** After a `pick_and_place` or `stack_cube` job the arm moves home,
+  so it does not sit over the cubes (the overhead camera cannot see a cube the arm covers).
+  This is skipped while a cube is held or the arm is stopped.
+- **No height limit.** Nothing in the code limits how tall a stack can be. What limits it is
+  how high the arm can reach (see [section 12](#12-what-the-arm-can-reach)), which the motion
+  server checks before a pick.
 - **Stopping.** Saying "stop", "halt", "freeze", "cancel", "abort", "hold still", "stay
   still", "don't move" or "that's enough" calls `/stop`, cancels the running goal and drops
   the queue before anything else is processed. The reply is a fixed "Stopped." so it is
@@ -311,9 +325,9 @@ The design, the SDK settings that matter, and the reasoning are in
   images reach other processes reliably.
 - **`world_state`.** Fuses both detectors: the wrist pose is used only while the arm is
   still, otherwise the overhead pose. It builds columns of cubes, reads a column's height
-  from its top tag, remembers cubes the arm is hiding (and cubes covered by others), drops a
-  cube that vanishes for no reason after a timeout, and marks the order uncertain if what it
-  sees contradicts what it remembered. If the overhead camera stops, `/world_state` is
+  from its top tag (any number of cubes high), remembers cubes the arm is hiding for up to 30
+  minutes (and cubes covered by others), drops a cube that vanishes for no reason after 10 s,
+  and marks the order uncertain if what it sees contradicts what it remembered. If the overhead camera stops, `/world_state` is
   marked stale and the node refuses to move.
 - **Overhead height correction.** The overhead detector's depth from tag size reads about 3
   cm low, so `overhead_correction.py` applies a linear fit (and re-projects x and y along the
@@ -379,7 +393,9 @@ are skipped because they disagree with `ruff`'s formatting.
 | `stack.launch.py` | `dry_run` | `false` | Passed to `llm_node`; canned tool results, the arm is not moved by the LLM |
 | | `driver` | `true` | Start the arm driver supervisor (`false` if one is already running) |
 | | `robot_ip` | `192.168.56.101` | The UR's address |
+| | `mic` | `TONOR` | Microphone name (matched by substring) or index; empty for the system default |
 | `llm_node` | `model` | `claude-sonnet-5-5` | Claude model |
+| | `announce_changes` | `true` | Say so when the table changes by itself |
 | | `pick_timeout_s`, `place_timeout_s`, `move_timeout_s` | 120, 120, 60 | Per-action timeouts; the goal is cancelled on timeout |
 | | `dry_run` | `false` | Fake arm, canned results |
 | `kokoro_tts` | `voice` | `bm_fable` | Kokoro voice pack |
@@ -404,7 +420,7 @@ are skipped because they disagree with `ruff`'s formatting.
 | Next pick fails with "Already holding" | A place failed after a pick and the vacuum still holds the cube. `ros2 service call /release std_srvs/srv/Trigger`. |
 | The robot says it can't see the table, or won't move | `/world_state` is missing or stale: check `pixi run overhead` is running and the overhead camera is plugged in. |
 | The robot says a cube is out of reach | It is outside the reach map. Move the cube nearer the middle of the table. |
-| The microphone does nothing or listens to the wrong device | The stack uses input index 10, which shifts if USB audio devices are replugged. List devices with `python -m sounddevice`. |
+| The microphone does nothing or listens to the wrong device | The stack finds the mic by name (`TONOR`). For another mic run `pixi run stack mic:=<name or index>`; list devices with `python -m sounddevice`. |
 | Camera images are dropped between processes | The pixi activation sets the Fast DDS shared-memory profile. Run through `pixi run`, not a bare shell. |
 | Tag heights look several cm off | Raw `ovh_tag_N` heights read low; use the fused `tag_N`. Check that `overhead_correction.py` still matches the tag size, camera pose and exposure. |
 | First start is slow or fails offline | Parakeet and Kokoro download weights on first run. |

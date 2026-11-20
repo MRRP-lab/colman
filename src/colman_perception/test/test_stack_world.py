@@ -77,6 +77,15 @@ def test_the_height_comes_from_the_top_tag_when_the_rest_were_never_seen():
     assert not column.order_known
 
 
+def test_a_stack_of_every_cube_is_read_at_its_full_height():
+    # There is no cap: all eight cubes in one column are a column of eight.
+    w = World()
+    snap = w.see({"tag_8": at(0.4, 0.05, 8)})
+    (column,) = snap.columns
+    assert column.height == 8
+    assert column.tags[-1] == "tag_8"
+
+
 def test_levels_round_to_the_nearest_cube():
     assert [level_of(z) for z in (0.041, 0.101, 0.146, 0.20)] == [1, 2, 3, 4]
 
