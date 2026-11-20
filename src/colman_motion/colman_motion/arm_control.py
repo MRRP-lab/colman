@@ -155,7 +155,10 @@ class ArmControl(Node):
     def is_valid(self, state):
         psm = self.moveit.get_planning_scene_monitor()
         with psm.read_only() as scene:
-            return scene.is_state_valid(state, "ur_arm")
+            if scene.is_state_valid(state, "ur_arm"):
+                return True
+            scene.is_state_valid(state, "ur_arm", True)  # prints the contacts
+            return False
 
     def state_from_ik(self, pose, seed=None):
         """Joint state for pose on the IK branch nearest the seed (default: now).

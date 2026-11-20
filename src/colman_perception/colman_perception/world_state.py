@@ -24,6 +24,7 @@ from colman_perception.stack_world import (
     SETTLE_XY_M,
     SETTLE_Z_M,
     StackModel,
+    exact_heights,
     shifted,
     should_publish,
 )
@@ -394,9 +395,17 @@ class WorldState(Node):
             self.state[tag_frame] = None
             poses.pop(tag_frame, None)
 
+        # A cube's height is known exactly from the level it is on (the cubes are 50 mm
+        # and the table is where the CAD says), so the arm is given that and not the
+        # noisy, calibration-dependent measurement. x and y stay as measured.
+        exact = exact_heights(snapshot.columns)
         for tag_frame, pose in poses.items():
-            if should_publish(states.get(tag_frame), camera_alive):
-                self.publish(tag_frame, pose, now)
+            if not should_publish(states.get(tag_frame), camera_alive):
+                continue
+            if tag_frame in exact and states.get(tag_frame) != "held":
+                position, rotation = pose
+                pose = ([position[0], position[1], exact[tag_frame]], rotation)
+            self.publish(tag_frame, pose, now)
         self.ticks += 1
         if self.ticks % PUBLISH_EVERY == 0:
             self.publish_world(snapshot, now)

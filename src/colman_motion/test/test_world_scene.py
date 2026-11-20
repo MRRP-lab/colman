@@ -6,6 +6,7 @@ from colman_motion.world_scene import (
     MARGIN_M,
     MOVED_M,
     STALE_S,
+    TABLE_TOP_Z,
     Box,
     WorldSceneSync,
     column_id,
@@ -67,13 +68,15 @@ def test_a_single_cube_is_a_box_a_cube_wide_plus_the_margin_standing_on_the_tabl
     side = CUBE_M + 2 * MARGIN_M
     assert box.dims == pytest.approx([side, side, CUBE_M + MARGIN_M])
     x, y, z = box.center
-    assert (x, y) == (0.4, 0.1) and z == pytest.approx(box.dims[2] / 2)
+    assert (x, y) == (0.4, 0.1)
+    assert z == pytest.approx(TABLE_TOP_Z + box.dims[2] / 2)
 
 
 def test_a_taller_stack_is_a_taller_box_resting_on_the_table():
     box = Box(0.4, 0.1, 4)
     assert box.dims[2] == pytest.approx(4 * CUBE_M + MARGIN_M)
-    assert box.center[2] - box.dims[2] / 2 == pytest.approx(0.0)  # its bottom is z = 0
+    # its bottom is on the table surface
+    assert box.center[2] - box.dims[2] / 2 == pytest.approx(TABLE_TOP_Z)
 
 
 def test_a_column_is_named_for_its_top_cube():

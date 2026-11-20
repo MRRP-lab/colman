@@ -20,7 +20,7 @@ from colman_motion.robot_ready import wait_for_robot
 from colman_motion.scene_manager import SceneManager
 from colman_motion.tag_lookup import TagLookup
 from colman_motion.vacuum_control import VacuumControl
-from colman_motion.world_scene import WorldScene
+from colman_motion.world_scene import TABLE_TOP_Z, WorldScene
 
 REFOCUS_SERVICE = "/oakd_pro/refocus"
 FIND_TIMEOUT_S = 4.0
@@ -426,7 +426,7 @@ def main():
             "table",
             "base_link",
             [2.0, 2.0, 0.01],
-            (0.0, 0.0, -0.01),
+            (0.0, 0.0, TABLE_TOP_Z - 0.005),
         )
     except KeyboardInterrupt:
         os._exit(1)

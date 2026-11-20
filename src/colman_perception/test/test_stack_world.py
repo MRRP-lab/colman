@@ -1,3 +1,4 @@
+import pytest
 from colman_perception.stack_world import (
     ARM_CLEAR_M,
     ARM_HIDE_MAX_S,
@@ -10,8 +11,12 @@ from colman_perception.stack_world import (
     RESTORE_S,
     SETTLE_XY_M,
     SETTLE_Z_M,
+    TABLE_TOP_Z,
     UNKNOWN,
+    Column,
     StackModel,
+    exact_heights,
+    level_height,
     level_of,
     shifted,
     should_publish,
@@ -847,3 +852,30 @@ def test_the_outage_is_timed_from_when_the_camera_stopped():
     w.see({}, seconds=3.0, alive=False)  # more than 10 s since it stopped, in steps
     snap = w.settle({"tag_3": at(0.4, 0.2, 1)})
     assert any("camera was down" in n for n in snap.notes)
+
+
+# ------------------------------------------------ exact heights from the levels
+def test_a_level_has_an_exact_height_above_the_table_surface():
+    assert level_height(1) == pytest.approx(TABLE_TOP_Z + 0.05)
+    assert level_height(8) == pytest.approx(TABLE_TOP_Z + 0.40)
+
+
+def test_levels_are_counted_from_the_table_surface_not_from_zero():
+    for level in range(1, 9):
+        assert level_of(level_height(level)) == level
+        assert level_of(level_height(level) + 0.02) == level  # 2 cm of noise is fine
+        assert level_of(level_height(level) - 0.02) == max(1, level)
+
+
+def test_every_identified_cube_gets_the_exact_height_of_its_level():
+    columns = [
+        Column(["tag_1", "tag_2", "tag_3"], (0.4, 0.1), 3, True, True),
+        Column(["tag_5"], (0.2, 0.0), 1, True, True),
+        Column([UNKNOWN, "tag_8"], (0.3, 0.3), 2, False, True),
+    ]
+    exact = exact_heights(columns)
+    assert exact["tag_1"] == pytest.approx(level_height(1))
+    assert exact["tag_3"] == pytest.approx(level_height(3))
+    assert exact["tag_5"] == pytest.approx(level_height(1))
+    assert exact["tag_8"] == pytest.approx(level_height(2))  # under it, an unknown cube
+    assert set(exact) == {"tag_1", "tag_2", "tag_3", "tag_5", "tag_8"}

@@ -11,7 +11,11 @@ pulled from under a stack), the camera wins and the order is marked uncertain.
 import math
 from dataclasses import dataclass, field
 
-CUBE_M = 0.05  # a cube is 5 cm, so a tag on the top of level n is n * CUBE_M high
+CUBE_M = 0.05  # a cube is exactly 5 cm
+# The table surface in base_link: the touched table marks average -0.006 and the MoveIt
+# table box (colman_motion/world_scene.py) has its top here. A tag on the top of the
+# cube at level n is exactly TABLE_TOP_Z + n * CUBE_M high.
+TABLE_TOP_Z = -0.005
 XY_TOL_M = 0.03  # tags closer than this in x, y are in the same column
 LOST_S = 10.0  # how long a tag may vanish with no explanation before it is lost
 # A cube placed on another can take several seconds to be detected, and its hand may
@@ -55,7 +59,22 @@ def shifted(a, b, xy_m, z_m):
 
 
 def level_of(z):
-    return max(1, round(z / CUBE_M))
+    return max(1, round((z - TABLE_TOP_Z) / CUBE_M))
+
+
+def level_height(level):
+    """The exact height of a tag on the top of the cube at this level."""
+    return TABLE_TOP_Z + level * CUBE_M
+
+
+def exact_heights(columns):
+    """{tag: exact height} for every identified cube in the columns."""
+    return {
+        tag: level_height(i + 1)
+        for column in columns
+        for i, tag in enumerate(column.tags)
+        if tag != UNKNOWN
+    }
 
 
 def xy_gap(a, b):
@@ -376,7 +395,7 @@ class StackModel:
                 continue
             for i, tag in enumerate(moving):
                 if tag in under:
-                    beliefs[tag] = (q[0], q[1], CUBE_M * (i + 1))
+                    beliefs[tag] = (q[0], q[1], level_height(i + 1))
                     relocated[tag] = beliefs[tag]
                     self.unexplained.pop(tag, None)
                     self.arm_hidden.pop(tag, None)

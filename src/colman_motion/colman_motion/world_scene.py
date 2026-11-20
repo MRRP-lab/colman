@@ -19,6 +19,9 @@ from rclpy.node import Node
 from colman_interfaces.msg import WorldState
 
 CUBE_M = 0.05
+# The top of the table in base_link: the table box added by the motion server has its
+# top here, and the nozzle touched the table marks at about -0.006.
+TABLE_TOP_Z = -0.005
 # Added to each side. A tag is placed to a centimetre or two, so a tight box would
 # let the arm graze a stack that is a little further over than it looks.
 MARGIN_M = 0.01
@@ -43,7 +46,7 @@ class Box:
 
     @property
     def center(self):
-        return (self.x, self.y, self.dims[2] / 2)
+        return (self.x, self.y, TABLE_TOP_Z + self.dims[2] / 2)
 
 
 def column_id(stack):

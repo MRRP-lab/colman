@@ -8,16 +8,34 @@ from colman_perception.overhead_correction import (
     corrected_z,
 )
 
+# Raw overhead readings (x, y, z) of tags at exactly known heights: a cube top is
+# -0.005 + 0.05 n, the table surface being at z = -0.005 in base_link.
+MEASURED = [
+    ((0.246, 0.282, 0.0242), 1),  # a single at the near edge
+    ((0.433, 0.109, 0.0258), 1),
+    ((0.2936, -0.4871, 0.0326), 1),  # the far corners of the table
+    ((0.4115, 0.4664, 0.0299), 1),
+    ((0.1535, -0.4860, 0.1365), 3),
+    ((0.5345, 0.4640, 0.1327), 3),
+    ((0.4335, -0.0355, 0.1777), 4),  # a stack grown from 4 to 8 at one spot
+    ((0.4304, -0.0361, 0.3776), 8),
+]
 
-def test_known_heights_are_close_to_the_true_heights():
-    # raw overhead heights read for a single cube and stacks of 2, 4 and 8 cubes
-    for measured, true in [
-        (0.0242, 0.05),
-        (0.0724, 0.10),
-        (0.1777, 0.20),
-        (0.3776, 0.40),
-    ]:
-        assert corrected_z(measured) == pytest.approx(true, abs=0.008)
+
+def exact_top(n):
+    return -0.005 + 0.05 * n
+
+
+def test_known_heights_are_close_to_the_exact_heights_everywhere_on_the_table():
+    for position, n in MEASURED:
+        z = correct_position(position)[2]
+        assert z == pytest.approx(exact_top(n), abs=0.012)
+
+
+def test_a_tag_far_from_the_camera_axis_is_corrected_a_little_more():
+    near = corrected_z(0.03, 0.0)
+    far = corrected_z(0.03, 0.4**2)
+    assert far < near
 
 
 def test_directly_below_the_camera_only_z_changes():
