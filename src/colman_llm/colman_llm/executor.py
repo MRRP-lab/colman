@@ -56,8 +56,8 @@ def validate_stack_cube(args):
         return None, None, f"I don't have {color} cubes."
     if isinstance(count, bool) or not isinstance(count, int):
         return None, None, "The count must be a whole number."
-    if not 2 <= count <= MAX_STACK:
-        return None, None, f"I can build a stack of 2 to {MAX_STACK} cubes."
+    if not 1 <= count <= MAX_STACK:
+        return None, None, f"I can stack between 1 and {MAX_STACK} cubes at a time."
     return color, count, None
 
 
@@ -79,7 +79,6 @@ class PickAndPlaceExecutor:
         release=None,
         move_to=None,
         sleep=time.sleep,
-        announce=None,
     ):
         self._world = world
         self._sleep = sleep
@@ -89,7 +88,6 @@ class PickAndPlaceExecutor:
         self._resume = resume
         self._release = release
         self._move_to = move_to
-        self._announce = announce
         self._log = logger
         self._busy = threading.Lock()
         self._held = None  # frame of the cube the arm believes it is holding
@@ -132,15 +130,6 @@ class PickAndPlaceExecutor:
     def _look(self):
         return self._world()
 
-    def _say(self, text):
-        """Speak text now, while the tool is still running. Never raises."""
-        if self._announce is None:
-            return
-        try:
-            self._announce(text)
-        except Exception as exc:  # noqa: BLE001 - speech must not break the stacking
-            self._log.warning(f"Could not announce {text!r}: {exc}")
-
     def _confirm(self, cube, target):
         """Wait until the camera sees the cube on top of the target's column."""
         for _ in range(CONFIRM_TRIES):
@@ -150,39 +139,25 @@ class PickAndPlaceExecutor:
             self._sleep(CONFIRM_WAIT_S)
         return None
 
-    def _fail(self, spoken, message):
-        """Say it now, while the arm is idle, and return the full account to Claude."""
-        self._say(spoken)
-        return False, message
-
     def _stack(self, color, count):
-        """Build one stack of count cubes of this colour, taking cubes in any order."""
         done = 0
         why = ""
-        view = self._look()
-        if view is not None and view.stack_done(color, count):
-            return True, f"The {color} cubes are already stacked, {count} or more high."
         for _ in range(count):
             view = self._look()
             if view is None:
-                return self._fail(NO_VIEW, self._partial(color, done, NO_VIEW))
-            if view.stack_done(color, count):
-                break
+                return False, self._partial(color, done, count, NO_VIEW)
             cube, target, reason = view.next_move(color)
             if cube is None:
                 if done == 0:
-                    return self._fail(reason, reason)
+                    return False, reason
                 why = reason
                 break
             name = view.name_of(cube)
             self._log.info(f"stack_cube: {name} ({cube}) onto {target}")
             ok, message = self._pick(cube)
             if not ok:
-                return self._fail(
-                    f"I couldn't pick up {name}.",
-                    self._partial(
-                        color, done, f"Could not pick up the {name}. {message}"
-                    ),
+                return False, self._partial(
+                    color, done, count, f"Could not pick up the {name}. {message}"
                 )
             self._held = cube
             # Someone may have changed the stack while the arm was picking.
@@ -191,58 +166,45 @@ class PickAndPlaceExecutor:
                 (None, NO_VIEW) if view is None else view.target_of(color)
             )
             if new_target is None:
-                return self._fail(
-                    f"I picked up {name} but {reason[0].lower()}{reason[1:]}",
-                    self._partial(
-                        color, done, f"Picked up the {name}. {reason} {HELD_HINT}"
-                    ),
+                return False, self._partial(
+                    color, done, count, f"Picked up the {name}. {reason} {HELD_HINT}"
                 )
             if new_target != target:
                 self._log.info(f"stack_cube: top changed, {target} -> {new_target}")
                 target = new_target
             ok, message = self._place(target)
             if not ok:
-                return self._fail(
-                    f"I picked up {name} but couldn't place it.",
-                    self._partial(
-                        color,
-                        done,
-                        f"Picked up the {name} but could not place it on the stack. "
-                        f"{message} {HELD_HINT}",
-                    ),
+                return False, self._partial(
+                    color,
+                    done,
+                    count,
+                    f"Picked up the {name} but could not place it on the stack. "
+                    f"{message} {HELD_HINT}",
                 )
             self._held = None
-            seen = self._confirm(cube, target)
-            if seen is None:
-                return self._fail(
-                    f"I placed {name} but I can't see it on the stack.",
-                    self._partial(
-                        color,
-                        done,
-                        f"I placed the {name} but the camera does not see it on the "
-                        f"{view.name_of(target)}.",
-                    ),
+            if self._confirm(cube, target) is None:
+                return False, self._partial(
+                    color,
+                    done,
+                    count,
+                    f"I placed the {name} but the camera does not see it on the "
+                    f"{view.name_of(target)}.",
                 )
-            self._say(f"I've placed {name} on {seen.name_of(target)}.")
             done += 1
         view = self._look()
         height = view.height(color) if view is not None else 0
-        message = f"Placed {done} {color} cube{'s' if done != 1 else ''}. "
-        if self._announce is not None:
-            message += "Each placement was already announced aloud. "
-        if height >= count:
-            message += f"The {color} cubes are stacked, {height} high."
-        else:
-            message += f"The {color} stack is {height} high, short of the {count}."
+        message = f"Stacked {done} {color} cube{'s' if done != 1 else ''}. "
+        message += f"The {color} stack now has {height} on top of its base."
+        if done < count:
             message += f" {why} I stopped."
         return True, message
 
-    def _partial(self, color, done, reason):
+    def _partial(self, color, done, count, reason):
         view = self._look()
         height = view.height(color) if view is not None else 0
         return (
-            f"Placed {done} {color} cube{'s' if done != 1 else ''}. {reason} "
-            f"The {color} stack is {height} high."
+            f"Stacked {done} of {count} {color} cubes. {reason} "
+            f"The {color} stack has {height} on top of its base."
         )
 
     def _pick_and_place(self, args):
@@ -268,31 +230,25 @@ class PickAndPlaceExecutor:
             )
             ok, message = self._pick(obj_frame)
             if not ok:
-                return self._fail(
-                    f"I couldn't pick up the {obj}.",
-                    f"Could not pick up the {obj}. {message}",
-                )
+                return False, f"Could not pick up the {obj}. {message}"
             self._held = obj_frame
             # Someone may have changed the destination while the arm was picking.
             view = self._look()
             if view is None or view.top_of(dest_frame) != dest_frame:
-                return self._fail(
-                    f"I picked up the {obj} but the {dest} is no longer free.",
+                return False, (
                     f"Picked up the {obj} but the {dest} is no longer free to place "
-                    f"on. {HELD_HINT}",
+                    f"on. {HELD_HINT}"
                 )
             ok, message = self._place(dest_frame)
             if not ok:
-                return self._fail(
-                    f"I picked up the {obj} but couldn't place it on the {dest}.",
+                return False, (
                     f"Picked up the {obj} but could not place it on the {dest}. "
-                    f"{message} {HELD_HINT}",
+                    f"{message} {HELD_HINT}"
                 )
             self._held = None
             if self._confirm(obj_frame, dest_frame) is None:
-                return self._fail(
-                    f"I placed the {obj} but I can't see it on the {dest}.",
-                    f"I placed the {obj} but the camera does not see it on the {dest}.",
+                return False, (
+                    f"I placed the {obj} but the camera does not see it on the {dest}."
                 )
             return True, f"Picked up the {obj} and placed it on the {dest}."
         finally:
@@ -374,9 +330,9 @@ class PickAndPlaceExecutor:
         return handlers[name](args)
 
 
-def FakeExecutor(logger, announce=None):  # noqa: N802
+def FakeExecutor(logger):  # noqa: N802
     """Dry run: every pick, place, stop, resume, release and move succeeds, and the
     cubes really move on a pretend table."""
     from colman_llm.fake_arm import FakeArm
 
-    return FakeArm(logger).executor(announce=announce)
+    return FakeArm(logger).executor()
