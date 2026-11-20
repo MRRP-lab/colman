@@ -54,6 +54,7 @@ LINEAR_SCALINGS = (0.3, 0.2, 0.1)
 class ArmControl(Node):
     def __init__(self, moveit):
         super().__init__("arm_control")
+        self._cube_attached = False  # a cube is modelled on the tip in the scene
         self.moveit = moveit
         self.arm = moveit.get_planning_component("ur_arm")
         self.trajectory_execution_manager = moveit.get_trajectory_execution_manager()
@@ -265,6 +266,9 @@ class ArmControl(Node):
         self._set_held_cube(False)
 
     def _set_held_cube(self, held):
+        if not held and not self._cube_attached:
+            return  # nothing to detach; MoveIt logs an error for that
+        self._cube_attached = held
         attached = AttachedCollisionObject()
         attached.link_name = TIP_LINK
         attached.touch_links = HELD_CUBE_TOUCH_LINKS
