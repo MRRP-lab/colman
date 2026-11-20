@@ -98,7 +98,7 @@ Each box is its own ROS 2 node or process. The important rules:
 | Cameras | Two Luxonis OAK-D Pro. Which is which is set by serial number in `colman_perception/config/cameras.yaml` (`ros2 run colman_perception list_cameras`). The wrist camera is on the tool flange; the overhead camera is fixed about 1.83 m above the table. |
 | Cubes | Eight cubes, exactly 50 mm on each side. Each has an AprilTag (family `36h11`, IDs 1–8) on its top face whose black square is 39.2 mm. |
 | Table | Surface at `base_link` z = −0.005 m. |
-| Audio | A USB microphone (the stack's launch file uses sounddevice input index 10, a TONOR USB mic) and any speaker. |
+| Audio | A USB microphone (the stack's launch file finds a TONOR USB mic by name; change it with `mic:=`) and any speaker. |
 | Computer | Linux x86-64, glibc ≥ 2.39, kernel ≥ 6.8. A CUDA GPU is optional and speeds up Parakeet. |
 
 Everything except the physical arm can be run without hardware: see

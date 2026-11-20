@@ -84,6 +84,7 @@ class PickAndPlaceExecutor:
         resume=None,
         release=None,
         move_to=None,
+        clear_view_pose=None,
         sleep=time.sleep,
     ):
         self._world = world
@@ -94,6 +95,7 @@ class PickAndPlaceExecutor:
         self._resume = resume
         self._release = release
         self._move_to = move_to
+        self._clear_view_pose = clear_view_pose  # where the arm waits after a job
         self._log = logger
         self._busy = threading.Lock()
         self._held = None  # frame of the cube the arm believes it is holding
@@ -139,6 +141,29 @@ class PickAndPlaceExecutor:
             if self._held is not None:
                 return False, self._holding_message()
             return self._stack(color, count)
+        finally:
+            self._busy.release()
+
+    def _clear_view(self):
+        """Move the arm home after a job, so it is not left over the cubes.
+
+        The overhead camera cannot see a cube the arm covers, so a cube next to where a
+        job ended drops out of view until the arm moves. Not done while a cube is held
+        or the arm is stopped, and skipped if another job has already started.
+        """
+        if (
+            self._clear_view_pose is None
+            or self._move_to is None
+            or self._held is not None
+            or self._stopped
+        ):
+            return
+        if not self._busy.acquire(blocking=False):
+            return
+        try:
+            ok, message = self._move_to(self._clear_view_pose)
+            if not ok:
+                self._log.warning(f"Could not clear the view: {message}")
         finally:
             self._busy.release()
 
@@ -369,7 +394,10 @@ class PickAndPlaceExecutor:
             if not ok:
                 return False, f"The arm is stopped and could not resume. {message}"
             self._log.info(f"{name}: a new command ended the stop")
-        return handlers[name](args)
+        result = handlers[name](args)
+        if name in ("stack_cube", "pick_and_place"):
+            self._clear_view()
+        return result
 
 
 def FakeExecutor(logger):  # noqa: N802
