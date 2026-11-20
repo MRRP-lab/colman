@@ -274,9 +274,17 @@ class WorldState(Node):
         # hides is not lost; the camera corrects it, or drops it, once it can see.
         if pose is not None:
             position = list(pose[0])
-            if position[2] > level_height(MAX_LEVELS) + CUBE_M / 2:
-                # Let go in the air, so it falls: it is at the table, not at the tip.
-                position[2] = level_height(1)
+            # A cube let go of in the air falls onto whatever is below it, so it is
+            # there, not at the tip: a box at the tip would block every plan.
+            below = max(
+                (
+                    len([t for t in column.tags if t != tag_frame])
+                    for column in self.model.last_columns
+                    if math.dist(column.position, position[:2]) < CUBE_M
+                ),
+                default=0,
+            )
+            position[2] = min(position[2], level_height(min(below + 1, MAX_LEVELS)))
             self.belief[tag_frame] = (tuple(position), pose[1])
         else:
             self.belief.pop(tag_frame, None)
