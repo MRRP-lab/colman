@@ -743,3 +743,40 @@ def test_a_cube_in_the_pair_that_is_seen_as_it_lands_does_not_stop_the_carry():
     )
     assert snap.lost == []
     assert snap.column_of("tag_8").tags == ["tag_7", "tag_8"]
+
+
+def test_a_cube_under_a_top_seen_mid_air_in_the_hand_is_not_dropped():
+    # The top flickers into view in the hand, away from the stack, while the cube under
+    # it is still remembered at the old spot and the exposed cube below is seen.
+    m = StackModel(ALL)
+    stack = {
+        "tag_5": at(0.2, 0.0, 1),
+        "tag_6": at(0.2, 0.0, 2),
+        "tag_7": at(0.2, 0.0, 3),
+        "tag_8": at(0.2, 0.0, 4),
+    }
+    m.update(1.0, stack, {"tag_8": stack["tag_8"]})
+    m.update(2.0, stack, {"tag_8": stack["tag_8"]})
+    beliefs = dict(stack)
+    lost = []
+    for t in range(3, 40):
+        # tag_6 is exposed; tag_8 is seen in the hand every other frame
+        fresh = {"tag_6": stack["tag_6"]}
+        if t % 2:
+            fresh["tag_8"] = at(0.3, 0.0, 3)
+        snap = m.update(float(t), beliefs, fresh)
+        lost += snap.lost
+        for tag in snap.lost:
+            beliefs.pop(tag, None)
+    assert "tag_7" not in lost
+    assert "tag_7" in beliefs
+
+
+def test_a_cube_under_a_top_seen_back_on_its_stack_is_covered_as_usual():
+    m = StackModel(ALL)
+    stack = {"tag_5": at(0.2, 0.0, 1), "tag_6": at(0.2, 0.0, 2)}
+    m.update(1.0, stack, {"tag_6": stack["tag_6"]})
+    m.update(2.0, stack, {"tag_6": stack["tag_6"]})
+    assert m.in_transit({"tag_6": stack["tag_6"]}) == set()
+    assert m.in_transit({"tag_6": at(0.5, 0.2, 2)}) == {"tag_5"}
+    assert m.in_transit({}) == {"tag_5"}

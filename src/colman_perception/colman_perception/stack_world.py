@@ -231,16 +231,18 @@ class StackModel:
         self.prev_beliefs = {t: p for t, p in beliefs.items() if t not in lost}
 
     def in_transit(self, visible):
-        """Cubes remembered under a top that is not in sight, for up to a minute.
+        """Cubes remembered under a top that has left the stack, for up to a minute.
 
         A cube lifted away with the top of a stack stays hidden under it while the
-        top is held or carried out of view, so its absence says nothing yet. The
-        memory expires, and then the normal wait for a missing tag applies.
+        top is held or carried, so its absence says nothing yet. That holds whether
+        the top is out of sight or seen in a hand away from the stack. It stops when
+        the top is seen back at the old spot, with the stack intact, and the memory
+        expires after a minute, when the normal wait for a missing tag applies.
         """
         return {
             tag
-            for top, (slots, _, _, _) in self.beneath.items()
-            if top not in visible
+            for top, (slots, old_xy, _, _) in self.beneath.items()
+            if not (top in visible and xy_gap(visible[top], old_xy) <= XY_TOL_M)
             for tag in slots
             if tag != UNKNOWN
         }
