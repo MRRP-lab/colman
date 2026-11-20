@@ -20,7 +20,10 @@ XY_TOL_M = 0.03  # tags closer than this in x, y are in the same column
 LOST_S = 10.0  # how long a tag may vanish with no explanation before it is lost
 # A cube placed on another can take several seconds to be detected, and its hand may
 # linger over it, so a covered tag must outlast that before it is called lost.
-ARM_HIDE_MAX_S = 30.0  # the arm may explain a missing tag for this long, no longer
+# The arm may explain a missing tag for this long, no longer. A pick or a place keeps
+# the arm over the table for a minute or more, and a cube dropped in the middle of one
+# cannot be found when the place looks for it.
+ARM_HIDE_MAX_S = 120.0
 CARRY_MEMORY_S = 60.0  # how long a stack's covered cubes are remembered for a slide
 RESTORE_S = 8.0  # a deleted tag comes back if a cube lands on its spot within this
 OUTAGE_S = 10.0  # after the camera was down this long, remembered cubes are doubted

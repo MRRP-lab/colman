@@ -120,6 +120,7 @@ class WorldState(Node):
         self.camera_track = deque()
         self.held = None
         self.vacuum_on = None
+        self.exact_z = {}  # tag -> the exact height of its level, from the last update
         self.model = StackModel(self.tag_frames)
         self.world_pub = self.create_publisher(WorldStateMsg, WORLD_TOPIC, 10)
         self.ticks = 0
@@ -223,6 +224,17 @@ class WorldState(Node):
         else:
             self.drop()
 
+    def believed_position(self, tag_frame):
+        """Where the cube is believed to be, at the exact height of its level.
+
+        The measured height is good to a centimetre or two and the arm is sent to the
+        exact one, so a grasp has to be judged against the exact one too.
+        """
+        position = list(self.belief[tag_frame][0])
+        if tag_frame in self.exact_z:
+            position[2] = self.exact_z[tag_frame]
+        return position
+
     def grab(self):
         tip = self.lookup(TIP_FRAME)
         if tip is None or not self.belief:
@@ -230,15 +242,17 @@ class WorldState(Node):
             return
         tip_position = position_of(tip)
         tag_frame = min(
-            self.belief, key=lambda t: math.dist(self.belief[t][0], tip_position)
+            self.belief,
+            key=lambda t: math.dist(self.believed_position(t), tip_position),
         )
-        gap_m = math.dist(self.belief[tag_frame][0], tip_position)
+        position = self.believed_position(tag_frame)
+        gap_m = math.dist(position, tip_position)
         if gap_m > GRAB_M:
             self.get_logger().warn(
                 f"vacuum on, nearest cube {tag_frame} is {gap_m * 1000:.0f} mm away"
             )
             return
-        position, rotation = self.belief[tag_frame]
+        rotation = self.belief[tag_frame][1]
         tip_inverse = quat_conj(rotation_of(tip))
         offset = rotate(tip_inverse, [p - q for p, q in zip(position, tip_position)])
         self.held = (tag_frame, offset, quat_mul(tip_inverse, rotation))
@@ -399,6 +413,7 @@ class WorldState(Node):
         # and the table is where the CAD says), so the arm is given that and not the
         # noisy, calibration-dependent measurement. x and y stay as measured.
         exact = exact_heights(snapshot.columns)
+        self.exact_z = exact
         for tag_frame, pose in poses.items():
             if not should_publish(states.get(tag_frame), camera_alive):
                 continue

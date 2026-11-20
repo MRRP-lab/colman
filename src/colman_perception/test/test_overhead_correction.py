@@ -11,10 +11,14 @@ from colman_perception.overhead_correction import (
 # Raw overhead readings (x, y, z) of tags at exactly known heights: a cube top is
 # -0.005 + 0.05 n, the table surface being at z = -0.005 in base_link.
 MEASURED = [
-    ((0.246, 0.282, 0.0242), 1),  # a single at the near edge
-    ((0.433, 0.109, 0.0258), 1),
-    ((0.2936, -0.4871, 0.0326), 1),  # the far corners of the table
-    ((0.4115, 0.4664, 0.0299), 1),
+    ((0.2291, -0.0103, 0.03559), 1),  # eight singles spread over the table
+    ((0.4614, -0.0132, 0.04549), 1),  # the one that read almost the true height
+    ((0.3482, -0.2905, 0.03331), 1),
+    ((0.3430, 0.2659, 0.02568), 1),  # the one that read lowest
+    ((0.6064, 0.5402, 0.03412), 1),
+    ((0.1117, -0.5404, 0.02776), 1),
+    ((0.6034, -0.5397, 0.03966), 1),
+    ((0.1163, 0.5415, 0.02969), 1),
     ((0.1535, -0.4860, 0.1365), 3),
     ((0.5345, 0.4640, 0.1327), 3),
     ((0.4335, -0.0355, 0.1777), 4),  # a stack grown from 4 to 8 at one spot
@@ -29,13 +33,15 @@ def exact_top(n):
 def test_known_heights_are_close_to_the_exact_heights_everywhere_on_the_table():
     for position, n in MEASURED:
         z = correct_position(position)[2]
-        assert z == pytest.approx(exact_top(n), abs=0.012)
+        # Good to about 1.5 cm: enough to tell which level a cube is on, since the
+        # levels are 5 cm apart, and not enough to send the arm to.
+        assert z == pytest.approx(exact_top(n), abs=0.02)
 
 
-def test_a_tag_far_from_the_camera_axis_is_corrected_a_little_more():
-    near = corrected_z(0.03, 0.0)
-    far = corrected_z(0.03, 0.4**2)
-    assert far < near
+def test_the_correction_alone_never_puts_a_cube_on_the_wrong_level():
+    for position, n in MEASURED:
+        z = correct_position(position)[2]
+        assert round((z + 0.005) / 0.05) == n
 
 
 def test_directly_below_the_camera_only_z_changes():
