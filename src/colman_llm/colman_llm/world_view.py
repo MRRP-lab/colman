@@ -10,11 +10,12 @@ mode and the tests move cubes around on.
 import math
 from dataclasses import dataclass, field
 
-from colman_llm.tools import CUBE_NAMES, STACKS
+from colman_llm.tools import CUBE_NAMES, MAX_STACK, STACKS
 
 UNKNOWN = "unknown"
 NAME_OF = {frame: name for name, frame in CUBE_NAMES.items()}
 COLOR_OF = {f: c for c, frames in STACKS.items() for f in frames}
+MAX_HEIGHT = MAX_STACK  # cubes in a stack; the arm can't build higher
 # stack_cube builds on the stack of a colour that sits nearest this distance from the
 # arm base (m), the middle of what the arm reaches comfortably.
 SWEET_SPOT_M = 0.30
@@ -153,6 +154,11 @@ class WorldView:
             return (
                 f"The {self.name_of(dest.tags[-1])} is already on top of the "
                 f"{self.name_of(target)}."
+            )
+        if dest.height + 1 > MAX_HEIGHT:
+            return (
+                f"That stack is already {MAX_HEIGHT} cubes high, so the "
+                f"{self.name_of(target)} cannot take another."
             )
         return None
 

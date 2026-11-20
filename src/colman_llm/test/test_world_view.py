@@ -105,6 +105,12 @@ def test_an_unidentified_top_cannot_be_the_target():
     assert view.target_of("white")[0] is None
 
 
+def test_a_stack_of_four_cannot_take_another_cube():
+    view = table(col("tag_1", "tag_2", "tag_5", "tag_3"), col("tag_6"))
+    assert "4 cubes high" in view.check_move("tag_6", "tag_3")
+    assert view.check_move("tag_6", "tag_5") is not None  # covered, not a top
+
+
 def test_the_stack_can_be_built_on_by_cubes_of_either_colour():
     view = table(col("tag_5", "tag_6"), col("tag_2"))
     assert view.check_move("tag_2", "tag_6") is None

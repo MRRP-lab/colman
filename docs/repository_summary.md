@@ -217,7 +217,7 @@ pixi run speak
 Tools:
 
 - `stack_cube(color, count)`: build one stack of `white` or `blue` cubes, 2 to 4 cubes high, from the colour's tallest stack and the loose cubes nearest it, in any order. Nothing is a base. The node, not Claude, picks which cube moves where.
-- `pick_and_place(object, destination)`: move any cube with nothing on it onto any other cube, of any colour and to any height.
+- `pick_and_place(object, destination)`: move any cube with nothing on it onto any other cube, of any colour, up to 4 cubes high.
 - `go_to_pose(pose)`: `upright` or `compact`, through `/move_to`.
 - `release_cube`: vacuum off, through `/release`.
 - `report_state`: stacks, loose cubes, what the arm holds, and whether it is stopped. It never moves the arm.

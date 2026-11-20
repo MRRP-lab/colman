@@ -36,9 +36,9 @@ PICK_AND_PLACE = {
     "name": "pick_and_place",
     "description": (
         "Pick up one cube and place it on top of another cube, of any colour. The "
-        "cube must have nothing on it, and neither cube may be the same one. It can "
-        "go on a stack of any height the arm can reach. To stack several cubes of one "
-        "colour use stack_cube instead. Takes about a minute and blocks other arm "
+        "cube must have nothing on it, and neither cube may be the same one. A stack "
+        f"already {MAX_STACK} cubes high cannot be built on. To stack several cubes of "
+        "one colour use stack_cube instead. Takes about a minute and blocks other arm "
         "commands."
     ),
     "strict": True,
@@ -169,8 +169,8 @@ def known_things_prompt():
         lines.append(f"The {color} cubes are {', '.join(names)}.")
     lines.append(
         "No cube is a base: any cube with nothing on it can go on any other cube, in "
-        "any order and to any height. stack_cube builds one stack of a single colour "
-        f"from two to {MAX_STACK} cubes."
+        f"any order, up to {MAX_STACK} cubes high. stack_cube builds one stack of a "
+        f"single colour from two to {MAX_STACK} cubes."
     )
     lines.append("Named poses for go_to_pose: " + ", ".join(POSES) + ".")
     return "\n".join(lines) + "\n"

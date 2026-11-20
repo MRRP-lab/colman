@@ -135,7 +135,7 @@ DESTINATION_FRAMES = dict(CUBE_NAMES)  # any of the 8
 POSES = {"home": "home", "compact": "Compact"}
 ```
 
-`pick_and_place(object, destination)` picks one cube and places it on top of any cube, of any colour, to any height the arm can reach. Claude never names a tag; the node maps the spoken names above to frames. The node also checks the move against the latest `/world_state` (what the overhead camera sees) before the arm moves, and again after the pick,, and refuses with a plain-language reason if the cube already has a cube on top, is already on the destination, or the destination is covered. It then waits for the camera to see the cube on the destination before reporting success.
+`pick_and_place(object, destination)` picks one cube and places it on top of any cube, of any colour, up to 4 cubes high (the most the arm reaches over the middle of the table). Claude never names a tag; the node maps the spoken names above to frames. The node also checks the move against the latest `/world_state` (what the overhead camera sees) before the arm moves, and again after the pick,, and refuses with a plain-language reason if the cube already has a cube on top, is already on the destination, or the destination is covered or already 4 cubes high. It then waits for the camera to see the cube on the destination before reporting success.
 
 Even with `strict: true` the executor re-checks every value against these dicts before sending a goal, because the node is the safety boundary.
 

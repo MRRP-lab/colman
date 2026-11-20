@@ -66,20 +66,24 @@ def test_a_covered_cube_cannot_be_picked_up():
     assert calls == []
 
 
-def test_stacks_can_be_any_height_and_any_mix_of_colours():
+def test_stacks_can_mix_colours_but_stop_at_four_cubes():
     executor, calls = make()
     order = [
         ("white cube 2", "white cube 1"),
         ("blue cube 1", "white cube 2"),
         ("white cube 3", "blue cube 1"),
-        ("blue cube 2", "white cube 3"),
-        ("white cube 4", "blue cube 2"),
     ]
     for obj, dest in order:
         assert pap(executor, obj, dest)[0]
     ok, message = executor.run_tool("report_state", {})
-    assert ok and "white cube 1 then white cube 2 then blue cube 1" in message
-    assert "white cube 4, bottom to top" in message
+    assert (
+        ok
+        and "white cube 1 then white cube 2 then blue cube 1 then white cube 3"
+        in message
+    )
+    del calls[:]
+    ok, message = pap(executor, "blue cube 2", "white cube 3")
+    assert not ok and "4 cubes high" in message and calls == []
 
 
 def test_failed_pick_changes_nothing():
