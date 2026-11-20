@@ -31,7 +31,6 @@ from colman_perception.stack_world import (
 )
 
 BASE_FRAME = "base_link"
-MAX_LEVELS = 4  # the tallest stack the arm builds
 TIP_FRAME = "vacuum_tip_link"
 OVERHEAD_FRAME = "overhead_camera_optical_frame"
 TAG_HEIGHT_M = 0.04  # about where a cube tag is, for the arm's shadow
@@ -284,7 +283,7 @@ class WorldState(Node):
                 ),
                 default=0,
             )
-            position[2] = min(position[2], level_height(min(below + 1, MAX_LEVELS)))
+            position[2] = min(position[2], level_height(below + 1))
             self.belief[tag_frame] = (tuple(position), pose[1])
         else:
             self.belief.pop(tag_frame, None)
