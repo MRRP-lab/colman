@@ -10,9 +10,14 @@ from colman_perception.overhead_correction import (
 
 
 def test_known_heights_are_close_to_the_true_heights():
-    # raw overhead z read for single cubes and stacks of 3 and 4 cubes at 4K
-    for measured, true in [(0.029, 0.05), (0.136, 0.15), (0.190, 0.20)]:
-        assert corrected_z(measured) == pytest.approx(true, abs=0.01)
+    # raw overhead heights read for a single cube and stacks of 2, 4 and 8 cubes
+    for measured, true in [
+        (0.0242, 0.05),
+        (0.0724, 0.10),
+        (0.1777, 0.20),
+        (0.3776, 0.40),
+    ]:
+        assert corrected_z(measured) == pytest.approx(true, abs=0.008)
 
 
 def test_directly_below_the_camera_only_z_changes():
