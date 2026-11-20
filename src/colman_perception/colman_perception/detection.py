@@ -2,12 +2,21 @@ import rclpy
 from cv_bridge import CvBridge
 from rclpy.node import Node
 from sensor_msgs.msg import Image
-from ultralytics import YOLO
+
+try:
+    from ultralytics import YOLO
+except ImportError:  # optional, and AGPL-3.0: not in the default pixi environment
+    YOLO = None
 
 
 class DetectionNode(Node):
     def __init__(self):
         super().__init__("yolo_node")
+        if YOLO is None:
+            raise RuntimeError(
+                "YOLO needs the optional ultralytics package. "
+                "Run it in the yolo environment: pixi run -e yolo sim-yolo"
+            )
 
         # convert between ros images and opencv images
         self.bridge = CvBridge()

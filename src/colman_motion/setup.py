@@ -22,7 +22,7 @@ setup(
     maintainer="pierce",
     maintainer_email="dev@piercecoyle.com",
     description="MoveIt arm, scene, AprilTag and vacuum control for the Colman robot",
-    license="TODO: License declaration",
+    license="Apache-2.0",
     extras_require={
         "test": [
             "pytest",

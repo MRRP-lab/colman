@@ -44,7 +44,7 @@ setup(
     maintainer="pierce",
     maintainer_email="dev@piercecoyle.com",
     description="Gazebo worlds, models and simulation support for the Colman workcell",
-    license="TODO: License declaration",
+    license="Apache-2.0",
     extras_require={
         "test": [
             "pytest",

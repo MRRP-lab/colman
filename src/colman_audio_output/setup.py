@@ -15,7 +15,7 @@ setup(
     maintainer="neil",
     maintainer_email="neil.macneale.v@gmail.com",
     description="Speech output (text to speech) nodes for Colman",
-    license="TODO: License declaration",
+    license="Apache-2.0",
     extras_require={
         "test": [
             "pytest",

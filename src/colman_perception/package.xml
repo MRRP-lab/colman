@@ -3,9 +3,9 @@
 <package format="3">
   <name>colman_perception</name>
   <version>0.0.0</version>
-  <description>OAK-D camera publishing, AprilTag and YOLO perception for the Colman robot</description>
+  <description>OAK-D camera publishing, AprilTag perception and optional YOLO detection for the Colman robot</description>
   <maintainer email="dev@piercecoyle.com">pierce</maintainer>
-  <license>TODO: License declaration</license>
+  <license>Apache-2.0</license>
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>

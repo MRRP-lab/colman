@@ -15,7 +15,7 @@ setup(
     maintainer="pierce",
     maintainer_email="dev@piercecoyle.com",
     description="Speech input (microphone to text) nodes for Colman",
-    license="TODO: License declaration",
+    license="Apache-2.0",
     extras_require={
         "test": [
             "pytest",
