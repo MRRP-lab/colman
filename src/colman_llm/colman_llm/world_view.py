@@ -134,6 +134,15 @@ class WorldView:
         return own is not None and own is dest and own.tags[-1] == cube
 
     # ------------------------------------------------------------------- report
+    def status(self):
+        """What the table looks like now, and whether the arm holds a cube."""
+        holding = (
+            f"The arm is holding the {self.name_of(self.held)}."
+            if self.held
+            else "The arm is not holding anything."
+        )
+        return f"{self.describe()} {holding}"
+
     def describe(self):
         """Plain-language account of the stacks and the loose cubes."""
         stacks, loose = [], []

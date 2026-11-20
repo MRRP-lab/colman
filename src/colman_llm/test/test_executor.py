@@ -276,3 +276,12 @@ def test_fake_executor_stacks_without_an_arm():
     fake = FakeExecutor(LOG)
     ok, message = fake.run_tool("stack_cube", {"color": "blue", "count": 3})
     assert ok and "Added 2 blue cubes" in message
+
+
+def test_the_executor_says_when_it_is_busy():
+    ex = PickAndPlaceExecutor(
+        lambda f: (True, ""), lambda f: (True, ""), LOG, lambda: None
+    )
+    assert ex.busy is False
+    ex._busy.acquire()
+    assert ex.busy is True

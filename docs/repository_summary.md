@@ -319,3 +319,15 @@ The repository cleanup from the original review is complete (PRs #9 and #12). St
 3. Merge the `NVIDIA-Parakeet` branch, which replaces the Azure speech input with a local Parakeet node and mutes the microphone while the robot speaks.
 4. Decide which stale remote branches to delete. Several contain unmerged work, so do not delete them blindly.
 5. Keep the architecture diagram synchronized with the implementation.
+
+### The LLM speaks up when the table changes by itself
+
+Every request to Claude carries the current table (`/world_state`, plus what the arm
+holds) as a system block, rebuilt each time and never kept in the history. `world_watch.py`
+also watches `/world_state` between requests and publishes a sentence on `llm_response`
+when a change lasts 3 s: a cube lost or found, or one moved by someone. It stays quiet
+while the arm is working, holds a cube or is being spoken to, waits for the table to be
+still for 3 s before it takes a baseline, spaces announcements 10 s apart, and says once
+when the camera is lost and once when it is back. What it said joins the conversation
+history so a follow-up like "put it back" makes sense. The node parameter
+`announce_changes` (default true) turns it off.

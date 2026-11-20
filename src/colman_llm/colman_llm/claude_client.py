@@ -50,10 +50,32 @@ short question instead of guessing. Report tool failures plainly.
 """ + known_things_prompt()
 
 
+NO_TABLE_VIEW = "The table view is not available right now, so the table is unknown."
+
+
+def table_block(world):
+    """The system text that tells Claude what the table looks like at this moment.
+
+    It is rebuilt for every request, including each round after a tool call, and is
+    never stored in the history, so what Claude reads is always the latest world state
+    and an old one cannot linger in a past turn.
+    """
+    try:
+        text = world() if world is not None else None
+    except Exception:  # noqa: BLE001 - a bad view must not stop the arm answering
+        text = None
+    return (
+        "The table right now, straight from the overhead camera (this is newer than "
+        "anything said or returned earlier in this conversation, so trust it over "
+        "them): " + (text or NO_TABLE_VIEW)
+    )
+
+
 class ClaudeClient:
-    def __init__(self, model, logger, client=None):
+    def __init__(self, model, logger, client=None, world=None):
         self._model = model
         self._log = logger
+        self._world = world  # () -> plain-language text of the table now, or None
         self._client = client or anthropic.Anthropic()
         self._exchanges = []  # each exchange is a list of messages
 
@@ -115,13 +137,29 @@ class ClaudeClient:
     def _is_ignore(text):
         return text.strip(" .!\"'\n").upper() == IGNORE_TOKEN
 
+    def note_spoken(self, text):
+        """Record something the arm said unprompted, so the next reply can follow it.
+
+        Only call this while no say() is running.
+        """
+        self._exchanges.append(
+            [
+                {"role": "user", "content": "(The table changed by itself.)"},
+                {"role": "assistant", "content": text},
+            ]
+        )
+        del self._exchanges[:-MAX_EXCHANGES]
+
     def _create(self, messages):
         try:
             response = self._client.messages.create(
                 model=self._model,
                 max_tokens=MAX_TOKENS,
                 output_config={"effort": "low"},
-                system=SYSTEM_PROMPT,
+                system=[
+                    {"type": "text", "text": SYSTEM_PROMPT},
+                    {"type": "text", "text": table_block(self._world)},
+                ],
                 tools=TOOLS,
                 messages=messages,
             )
