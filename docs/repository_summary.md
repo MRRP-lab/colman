@@ -6,7 +6,7 @@ This repository is a ROS 2 Jazzy workspace for a simulated or real UR3e robot wi
 - MoveIt motion planning
 - Custom gripper or Robotiq gripper support
 - OAK-D camera support
-- AprilTag and YOLO perception
+- AprilTag perception, and optional YOLO object detection
 - Local Parakeet speech-to-text input (via `onnx-asr`)
 - Local Kokoro-82M speech output
 - A voice/LLM pipeline: speech, Claude with tool calls, the arm, and spoken replies
@@ -250,8 +250,8 @@ Saying "stop", "halt", "freeze", "cancel", "abort", "hold still", "stay still", 
 | Kokoro speech output | Publishes `std_msgs/msg/Bool` on `tts_speaking` | Indicates when speech playback is active |
 | Camera publisher | Publishes `sensor_msgs/msg/Image` | RGB/stereo camera images |
 | Camera publisher | Publishes `sensor_msgs/msg/CameraInfo` | The camera's factory lens intrinsics (focal length, principal point, distortion) |
-| YOLO node | Subscribes to `/oakd_pro/rgb/image` | Runs object detection |
-| YOLO node | Publishes `/yolo/annotated` | Annotated image visualization |
+| YOLO node (optional; `pixi run -e yolo sim-yolo`) | Subscribes to `/oakd_pro/rgb/image` | Runs object detection |
+| YOLO node (optional) | Publishes `/yolo/annotated` | Annotated image visualization |
 | AprilTag node | Subscribes to camera image/camera info | Detects AprilTags |
 | AprilTag/TF | Publishes TF frames | Makes tag locations available to motion code |
 | Robot state publisher | Publishes TF and robot state | Robot kinematic transforms |
@@ -324,19 +324,16 @@ This ordering makes debugging much easier because each layer can be tested indep
 
 The LLM package, the Parakeet node, the overhead camera, `world_state` and the camera-pose calibration are all merged. Still open:
 
-1. Choose a license. The repository has no LICENSE file, and every `package.xml` and `setup.py` still says `TODO: License declaration`.
-2. Redraw the architecture diagram: it does not show the overhead camera, `world_state`, or the calibration tools.
-3. The overhead camera's exposure clips the white tag cells, and the tag depth reads about 3 cm low (corrected, not fixed at the source). Lower the exposure and refit `overhead_correction.py`.
-4. The calibrations are only checked at table height. Heights above the table (stacks) have no independent ground truth beyond the correction's fit.
-5. Run the hardware-in-the-loop checklist (`docs/hil_checklist.md`) on the real arm and keep the results.
-6. Decide which stale remote branches to delete. Several contain unmerged work, so do not delete them blindly.
-7. CI skips the ament flake8 and pep257 tests, and lints only `src/` while `pixi run lint` also covers `scripts/`.
-1. Choose a license. The repository has no LICENSE file, and several `package.xml` and `setup.py` files still say `TODO: License declaration`.
-2. Add the `colman_llm` package, following [`plan.md`](plan.md).
-3. Merge the `NVIDIA-Parakeet` branch, which replaces the Azure speech input with a local Parakeet node and mutes the microphone while the robot speaks.
-4. Decide which stale remote branches to delete. Several contain unmerged work, so do not delete them blindly.
-5. Keep the architecture diagram synchronized with the implementation.
+1. Redraw the architecture diagram: it does not show the overhead camera, `world_state`, or the calibration tools.
+2. The overhead camera's exposure clips the white tag cells, and the tag depth reads about 3 cm low (corrected, not fixed at the source). Lower the exposure and refit `overhead_correction.py`.
+3. The calibrations are only checked at table height. Heights above the table (stacks) have no independent ground truth beyond the correction's fit.
+4. Run the hardware-in-the-loop checklist (`docs/hil_checklist.md`) on the real arm and keep the results.
+5. Decide which stale remote branches to delete. Several contain unmerged work, so do not delete them blindly.
+6. CI skips the ament flake8 and pep257 tests, and lints only `src/` while `pixi run lint` also covers `scripts/`.
 
+## License
+
+The `colman_*` packages are licensed under Apache-2.0 (`LICENSE` at the repository root, and each package's `package.xml` and `setup.py`). Four packages keep the licences they came with: `colman_moveit_config` (BSD-3-Clause), `gripper_description` and `gripper_gazebo` (MIT), and `oakd_description` and `oakd_gazebo` (BSD-2-Clause). YOLO detection (`detection.py`, the `yolo` launch argument and `sim-yolo`) needs `ultralytics`, which is AGPL-3.0. It is not in the default pixi environment; it is installed only by the optional `yolo` environment (`pixi run -e yolo sim-yolo`).
 ### The LLM speaks up when the table changes by itself
 
 Every request to Claude carries the current table (`/world_state`, plus what the arm

@@ -5,7 +5,7 @@
   <version>0.0.0</version>
   <description>Speech output (text to speech) nodes for Colman</description>
   <maintainer email="neil.macneale.v@gmail.com">neil</maintainer>
-  <license>TODO: License declaration</license>
+  <license>Apache-2.0</license>
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>

@@ -22,7 +22,7 @@ setup(
     maintainer="pierce",
     maintainer_email="dev@piercecoyle.com",
     description="Launch files and controller configuration for the Colman robot",
-    license="TODO: License declaration",
+    license="Apache-2.0",
     extras_require={
         "test": [
             "pytest",
