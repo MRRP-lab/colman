@@ -95,6 +95,10 @@ class PickAndPlaceExecutor:
         self._held = None  # frame of the cube the arm believes it is holding
         self._stopped = False
 
+    @property
+    def stopped(self):
+        return self._stopped
+
     def set_stopped(self, stopped):
         """The node calls this when a spoken stop reaches the arm outside run_tool."""
         self._stopped = stopped
