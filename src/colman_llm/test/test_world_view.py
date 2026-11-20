@@ -63,27 +63,52 @@ def test_a_cube_someone_else_stacked_is_not_picked_again():
     assert view.next_move("white") == ("tag_2", "tag_3", None)
 
 
-def test_a_loose_cube_that_is_covered_is_not_loose():
+def test_the_tallest_pure_stack_is_the_one_built_on():
     view = table(col("tag_1"), col("tag_2", "tag_3"), col("tag_4"))
-    assert view.next_move("white") == ("tag_4", "tag_1", None)
+    assert view.next_move("white") == ("tag_1", "tag_3", None)
 
 
-def test_a_full_stack_has_no_move():
+def test_a_stack_is_done_when_it_has_enough_cubes_of_the_colour():
     view = table(col("tag_1", "tag_2", "tag_3", "tag_4"))
-    assert view.next_move("white") == (None, None, "The white stack is already full.")
+    assert view.stack_done("white", 4) and not view.stack_done("blue", 2)
+    assert view.next_move("white")[2] == "There are no loose white cubes left to stack."
 
 
-def test_a_missing_base_is_reported_not_guessed():
-    view = table(col("tag_2"), col("tag_3"), missing=["tag_1"])
+def test_no_cube_of_the_colour_in_view_is_reported_not_guessed():
+    view = table(col("tag_5"), missing=["tag_1", "tag_2"])
     cube, target, reason = view.next_move("white")
-    assert cube is None and "can't see the white base" in reason
+    assert cube is None and "can't see any white cubes" in reason
+
+
+def test_a_mixed_stack_is_never_taken_apart_by_stack_cube():
+    view = table(col("tag_1", "tag_5"), col("tag_2"), col("tag_3"))
+    # tag_1 is under a blue cube, so the white stack is tag_2 or tag_3 and tag_5 stays.
+    cube, target, _ = view.next_move("white")
+    assert cube in ("tag_2", "tag_3") and target in ("tag_2", "tag_3")
+    assert cube != target
+
+
+def test_the_stack_is_built_nearest_the_sweet_spot_and_the_nearest_cube_goes_first():
+    far = Column(["tag_1"], 1, True, True, 0.55, 0.40)
+    near = Column(["tag_2"], 1, True, True, 0.30, 0.00)
+    beside = Column(["tag_3"], 1, True, True, 0.30, 0.10)
+    mid = Column(["tag_4"], 1, True, True, 0.20, -0.30)
+    view = table(far, near, beside, mid)
+    assert view.anchor("white")[0] is near
+    assert view.next_move("white") == ("tag_3", "tag_2", None)
 
 
 def test_an_unidentified_top_cannot_be_the_target():
     view = table(Column([UNKNOWN, UNKNOWN], 2, False, False), col("tag_1"))
     assert view.target_of("white")[0] == "tag_1"
-    view = table(Column(["tag_1", UNKNOWN], 2, False, True), col("tag_2"))
+    view = table(Column(["tag_1", UNKNOWN], 2, False, True))
     assert view.target_of("white")[0] is None
+
+
+def test_a_stack_of_four_cannot_take_another_cube():
+    view = table(col("tag_1", "tag_2", "tag_5", "tag_3"), col("tag_6"))
+    assert "4 cubes high" in view.check_move("tag_6", "tag_3")
+    assert view.check_move("tag_6", "tag_5") is not None  # covered, not a top
 
 
 def test_the_stack_can_be_built_on_by_cubes_of_either_colour():
@@ -91,26 +116,28 @@ def test_the_stack_can_be_built_on_by_cubes_of_either_colour():
     assert view.check_move("tag_2", "tag_6") is None
 
 
-def test_the_count_on_top_of_the_base_is_one_less_than_the_height():
-    view = table(col("tag_1", "tag_2", "tag_3"))
-    assert view.height("white") == 2 and view.height("blue") == 0
+def test_the_height_is_the_cubes_in_the_colours_tallest_stack():
+    view = table(col("tag_1", "tag_2", "tag_3"), col("tag_5"))
+    assert view.height("white") == 3 and view.height("blue") == 1
+    assert table(col("tag_1")).height("blue") == 0
 
 
 # ------------------------------------------------------- the world changes
 def test_a_top_cube_removed_while_the_arm_picks_is_not_placed_on():
-    scene = Scene(table(col("tag_1", "tag_2"), col("tag_3"), col("tag_4")))
-    # While tag_3 is picked someone takes tag_2 off the stack: the top is tag_1 now.
-    scene.on_pick = lambda frame: setattr(
-        scene,
-        "view",
-        table(col("tag_1"), col("tag_2"), col("tag_4")),
-    )
-    scene.on_place = lambda frame: setattr(
-        scene, "view", table(col("tag_1", "tag_3"), col("tag_2"), col("tag_4"))
-    )
-    ok, _ = scene.executor().run_tool("stack_cube", {"color": "white", "count": 1})
-    assert ok
-    assert scene.calls == [("pick", "tag_3"), ("place", "tag_1")]
+    scene = Scene(table(col("tag_1", "tag_2"), col("tag_3")))
+
+    def taken_off(frame):
+        # While tag_3 is picked someone takes tag_2 off the stack: tag_1 is alone.
+        scene.view = table(col("tag_1"), col("tag_2"))
+        scene.on_pick = lambda f: None
+
+    def placed(frame):
+        scene.view = table(col("tag_1", "tag_3"), col("tag_2"))
+        scene.on_place = lambda f: None
+
+    scene.on_pick, scene.on_place = taken_off, placed
+    scene.executor().run_tool("stack_cube", {"color": "white", "count": 3})
+    assert scene.calls[:2] == [("pick", "tag_3"), ("place", "tag_1")]
 
 
 def test_a_cube_added_while_the_arm_picks_changes_the_target():
@@ -121,7 +148,7 @@ def test_a_cube_added_while_the_arm_picks_changes_the_target():
     scene.on_place = lambda frame: setattr(
         scene, "view", table(col("tag_1", "tag_2", "tag_3"), col("tag_4"))
     )
-    ok, _ = scene.executor().run_tool("stack_cube", {"color": "white", "count": 1})
+    ok, _ = scene.executor().run_tool("stack_cube", {"color": "white", "count": 2})
     assert ok and scene.calls == [("pick", "tag_3"), ("place", "tag_2")]
 
 
@@ -140,7 +167,7 @@ def test_a_destination_covered_while_the_arm_picks_is_not_placed_on():
 def test_a_place_the_camera_never_confirms_is_reported():
     scene = Scene(table(col("tag_1"), col("tag_2")))
     ok, message = scene.executor().run_tool(
-        "stack_cube", {"color": "white", "count": 1}
+        "stack_cube", {"color": "white", "count": 2}
     )
     assert not ok and "camera does not see it" in message
 
@@ -149,7 +176,7 @@ def test_no_world_state_means_no_motion():
     executor = PickAndPlaceExecutor(
         lambda f: (True, "ok"), lambda f: (True, "ok"), LOG, lambda: None
     )
-    ok, message = executor.run_tool("stack_cube", {"color": "white", "count": 1})
+    ok, message = executor.run_tool("stack_cube", {"color": "white", "count": 2})
     assert not ok and "can't see the table" in message
     ok, message = executor.run_tool(
         "pick_and_place", {"object": "white cube 3", "destination": "white cube 2"}
@@ -185,9 +212,7 @@ def test_a_cube_in_a_column_with_no_visible_top_cannot_be_picked_or_placed_on():
 
 
 def test_a_stack_with_no_visible_top_is_not_a_target():
-    view = table(
-        Column(["tag_1", UNKNOWN], 2, False, False), col("tag_2"), col("tag_3")
-    )
+    view = table(Column(["tag_1", "tag_2"], 2, True, False))
     target, reason = view.target_of("white")
     assert target is None and "can't see the top" in reason
 
@@ -196,7 +221,12 @@ def test_from_msg_carries_the_visibility_of_the_top():
     from types import SimpleNamespace
 
     stack = SimpleNamespace(
-        tags=["tag_1", "tag_2"], height=2, order_known=True, top_seen=False
+        tags=["tag_1", "tag_2"],
+        height=2,
+        order_known=True,
+        top_seen=False,
+        position=SimpleNamespace(x=0.3, y=0.1, z=0.0),
     )
     view = WorldView.from_msg(SimpleNamespace(stacks=[stack], held="", missing=[]))
     assert view.columns[0].top_seen is False
+    assert (view.columns[0].x, view.columns[0].y) == (0.3, 0.1)

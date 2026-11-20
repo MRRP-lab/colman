@@ -159,11 +159,11 @@ AprilTag detection is provided by the external `apriltag_ros` package. The April
 The detector config (`colman_perception/config/apriltag.yaml`) registers tag IDs 1 to 8 at 39.2 mm. The motion code finds objects by TF frame names such as:
 
 ```text
-tag_1   white cube 1 (base of the white stack)
+tag_1   white cube 1
 tag_2   white cube 2
 tag_3   white cube 3
 tag_4   white cube 4
-tag_5   blue cube 1 (base of the blue stack)
+tag_5   blue cube 1
 tag_6   blue cube 2
 tag_7   blue cube 3
 tag_8   blue cube 4
@@ -216,8 +216,8 @@ pixi run speak
 
 Tools:
 
-- `stack_cube(color, count)`: build a stack of `white` or `blue` cubes, 1 to 3 on top of that colour's base cube. The node, not Claude, picks which cube moves where.
-- `pick_and_place(object, destination)`: move one loose cube onto any cube. Bases never move.
+- `stack_cube(color, count)`: build one stack of `white` or `blue` cubes, 2 to 4 cubes high, from the colour's tallest stack and the loose cubes nearest it, in any order. Nothing is a base. The node, not Claude, picks which cube moves where.
+- `pick_and_place(object, destination)`: move any cube with nothing on it onto any other cube, of any colour, up to 4 cubes high.
 - `go_to_pose(pose)`: `upright` or `compact`, through `/move_to`.
 - `release_cube`: vacuum off, through `/release`.
 - `report_state`: stacks, loose cubes, what the arm holds, and whether it is stopped. It never moves the arm.

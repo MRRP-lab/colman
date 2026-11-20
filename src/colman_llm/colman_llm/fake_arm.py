@@ -44,7 +44,7 @@ class FakeArm:
         self.calls.append(("move_to", pose))
         return self._move
 
-    def executor(self, stop=True, sleep=lambda s: None):
+    def executor(self, stop=True, sleep=lambda s: None, announce=None):
         return PickAndPlaceExecutor(
             self.do_pick,
             self.do_place,
@@ -55,4 +55,5 @@ class FakeArm:
             release=self.do_release,
             move_to=self.do_move,
             sleep=sleep if sleep is not None else time.sleep,
+            announce=announce,
         )

@@ -23,7 +23,7 @@ def test_valid_call_gets_canned_success():
         {**GOOD, "extra": "x"},
         {"object": "tag_3", "destination": "tag_1"},
         {"object": 3, "destination": ["white cube 2"]},
-        {"object": "white cube 1", "destination": "white cube 2"},  # a base never moves
+        {"object": "white cube 2", "destination": "white cube 2"},  # onto itself
         "white cube 3",
     ],
 )
@@ -170,55 +170,55 @@ def make_stacker(pick_results=None, place_results=None):
     return arm.executor(), arm.calls
 
 
-def test_stack_three_white_cubes_builds_the_tower_in_order():
+def test_stack_four_white_cubes_builds_one_tower_in_any_order():
     executor, calls = make_stacker()
-    ok, message = executor.run_tool("stack_cube", {"color": "white", "count": 3})
-    assert ok and "Stacked 3 white cubes" in message
-    assert calls == [
-        ("pick", "tag_2"),
-        ("place", "tag_1"),
-        ("pick", "tag_3"),
-        ("place", "tag_2"),
-        ("pick", "tag_4"),
-        ("place", "tag_3"),
-    ]
+    ok, message = executor.run_tool("stack_cube", {"color": "white", "count": 4})
+    assert ok and "The white cubes are stacked, 4 high" in message
+    picks = [f for kind, f in calls if kind == "pick"]
+    places = [f for kind, f in calls if kind == "place"]
+    assert len(picks) == 3 and len(set(picks)) == 3
+    # Nothing is a base: the first cube stays where it lies, whichever it is, and each
+    # cube goes on the one placed before it.
+    anchor = ({"tag_1", "tag_2", "tag_3", "tag_4"} - set(picks)).pop()
+    assert places == [anchor, picks[0], picks[1]]
 
 
-def test_stacking_continues_from_the_current_top_across_calls():
+def test_stacking_continues_from_the_tallest_stack_across_calls():
     executor, calls = make_stacker()
-    executor.run_tool("stack_cube", {"color": "blue", "count": 1})
-    executor.run_tool("stack_cube", {"color": "blue", "count": 1})
-    assert calls[-2:] == [("pick", "tag_7"), ("place", "tag_6")]
+    executor.run_tool("stack_cube", {"color": "blue", "count": 2})
+    executor.run_tool("stack_cube", {"color": "blue", "count": 3})
+    picks = [c for c in calls if c[0] == "pick"]
+    places = [c for c in calls if c[0] == "place"]
+    assert len(picks) == 2 and len(places) == 2
+    assert places[1][1] == picks[0][1]  # the second cube went on the first one placed
 
 
-def test_asking_for_more_than_fits_stops_when_full():
+def test_asking_for_what_is_already_stacked_does_nothing():
     executor, calls = make_stacker()
-    executor.run_tool("stack_cube", {"color": "white", "count": 2})
+    executor.run_tool("stack_cube", {"color": "white", "count": 3})
+    n = len(calls)
     ok, message = executor.run_tool("stack_cube", {"color": "white", "count": 2})
-    assert ok and "Stacked 1 white cube." in message and "full" in message
-    ok, message = executor.run_tool("stack_cube", {"color": "white", "count": 1})
-    assert not ok and "already full" in message
+    assert ok and "already stacked" in message and len(calls) == n
 
 
 def test_failed_pick_stops_the_run_and_reports_progress():
     executor, calls = make_stacker(pick_results=[(True, "ok"), (False, "not visible")])
-    ok, message = executor.run_tool("stack_cube", {"color": "white", "count": 3})
+    ok, message = executor.run_tool("stack_cube", {"color": "white", "count": 4})
     assert not ok
-    assert "Stacked 1 of 3" in message and "white cube 3" in message
-    assert "not visible" in message and "1 on top" in message
-    assert calls[-1] == ("pick", "tag_3")
+    assert "Placed 1 white cube." in message and "Could not pick up" in message
+    assert "not visible" in message and "2 high" in message
 
 
 def test_failed_place_does_not_count_the_cube_as_stacked():
     executor, calls = make_stacker(place_results=[(False, "tag_1 not visible")])
-    ok, message = executor.run_tool("stack_cube", {"color": "white", "count": 1})
-    assert not ok and "0 on top" in message
+    ok, message = executor.run_tool("stack_cube", {"color": "white", "count": 2})
+    assert not ok and "Placed 0 white cubes" in message and "1 high" in message
     # The arm still holds the cube, so nothing else is picked until it is let go.
-    ok, message = executor.run_tool("stack_cube", {"color": "white", "count": 1})
+    ok, message = executor.run_tool("stack_cube", {"color": "white", "count": 2})
     assert not ok and "still holding" in message
     executor.run_tool("release_cube", {})
-    executor.run_tool("stack_cube", {"color": "white", "count": 1})
-    assert calls[-2:] == [("pick", "tag_2"), ("place", "tag_1")]
+    executor.run_tool("stack_cube", {"color": "white", "count": 2})
+    assert calls[-2][0] == "pick" and calls[-1][0] == "place"
 
 
 @pytest.mark.parametrize(
@@ -226,7 +226,8 @@ def test_failed_place_does_not_count_the_cube_as_stacked():
     [
         {"color": "red", "count": 1},
         {"color": "white", "count": 0},
-        {"color": "white", "count": 4},
+        {"color": "white", "count": 1},
+        {"color": "white", "count": 5},
         {"color": "white", "count": 1.5},
         {"color": "white", "count": True},
         {"color": "white"},
@@ -242,5 +243,55 @@ def test_bad_stack_arguments_never_reach_the_arm(args):
 
 def test_fake_executor_stacks_without_an_arm():
     fake = FakeExecutor(LOG)
-    ok, message = fake.run_tool("stack_cube", {"color": "blue", "count": 2})
-    assert ok and "Stacked 2 blue cubes" in message
+    ok, message = fake.run_tool("stack_cube", {"color": "blue", "count": 3})
+    assert ok and "The blue cubes are stacked, 3 high" in message
+
+
+def test_each_placement_is_announced_as_it_happens():
+    said = []
+    arm = FakeArm(LOG)
+    executor = arm.executor(announce=said.append)
+    ok, message = executor.run_tool("stack_cube", {"color": "blue", "count": 4})
+    assert ok
+    assert said == [
+        "I've placed blue cube 2 on blue cube 1.",
+        "I've placed blue cube 3 on blue cube 2.",
+        "I've placed blue cube 4 on blue cube 3.",
+    ]
+    assert "already announced aloud" in message
+
+
+def test_a_failed_placement_is_not_announced():
+    said = []
+    arm = FakeArm(LOG, place=[(True, "ok"), (False, "tag_2 not visible")])
+    executor = arm.executor(announce=said.append)
+    ok, _ = executor.run_tool("stack_cube", {"color": "white", "count": 3})
+    assert not ok
+    assert len(said) == 2 and said[0].startswith("I've placed white cube ")
+    assert said[1].endswith("but couldn't place it.")
+
+
+def test_a_broken_announcer_does_not_stop_the_stacking():
+    def broken(text):
+        raise RuntimeError("no speaker")
+
+    arm = FakeArm(LOG)
+    ok, message = arm.executor(announce=broken).run_tool(
+        "stack_cube", {"color": "white", "count": 3}
+    )
+    assert ok and "The white cubes are stacked, 3 high" in message
+
+
+def test_without_an_announcer_the_message_does_not_mention_one():
+    executor, _ = make_stacker()
+    ok, message = executor.run_tool("stack_cube", {"color": "white", "count": 2})
+    assert ok and "announced" not in message
+
+
+def test_a_failure_is_announced_the_moment_it_happens():
+    said = []
+    arm = FakeArm(LOG, pick=[(False, "not visible")])
+    ok, message = arm.executor(announce=said.append).run_tool(
+        "pick_and_place", {"object": "white cube 3", "destination": "blue cube 1"}
+    )
+    assert not ok and said == ["I couldn't pick up the white cube 3."]

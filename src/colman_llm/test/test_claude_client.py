@@ -206,15 +206,59 @@ def test_demo_tools_are_strict_and_sent():
         "compact",
     ]
     pick = tools["pick_and_place"]["input_schema"]["properties"]
-    assert "white cube 1" not in pick["object"]["enum"]  # a base never moves
-    assert "white cube 1" in pick["destination"]["enum"]
-    assert len(pick["object"]["enum"]) == 6 and len(pick["destination"]["enum"]) == 8
+    # No cube is a base: any of the eight can be moved and any can be a destination.
+    assert "white cube 1" in pick["object"]["enum"]
+    assert len(pick["object"]["enum"]) == 8 and len(pick["destination"]["enum"]) == 8
     assert tools["stack_cube"]["input_schema"]["properties"]["count"]["enum"] == [
-        1,
         2,
         3,
+        4,
     ]
     assert tools["stack_cube"]["input_schema"]["properties"]["color"]["enum"] == [
         "white",
         "blue",
     ]
+
+
+def test_prompt_asks_for_a_placement_line_and_a_done_line():
+    prompt = " ".join(claude_client.SYSTEM_PROMPT.split())
+    assert "I've placed blue cube" in prompt
+    assert "The blue cubes are stacked." in prompt
+    assert "Never repeat" in prompt
+    assert "No cube is a base" in prompt
+
+
+def test_text_written_before_a_tool_call_is_spoken_at_once():
+    spoken = []
+    tool_turn = SimpleNamespace(
+        stop_reason="tool_use",
+        usage="usage",
+        _request_id="req_t",
+        content=[
+            SimpleNamespace(type="text", text="Okay, stacking the blue cubes."),
+            SimpleNamespace(
+                type="tool_use", id="t1", name="stack_cube", input={"color": "blue"}
+            ),
+        ],
+    )
+    client, _ = make(tool_turn, reply("The blue cubes are stacked."))
+    answer = client.say(
+        "stack the blue cubes", lambda n, a: (True, "ok"), spoken.append
+    )
+    assert spoken == ["Okay, stacking the blue cubes."]
+    assert answer == "The blue cubes are stacked."
+
+
+def test_nothing_is_spoken_early_when_claude_writes_no_text_before_a_tool():
+    spoken = []
+    tool_turn = SimpleNamespace(
+        stop_reason="tool_use",
+        usage="usage",
+        _request_id="req_t",
+        content=[
+            SimpleNamespace(type="tool_use", id="t1", name="report_state", input={})
+        ],
+    )
+    client, _ = make(tool_turn, reply("Nothing is stacked."))
+    client.say("what is on the table", lambda n, a: (True, "ok"), spoken.append)
+    assert spoken == []

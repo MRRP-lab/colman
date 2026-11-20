@@ -27,12 +27,20 @@ def test_any_loose_cube_goes_on_any_cube():
     assert calls == [("pick", "tag_7"), ("place", "tag_1")]
 
 
-def test_a_manual_move_is_remembered_by_stack_cube():
+def test_a_manual_move_is_built_on_by_stack_cube():
     executor, calls = make()
     pap(executor, "white cube 2", "white cube 1")
-    executor.run_tool("stack_cube", {"color": "white", "count": 1})
-    # white cube 3 goes on the cube that is now on top, not on the base again.
+    executor.run_tool("stack_cube", {"color": "white", "count": 3})
+    # white cube 3 goes on the cube that is now on top.
     assert calls[-2:] == [("pick", "tag_3"), ("place", "tag_2")]
+
+
+def test_a_base_can_be_moved_and_covered_cubes_cannot():
+    executor, calls = make()
+    ok, message = pap(executor, "white cube 1", "blue cube 2")
+    assert ok and calls == [("pick", "tag_1"), ("place", "tag_6")]
+    ok, message = pap(executor, "blue cube 2", "white cube 3")
+    assert not ok and "white cube 1 is on top of the blue cube 2" in message
 
 
 def test_blocked_moves_never_reach_the_arm():
@@ -58,16 +66,23 @@ def test_a_covered_cube_cannot_be_picked_up():
     assert calls == []
 
 
-def test_stacks_stop_at_the_height_limit():
+def test_stacks_can_mix_colours_but_stop_at_four_cubes():
     executor, calls = make()
-    for obj, dest in [
+    order = [
         ("white cube 2", "white cube 1"),
-        ("white cube 3", "white cube 2"),
-        ("white cube 4", "white cube 3"),
-    ]:
+        ("blue cube 1", "white cube 2"),
+        ("white cube 3", "blue cube 1"),
+    ]
+    for obj, dest in order:
         assert pap(executor, obj, dest)[0]
+    ok, message = executor.run_tool("report_state", {})
+    assert (
+        ok
+        and "white cube 1 then white cube 2 then blue cube 1 then white cube 3"
+        in message
+    )
     del calls[:]
-    ok, message = pap(executor, "blue cube 2", "white cube 4")
+    ok, message = pap(executor, "blue cube 2", "white cube 3")
     assert not ok and "4 cubes high" in message and calls == []
 
 
@@ -97,7 +112,7 @@ def test_failed_place_leaves_the_cube_held_until_released():
 
 def test_stack_cube_failed_place_also_holds_the_cube():
     executor, _ = make(place=[(False, "no")])
-    ok, _ = executor.run_tool("stack_cube", {"color": "white", "count": 1})
+    ok, _ = executor.run_tool("stack_cube", {"color": "white", "count": 2})
     assert not ok
     ok, message = pap(executor, "blue cube 2", "blue cube 1")
     assert not ok and "still holding the white cube 2" in message
@@ -235,7 +250,7 @@ def test_report_state_follows_the_stacks_and_the_gripper():
     pap(executor, "white cube 2", "white cube 1")
     pap(executor, "blue cube 2", "white cube 2")  # place fails, still holding
     _, message = executor.run_tool("report_state", {})
-    assert "the white cube 1 has white cube 2 on top" in message
+    assert "white cube 1 then white cube 2, bottom to top" in message
     assert "holding the blue cube 2" in message
 
 
