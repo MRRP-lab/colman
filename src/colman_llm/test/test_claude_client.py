@@ -127,7 +127,8 @@ def test_tools_and_known_names_are_sent():
     client.say("hello", lambda name, args: (True, "ok"))
     call = messages.calls[0]
     assert call["tools"][0]["name"] == "stack_cube"
-    assert "white cube" in call["system"] and "blue cube" in call["system"]
+    system = system_text(call)
+    assert "white cube" in system and "blue cube" in system
 
 
 def test_tool_call_runs_and_result_goes_back_to_claude():
@@ -258,3 +259,66 @@ def test_the_system_prompt_has_no_fixed_acknowledgement_and_no_base_cube():
     prompt = claude_client.SYSTEM_PROMPT
     assert "On it." not in prompt and "No cube is a base" in prompt
     assert "say one short sentence" in prompt
+
+
+# ------------------------------------------------ the table is read fresh every request
+def system_text(call):
+    return " ".join(b["text"] for b in call["system"])
+
+
+def test_every_request_carries_the_table_as_it_is_now():
+    messages = FakeMessages(reply("a"), reply("b"))
+    tables = iter(["Stacks: none.", "Stacks: red on blue."])
+    client = ClaudeClient(
+        "m", LOG, client=SimpleNamespace(messages=messages), world=lambda: next(tables)
+    )
+    client.say("one")
+    client.say("two")
+    assert "Stacks: none." in system_text(messages.calls[0])
+    assert "Stacks: red on blue." in system_text(messages.calls[1])
+    assert "Stacks: none." not in system_text(messages.calls[1])
+
+
+def test_the_table_is_read_again_after_each_tool_call():
+    tool = SimpleNamespace(type="tool_use", id="t1", name="report_state", input={})
+    first = SimpleNamespace(
+        content=[tool], stop_reason="tool_use", usage="u", _request_id="r"
+    )
+    messages = FakeMessages(first, reply("done"))
+    tables = iter(["before the move", "after the move"])
+    client = ClaudeClient(
+        "m", LOG, client=SimpleNamespace(messages=messages), world=lambda: next(tables)
+    )
+    client.say("move it", lambda name, args: (True, "ok"))
+    assert "before the move" in system_text(messages.calls[0])
+    assert "after the move" in system_text(messages.calls[1])
+
+
+def test_the_table_is_never_kept_in_the_history():
+    messages = FakeMessages(reply("a"), reply("b"))
+    client = ClaudeClient(
+        "m",
+        LOG,
+        client=SimpleNamespace(messages=messages),
+        world=lambda: "UNIQUE-TABLE-TEXT",
+    )
+    client.say("one")
+    client.say("two")
+    assert "UNIQUE-TABLE-TEXT" not in str(messages.calls[1]["messages"])
+
+
+def test_no_view_is_said_plainly_and_a_failing_view_does_not_stop_it():
+    messages = FakeMessages(reply("a"), reply("b"))
+    client = ClaudeClient(
+        "m", LOG, client=SimpleNamespace(messages=messages), world=lambda: None
+    )
+    client.say("one")
+    assert claude_client.NO_TABLE_VIEW in system_text(messages.calls[0])
+
+    def broken():
+        raise ValueError("bad")
+
+    client = ClaudeClient(
+        "m", LOG, client=SimpleNamespace(messages=messages), world=broken
+    )
+    assert client.say("two") == "b"

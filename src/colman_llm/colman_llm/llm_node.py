@@ -63,11 +63,14 @@ class LlmNode(Node):
                 "Set ANTHROPIC_API_KEY in your environment or in the .env file."
             )
 
-        self._claude = ClaudeClient(
-            self.get_parameter("model").value, self.get_logger()
-        )
         self._world_msg = None
         self._world_at = 0.0
+        self._world_seen = None  # the last table description, to log changes
+        self._claude = ClaudeClient(
+            self.get_parameter("model").value,
+            self.get_logger(),
+            world=self._world_text,
+        )
         self._pick = self._place = self._move = self._stop_call = None
         self._last_stop_s = -1e9  # when a spoken stop was last acted on
         self._stop_generation = 0  # bumped by a spoken stop; drops in-flight replies
@@ -92,6 +95,15 @@ class LlmNode(Node):
     def _on_world(self, msg):
         self._world_msg = msg
         self._world_at = time.monotonic()
+        text = None if msg.stale else WorldView.from_msg(msg).status()
+        if text != self._world_seen:
+            self._world_seen = text
+            self.get_logger().info(f"World changed: {text or 'no view'}")
+
+    def _world_text(self):
+        """The table as Claude is told about it in every request, or None."""
+        view = self._world()
+        return None if view is None else view.status()
 
     def _world(self):
         """The latest world_state as a WorldView, or None if it is missing or stale."""
