@@ -244,3 +244,43 @@ def test_fake_executor_stacks_without_an_arm():
     fake = FakeExecutor(LOG)
     ok, message = fake.run_tool("stack_cube", {"color": "blue", "count": 2})
     assert ok and "Stacked 2 blue cubes" in message
+
+
+def test_each_placement_is_announced_as_it_happens():
+    said = []
+    arm = FakeArm(LOG)
+    executor = arm.executor(announce=said.append)
+    ok, message = executor.run_tool("stack_cube", {"color": "blue", "count": 3})
+    assert ok
+    assert said == [
+        "I've placed blue cube 2 on blue cube 1.",
+        "I've placed blue cube 3 on blue cube 2.",
+        "I've placed blue cube 4 on blue cube 3.",
+    ]
+    assert "already announced aloud" in message
+
+
+def test_a_failed_placement_is_not_announced():
+    said = []
+    arm = FakeArm(LOG, place=[(True, "ok"), (False, "tag_2 not visible")])
+    executor = arm.executor(announce=said.append)
+    ok, _ = executor.run_tool("stack_cube", {"color": "white", "count": 2})
+    assert not ok
+    assert said == ["I've placed white cube 2 on white cube 1."]
+
+
+def test_a_broken_announcer_does_not_stop_the_stacking():
+    def broken(text):
+        raise RuntimeError("no speaker")
+
+    arm = FakeArm(LOG)
+    ok, message = arm.executor(announce=broken).run_tool(
+        "stack_cube", {"color": "white", "count": 2}
+    )
+    assert ok and "Stacked 2 white cubes" in message
+
+
+def test_without_an_announcer_the_message_does_not_mention_one():
+    executor, _ = make_stacker()
+    ok, message = executor.run_tool("stack_cube", {"color": "white", "count": 1})
+    assert ok and "announced" not in message

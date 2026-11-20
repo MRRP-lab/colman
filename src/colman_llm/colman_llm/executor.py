@@ -79,6 +79,7 @@ class PickAndPlaceExecutor:
         release=None,
         move_to=None,
         sleep=time.sleep,
+        announce=None,
     ):
         self._world = world
         self._sleep = sleep
@@ -88,6 +89,7 @@ class PickAndPlaceExecutor:
         self._resume = resume
         self._release = release
         self._move_to = move_to
+        self._announce = announce
         self._log = logger
         self._busy = threading.Lock()
         self._held = None  # frame of the cube the arm believes it is holding
@@ -129,6 +131,15 @@ class PickAndPlaceExecutor:
 
     def _look(self):
         return self._world()
+
+    def _say(self, text):
+        """Speak text now, while the tool is still running. Never raises."""
+        if self._announce is None:
+            return
+        try:
+            self._announce(text)
+        except Exception as exc:  # noqa: BLE001 - speech must not break the stacking
+            self._log.warning(f"Could not announce {text!r}: {exc}")
 
     def _confirm(self, cube, target):
         """Wait until the camera sees the cube on top of the target's column."""
@@ -182,7 +193,10 @@ class PickAndPlaceExecutor:
                     f"{message} {HELD_HINT}",
                 )
             self._held = None
-            if self._confirm(cube, target) is None:
+            seen = self._confirm(cube, target)
+            if seen is not None:
+                self._say(f"I've placed {name} on {seen.name_of(target)}.")
+            if seen is None:
                 return False, self._partial(
                     color,
                     done,
@@ -194,6 +208,8 @@ class PickAndPlaceExecutor:
         view = self._look()
         height = view.height(color) if view is not None else 0
         message = f"Stacked {done} {color} cube{'s' if done != 1 else ''}. "
+        if self._announce is not None:
+            message += "Each placement was already announced aloud. "
         message += f"The {color} stack now has {height} on top of its base."
         if done < count:
             message += f" {why} I stopped."
@@ -330,9 +346,9 @@ class PickAndPlaceExecutor:
         return handlers[name](args)
 
 
-def FakeExecutor(logger):  # noqa: N802
+def FakeExecutor(logger, announce=None):  # noqa: N802
     """Dry run: every pick, place, stop, resume, release and move succeeds, and the
     cubes really move on a pretend table."""
     from colman_llm.fake_arm import FakeArm
 
-    return FakeArm(logger).executor()
+    return FakeArm(logger).executor(announce=announce)

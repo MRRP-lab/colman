@@ -67,6 +67,7 @@ class LlmNode(Node):
         self._world_at = 0.0
         self._pick = self._place = self._move = self._stop_call = None
         self._stop_generation = 0  # bumped by a spoken stop; drops in-flight replies
+        self._turn_generation = 0  # the stop generation the current utterance began in
         self._executor = self._make_executor()
         self._pub = self.create_publisher(String, "llm_response", 10)
 
@@ -104,7 +105,7 @@ class LlmNode(Node):
             log.warn(
                 "dry_run: tool calls get canned results and the arm will not move."
             )
-            return FakeExecutor(log)
+            return FakeExecutor(log, self._announce)
         pick = self._pick = ActionCall(ActionClient(self, Pick, "pick"), "pick", log)
         place = self._place = ActionCall(
             ActionClient(self, Place, "place"), "place", log
@@ -133,6 +134,7 @@ class LlmNode(Node):
             resume=resume.call,
             release=release.call,
             move_to=lambda pose: move.call(MoveTo.Goal(pose_name=pose), move_s),
+            announce=self._announce,
         )
 
     def _on_speech(self, msg):
@@ -173,7 +175,7 @@ class LlmNode(Node):
             except queue.Empty:
                 continue
             self.get_logger().info(f"Heard: {text}")
-            generation = self._stop_generation
+            generation = self._turn_generation = self._stop_generation
             try:
                 reply = self._claude.say(text, self._run_tool)
             except Exception:  # noqa: BLE001 - one bad tool call must not end the worker
@@ -184,6 +186,13 @@ class LlmNode(Node):
             elif reply:
                 self._pub.publish(String(data=reply))
                 self.get_logger().info(f"Replied: {reply}")
+
+    def _announce(self, text):
+        """Speak a progress line while a tool runs, unless a stop came in meanwhile."""
+        if self._turn_generation != self._stop_generation:
+            return
+        self._pub.publish(String(data=text))
+        self.get_logger().info(f"Announced: {text}")
 
     def _run_tool(self, name, args):
         # Tell the user the command was heard before a long action starts.

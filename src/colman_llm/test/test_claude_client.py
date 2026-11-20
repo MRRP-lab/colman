@@ -218,3 +218,9 @@ def test_demo_tools_are_strict_and_sent():
         "white",
         "blue",
     ]
+
+
+def test_prompt_asks_for_a_placement_line_and_a_done_line():
+    assert "I've placed blue cube" in claude_client.SYSTEM_PROMPT
+    assert "The blue cubes are stacked." in claude_client.SYSTEM_PROMPT
+    assert "never repeat" in claude_client.SYSTEM_PROMPT
