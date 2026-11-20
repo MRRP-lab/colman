@@ -16,6 +16,25 @@ def quaternion_to_matrix(q):
     )
 
 
+def yawed(orientation, degrees):
+    """The orientation (x, y, z, w) turned by these degrees about the vertical axis.
+
+    The suction cup is round, so a tool pointing straight down can be turned about the
+    vertical axis without changing the grasp. It moves the arm's wrist, which sticks out
+    to one side of the tool, and that is how a pick next to a tall stack finds a free
+    way in.
+    """
+    half = math.radians(degrees) / 2.0
+    ax, ay, az, aw = 0.0, 0.0, math.sin(half), math.cos(half)
+    bx, by, bz, bw = orientation
+    return (
+        aw * bx + ax * bw + ay * bz - az * by,
+        aw * by - ax * bz + ay * bw + az * bx,
+        aw * bz + ax * by - ay * bx + az * bw,
+        aw * bw - ax * bx - ay * by - az * bz,
+    )
+
+
 def level_camera_rotation(direction):
     """
     Camera rotation (columns x right, y down, z forward) looking along direction

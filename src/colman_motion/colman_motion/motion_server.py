@@ -281,14 +281,14 @@ class MotionServer(Node):
                 return self.fail(
                     goal_handle, result, f"No safe arm pose to reach {tag_frame}"
                 )
-            approach_state, _ = pair
+            approach_state, _, tool = pair
 
             self.stage(goal_handle, feedback, "approaching")
             if not self.arm.move_to_state(approach_state, self.arm.fast):
                 return self.fail(goal_handle, result, "Approach failed")
 
             self.stage(goal_handle, feedback, "lowering")
-            if not self.arm.go_straight(*pick_translation, EE_DOWN, self.arm.slow):
+            if not self.arm.go_straight(*pick_translation, tool, self.arm.slow):
                 return self.fail(goal_handle, result, "Lower failed")
 
             self.stage(goal_handle, feedback, "grasping")
@@ -299,7 +299,7 @@ class MotionServer(Node):
             time.sleep(GRASP_DWELL_S)
 
             self.stage(goal_handle, feedback, "retreating")
-            if not self.arm.go_straight(*approach_translation, EE_DOWN, self.arm.fast):
+            if not self.arm.go_straight(*approach_translation, tool, self.arm.fast):
                 return self.fail(goal_handle, result, "Retreat failed, still holding")
 
             result.success = True
@@ -357,14 +357,14 @@ class MotionServer(Node):
             )
             if pair is None:
                 return self.fail(goal_handle, result, "No safe arm pose to place there")
-            approach_state, _ = pair
+            approach_state, _, tool = pair
 
             self.stage(goal_handle, feedback, "approaching")
             if not self.arm.move_to_state(approach_state, self.arm.fast):
                 return self.fail(goal_handle, result, "Approach failed")
 
             self.stage(goal_handle, feedback, "lowering")
-            if not self.arm.go_straight(*drop_off, EE_DOWN, self.arm.slow):
+            if not self.arm.go_straight(*drop_off, tool, self.arm.slow):
                 return self.fail(goal_handle, result, "Lower failed")
 
             self.stage(goal_handle, feedback, "releasing")
@@ -376,7 +376,7 @@ class MotionServer(Node):
             time.sleep(RELEASE_DWELL_S)
 
             self.stage(goal_handle, feedback, "retreating")
-            if not self.arm.go_straight(*drop_off_approach, EE_DOWN, self.arm.slow):
+            if not self.arm.go_straight(*drop_off_approach, tool, self.arm.slow):
                 return self.fail(goal_handle, result, "Retreat failed")
 
             result.success = True

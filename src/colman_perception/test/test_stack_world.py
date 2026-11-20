@@ -18,6 +18,7 @@ from colman_perception.stack_world import (
     exact_heights,
     level_height,
     level_of,
+    moved_away,
     shifted,
     should_publish,
 )
@@ -891,3 +892,30 @@ def test_the_stack_model_takes_the_cube_and_table_sizes_from_the_workcell():
         assert stack_world.level_height(level) == pytest.approx(
             workcell.cube_top_z(level)
         )
+
+
+# ----------------------- a tag under the arm is not judged; the restore window
+def test_a_reading_far_from_the_belief_means_the_tag_moved():
+    assert moved_away([(0.4, 0.1, 0.045)], (0.3, 0.1, 0.045), False)
+
+
+def test_a_reading_close_to_the_belief_means_it_did_not():
+    assert not moved_away([(0.301, 0.1, 0.045)], (0.3, 0.1, 0.045), False)
+    assert not moved_away([None], (0.3, 0.1, 0.045), False)
+    assert not moved_away([], (0.3, 0.1, 0.045), False)
+
+
+def test_a_tag_the_arm_is_over_is_not_judged_by_a_reading_that_jumps():
+    assert not moved_away([(0.4, 0.1, 0.045)], (0.3, 0.1, 0.045), True)
+
+
+def test_the_cube_under_one_just_placed_is_restored_after_the_arm_has_retreated():
+    w = World()
+    w.settle({"tag_7": at(0.4, 0.2, 1), "tag_1": at(0.2, -0.3, 1)})
+    w.take("tag_7")  # a jump while the cube above it was held there
+    w.settle({"tag_1": at(0.2, -0.3, 1)}, seconds=0.5)
+    # the arm stays over the stack through its retreat and its move home
+    w.settle({"tag_1": at(0.2, -0.3, 1)}, seconds=30.0)
+    snap = w.settle({"tag_1": at(0.2, -0.3, 1), "tag_8": at(0.4, 0.2, 2)})
+    assert set(snap.restored) == {"tag_7"}
+    assert snap.column_of("tag_8").tags == ["tag_7", "tag_8"]

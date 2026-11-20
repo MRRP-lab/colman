@@ -93,7 +93,12 @@ class FakeCameraPublisher(CameraPublisher):
 
 
 @pytest.fixture(autouse=True)
-def ros():
+def ros(monkeypatch):
+    # These tests check the camera code, not the transport. The large-image Fast DDS
+    # profile (pixi.toml) reserves a 512 MB shared-memory segment for every node, and
+    # a CI runner cannot give one to a node per test: the node then fails to start
+    # with "failed to create participant". It must be dropped before the first node.
+    monkeypatch.delenv("FASTRTPS_DEFAULT_PROFILES_FILE", raising=False)
     rclpy.init()
     yield
     rclpy.shutdown()

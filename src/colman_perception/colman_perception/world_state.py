@@ -19,12 +19,11 @@ from colman_interfaces.msg import WorldState as WorldStateMsg
 from colman_perception.overhead_correction import correct_position
 from colman_perception.stack_world import (
     ARM_CLEAR_M,
-    MOVED_XY_M,
-    MOVED_Z_M,
     SETTLE_XY_M,
     SETTLE_Z_M,
     StackModel,
     exact_heights,
+    moved_away,
     shifted,
     should_publish,
 )
@@ -121,6 +120,7 @@ class WorldState(Node):
         self.held = None
         self.vacuum_on = None
         self.exact_z = {}  # tag -> the exact height of its level, from the last update
+        self.hides = lambda xy: False  # True where the arm is over the table, as of now
         self.model = StackModel(self.tag_frames)
         self.world_pub = self.create_publisher(WorldStateMsg, WORLD_TOPIC, 10)
         self.ticks = 0
@@ -309,10 +309,7 @@ class WorldState(Node):
         belief = self.belief.get(tag_frame)
         if belief is None:
             return None, None, seen
-        if any(
-            p is not None and shifted(p, belief[0], MOVED_XY_M, MOVED_Z_M)
-            for p in fresh.values()
-        ):
+        if moved_away(fresh.values(), belief[0], self.hides(belief[0][:2])):
             del self.belief[tag_frame]
             return None, None, seen
         return "remembered", belief, seen
@@ -365,6 +362,10 @@ class WorldState(Node):
         wrist_usable = self.arm_still(now)
         camera_alive = self.camera_alive(now)
         poses, states, settled, fresh = {}, {}, {}, {}
+        tip = self.lookup(TIP_FRAME)
+        known = tip is not None and self.arm_known(now)
+        hides = self.arm_hides(position_of(tip) if known else None)
+        self.hides = hides
         for tag_frame in self.tag_frames:
             state, pose, seen = self.track(tag_frame, now, wrist_usable)
             if state != self.state.get(tag_frame):
@@ -378,9 +379,6 @@ class WorldState(Node):
             if seen is not None:
                 fresh[tag_frame] = seen
 
-        tip = self.lookup(TIP_FRAME)
-        known = tip is not None and self.arm_known(now)
-        hides = self.arm_hides(position_of(tip) if known else None)
         held = self.held[0] if self.held is not None else None
         snapshot = self.model.update(
             now.nanoseconds / 1e9,
