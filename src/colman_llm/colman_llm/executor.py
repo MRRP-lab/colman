@@ -17,6 +17,7 @@ HELD_HINT = "The arm may still be holding it. Say release to let go of it."
 NO_VIEW = "I can't see the table right now, so I won't move."
 CONFIRM_TRIES = 20  # how many times to look for a placed cube before giving up
 CONFIRM_WAIT_S = 0.4
+MOVING_TOOLS = ("stack_cube", "pick_and_place", "go_to_pose")
 SETTLE_TRIES = 12  # how long to wait for a cube that is not in view yet
 
 
@@ -353,6 +354,13 @@ class PickAndPlaceExecutor:
         }
         if name not in handlers:
             return False, f"Unknown tool {name}."
+        if self._stopped and name in MOVING_TOOLS:
+            # A new command to move is a new decision: it ends the stop, no "resume"
+            # needed. A stop heard while it runs still stops it.
+            ok, message = self._stop_or_resume("resume_robot", {})
+            if not ok:
+                return False, f"The arm is stopped and could not resume. {message}"
+            self._log.info(f"{name}: a new command ended the stop")
         return handlers[name](args)
 
 

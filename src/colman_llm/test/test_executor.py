@@ -119,6 +119,29 @@ def test_stop_and_resume_tools_call_the_services():
     assert calls == ["stop", "resume"]
 
 
+def test_a_new_move_command_ends_the_stop_without_resume():
+    executor, calls = make_with_stop()
+    executor.run_tool("stop_robot", {})
+    executor.run_tool("go_to_pose", {"pose": "home"})
+    assert calls == ["stop", "resume"]
+    assert executor.stopped is False
+
+
+def test_a_question_or_release_does_not_end_the_stop():
+    executor, calls = make_with_stop()
+    executor.run_tool("stop_robot", {})
+    executor.run_tool("report_state", {})
+    executor.run_tool("release_cube", {})
+    assert calls == ["stop"] and executor.stopped is True
+
+
+def test_a_failed_resume_blocks_the_new_command():
+    executor, _ = make_with_stop(resume=(False, "no service"))
+    executor.run_tool("stop_robot", {})
+    ok, message = executor.run_tool("go_to_pose", {"pose": "home"})
+    assert not ok and "no service" in message
+
+
 def test_service_failure_is_an_error():
     executor, _ = make_with_stop(stop=(False, "no service"))
     ok, message = executor.run_tool("stop_robot", {})
