@@ -265,8 +265,8 @@ class StackModel:
     def carry(self, now_s, beliefs, visible, notes=None):
         """Move the remembered cubes under a stack's top when it is slid or lifted off.
 
-        The top tag shows where it went, and how high it now sits says how many cubes
-        went with it: a whole stack slid keeps its height, and the top two cubes
+        The settled top tag shows where it went, and how high it now sits says how many
+        cubes went with it: a whole stack slid keeps its height, and the top two cubes
         lifted off together land two high, so one cube went along under the top. The
         cubes under it stay covered and are never seen to move, so they are carried
         only if the top is seen somewhere new, the spot is free, and each of them is
@@ -277,9 +277,11 @@ class StackModel:
         relocated, carried = {}, {}
         notes = [] if notes is None else notes
         for top, (slots, old_xy, height, _) in list(self.beneath.items()):
-            if top not in visible:
+            # Only a top that has settled counts. One seen moving, in a hand or in a
+            # push, is at a height that says nothing about the cubes that went with it.
+            if top not in beliefs or top not in visible:
                 continue
-            q = visible[top]
+            q = beliefs[top]
             if xy_gap(q, old_xy) <= XY_TOL_M:
                 continue
             moved_cm = xy_gap(q, old_xy) * 100
