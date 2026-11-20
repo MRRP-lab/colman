@@ -10,7 +10,7 @@ from geometry_msgs.msg import TransformStamped
 from rclpy.node import Node
 from tf2_ros import TransformBroadcaster
 
-# tag_n -> (x, y) in base_link. The tag is on top of a 39.2 mm cube standing on the table.
+# tag_n -> (x, y) in base_link. The tag is on top of a 39.2 mm cube on the table.
 TAG_XY = {
     1: (0.30, 0.15),
     2: (0.30, -0.10),
