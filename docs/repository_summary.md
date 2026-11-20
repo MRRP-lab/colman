@@ -142,10 +142,19 @@ The relevant code is in:
 - `camera_info_republisher.py`
 - `detection.py`
 
+`camera_publisher` has one setting table per camera (`CAMERAS` in `camera_publisher.py`) and three parameters that override it: `fps`, `jpeg_quality` (0 sends raw frames; 1 to 100 has the camera compress each frame as MJPEG at that quality) and `decode_threads` (threads that decode compressed frames). The defaults, from a test with both cameras and both detectors running at once, are:
+
+| Camera | Resolution | Frame rate | Compression | Why |
+|---|---|---|---|---|
+| wrist | 1080p | 60 (the camera's maximum at 1080p) | none | raw frames are 187 MB/s and none are dropped |
+| overhead | 4K | 30 (the camera's maximum at 4K is 42) | MJPEG quality 90, 3 decode threads | raw 4K frames at 30 fps need more than USB 3 carries (27% were dropped); with one decode thread 8 to 24% were dropped |
+
+Both detectors run with `threads: 8` and `decimate: 3.0`. Large images only reach the detectors reliably because `config/fastdds_shared_memory_large_images.xml` is loaded for every pixi task; without it about half of the frames were lost between processes.
+
 AprilTag detection is provided by the external `apriltag_ros` package. The AprilTag launch file remaps the camera input:
 
 - `apriltag.launch.py`: takes `camera:=wrist` (default, node `apriltag`, `apriltag.yaml`, `/oakd_pro` topics) or `camera:=overhead` (node `apriltag_overhead`, `apriltag_overhead.yaml`, `/overhead` topics)
-- `overhead.launch.py` (`pixi run overhead`): runs `camera_publisher` with `camera:=overhead` at 1080p, publishes the `base_link` to `overhead_camera_optical_frame` static transform from `colman_perception/config/overhead_camera_pose_in_base_link.yaml` (the merged calibration), and starts the overhead detector. Its tags are named `ovh_tag_N`. At 1.8 m a 39.2 mm tag is about 30 px wide at 1080p; all eight tags are detected.
+- `overhead.launch.py` (`pixi run overhead`): runs `camera_publisher` with `camera:=overhead` (4K, 30 fps), publishes the `base_link` to `overhead_camera_optical_frame` static transform from `colman_perception/config/overhead_camera_pose_in_base_link.yaml` (the merged calibration), and starts the overhead detector. Its tags are named `ovh_tag_N`. At 1.8 m a 39.2 mm tag is about 30 px wide at 1080p; all eight tags are detected.
 
 The detector config (`colman_perception/config/apriltag.yaml`) registers tag IDs 1 to 8 at 39.2 mm. The motion code finds objects by TF frame names such as:
 
