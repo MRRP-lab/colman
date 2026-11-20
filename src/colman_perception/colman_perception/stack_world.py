@@ -147,10 +147,18 @@ class StackModel:
         if not camera_alive:
             self.unexplained.clear()
             self.arm_hidden.clear()
+        self.beneath = {
+            top: v for top, v in self.beneath.items() if now_s - v[3] < CARRY_MEMORY_S
+        }
+        in_transit = self.in_transit(visible)
         for tag, pos in beliefs.items():
             if not camera_alive:
                 break
             if tag in visible:
+                self.unexplained.pop(tag, None)
+                self.arm_hidden.pop(tag, None)
+            elif tag in in_transit:
+                # It was under a top that has gone out of sight, probably in a hand.
                 self.unexplained.pop(tag, None)
                 self.arm_hidden.pop(tag, None)
             elif self.covered(tag, pos, visible):
@@ -177,7 +185,7 @@ class StackModel:
 
         columns = []
         for group in clusters(members):
-            column, dropped = self.column(group, members, visible)
+            column, dropped = self.column(group, members, visible, in_transit)
             lost += dropped
             columns.append(column)
         if camera_alive:
@@ -221,6 +229,21 @@ class StackModel:
                 continue
             self.gone.setdefault(tag, (pos, now_s))
         self.prev_beliefs = {t: p for t, p in beliefs.items() if t not in lost}
+
+    def in_transit(self, visible):
+        """Cubes remembered under a top that is not in sight, for up to a minute.
+
+        A cube lifted away with the top of a stack stays hidden under it while the
+        top is held or carried out of view, so its absence says nothing yet. The
+        memory expires, and then the normal wait for a missing tag applies.
+        """
+        return {
+            tag
+            for top, (slots, _, _, _) in self.beneath.items()
+            if top not in visible
+            for tag in slots
+            if tag != UNKNOWN
+        }
 
     def remember_beneath(self, now_s, columns):
         """Note which cubes are under each stack's visible top, in case it slides."""
@@ -281,8 +304,9 @@ class StackModel:
             if not under:
                 refuse("no cube under it is remembered")
                 continue
-            if any(t in visible for t in under):
-                refuse("a cube under it is now seen")
+            under = [t for t in under if t not in visible]  # a seen one tracks itself
+            if not under:
+                refuse("every cube under it is seen, so none needs carrying")
                 continue
             if any(xy_gap(beliefs[t], old_xy) > XY_TOL_M for t in under):
                 refuse("a cube under it is no longer at the old spot")
@@ -335,7 +359,7 @@ class StackModel:
             if now_s - g.since < GHOST_S and not near(g.position, positions)
         ]
 
-    def column(self, group, members, visible):
+    def column(self, group, members, visible, transit=frozenset()):
         seen = [t for t in group if t in visible]
         top = max(seen or group, key=lambda t: members[t][2])
         height = level_of(members[top][2])
@@ -346,7 +370,10 @@ class StackModel:
         for tag in sorted(group, key=lambda t: (t not in visible, -members[t][2])):
             level = level_of(members[tag][2])
             if tag not in visible and seen and level >= height:
-                dropped.append(tag)  # the stack is shorter than this tag says
+                # The stack is shorter than this tag says. If the tag went with a top
+                # that was lifted away, keep it for the carry instead of losing it.
+                if tag not in transit:
+                    dropped.append(tag)
                 order_known = False
             elif level in slots:
                 dropped.append(tag)

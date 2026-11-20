@@ -1,6 +1,7 @@
 from colman_perception.stack_world import (
     ARM_CLEAR_M,
     ARM_HIDE_MAX_S,
+    CARRY_MEMORY_S,
     GHOST_S,
     LOST_S,
     MOVED_XY_M,
@@ -465,7 +466,8 @@ def test_a_carried_cube_that_is_not_there_is_dropped_like_any_other():
     w.settle({"tag_7": at(0.35, 0.05, 3)})
     # tag_7, the cover, is taken away, and the carried cubes are never seen
     w.take("tag_7")
-    snap = w.settle({"tag_1": at(0.5, -0.2, 1)})
+    w.settle({"tag_1": at(0.5, -0.2, 1)})
+    w.settle({"tag_1": at(0.5, -0.2, 1)}, seconds=CARRY_MEMORY_S + 2)  # memory expires
     snap = w.settle({"tag_1": at(0.5, -0.2, 1)}, seconds=LOST_S + 1)
     assert set(snap.lost) == {"tag_5", "tag_6"}
 
@@ -656,3 +658,66 @@ def test_a_pair_set_down_keeps_its_cube_while_the_old_stack_is_exposed():
     assert snap.lost == []
     assert snap.column_of("tag_8").tags == ["tag_7", "tag_8"]
     assert snap.column_of("tag_6").tags[-1] == "tag_6"
+
+
+# ------------------------------------------------ a pair held in the hand a while
+def four_stack(w):
+    poses = {
+        "tag_5": at(0.2, 0.0, 1),
+        "tag_6": at(0.2, 0.0, 2),
+        "tag_7": at(0.2, 0.0, 3),
+        "tag_8": at(0.2, 0.0, 4),
+    }
+    w.settle(poses)
+    w.settle({"tag_8": poses["tag_8"]})  # the lower three are covered, remembered
+
+
+def test_a_cube_lifted_away_under_a_top_is_not_lost_while_the_top_is_in_the_hand():
+    w = World()
+    four_stack(w)
+    w.take("tag_8")  # the top is lifted out of sight
+    snap = w.settle({"tag_6": at(0.2, 0.0, 2)})  # the stack below is exposed
+    snap = w.settle({"tag_6": at(0.2, 0.0, 2)}, seconds=40.0)
+    assert snap.lost == []
+    snap = w.settle({"tag_6": at(0.2, 0.0, 2), "tag_8": at(0.4, 0.2, 2)})
+    assert set(snap.relocated) == {"tag_7"}
+    assert snap.column_of("tag_8").tags == ["tag_7", "tag_8"]
+
+
+def test_the_cube_under_the_top_stays_remembered_for_the_pair_after_a_long_hold():
+    w = World()
+    four_stack(w)
+    w.take("tag_8")
+    w.settle({"tag_6": at(0.2, 0.0, 2)})
+    w.settle({"tag_6": at(0.2, 0.0, 2)}, seconds=40.0)
+    w.settle({"tag_6": at(0.2, 0.0, 2), "tag_8": at(0.4, 0.2, 2)})
+    snap = w.settle({"tag_6": at(0.2, 0.0, 2), "tag_8": at(0.4, 0.2, 2)}, seconds=300.0)
+    assert snap.lost == []
+    assert snap.column_of("tag_8").tags == ["tag_7", "tag_8"]
+
+
+def test_a_cube_under_a_top_that_never_comes_back_is_lost_after_the_minute():
+    w = World()
+    four_stack(w)
+    w.take("tag_8")
+    w.settle({"tag_6": at(0.2, 0.0, 2)})
+    lost = []
+    for seconds in (
+        CARRY_MEMORY_S + 1,
+        LOST_S + 1,
+    ):  # the memory expires, then the wait
+        lost += w.settle({"tag_6": at(0.2, 0.0, 2)}, seconds=seconds).lost
+    assert "tag_7" in lost
+
+
+def test_a_cube_in_the_pair_that_is_seen_as_it_lands_does_not_stop_the_carry():
+    w = World()
+    four_stack(w)
+    w.take("tag_8")
+    w.settle({"tag_6": at(0.2, 0.0, 2)})
+    # tag_7 is seen tilted in the pair, then the pair lands with tag_8 on top
+    snap = w.settle(
+        {"tag_6": at(0.2, 0.0, 2), "tag_7": at(0.4, 0.2, 1), "tag_8": at(0.4, 0.2, 2)}
+    )
+    assert snap.lost == []
+    assert snap.column_of("tag_8").tags == ["tag_7", "tag_8"]
