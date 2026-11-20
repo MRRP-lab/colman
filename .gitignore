@@ -23,3 +23,5 @@ __pycache__/
 calib_samples.npz
 # api keys
 .env
+# hardware-in-the-loop run results
+hil_results/
