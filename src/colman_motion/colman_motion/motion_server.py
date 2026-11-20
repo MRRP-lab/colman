@@ -17,6 +17,7 @@ from std_srvs.srv import Trigger
 
 from colman_interfaces.action import MovePose, MoveTo, Pick, Place
 from colman_motion.arm_control import ArmControl
+from colman_motion.geometry import cube_yaw_in_tool, tool_yaw_to_square, yawed
 from colman_motion.robot_ready import wait_for_robot
 from colman_motion.scene_manager import SceneManager
 from colman_motion.tag_lookup import TagLookup
@@ -42,7 +43,15 @@ RESULT_FLUSH_S = 0.5
 SIGNALS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
 
 
+def quaternion_of(rotation):
+    return (rotation.x, rotation.y, rotation.z, rotation.w)
+
+
 class MotionServer(Node):
+    # How far the held cube is turned from the tool (degrees, within a quarter turn),
+    # so a place can turn the tool to set it down square with the cube below.
+    held_yaw = None
+
     def __init__(self, arm, tag, vacuum, world=None):
         super().__init__("motion_server")
         self.arm = arm
@@ -256,6 +265,7 @@ class MotionServer(Node):
         self.arm.running = True
         try:
             tag_frame = goal_handle.request.frame
+            self.held_yaw = None
             if self.vacuum.holding:
                 return self.fail(goal_handle, result, "Already holding, call /release")
             # Nothing is held, so no cube is modelled while picking, and the column
@@ -308,6 +318,7 @@ class MotionServer(Node):
             if not self.vacuum.grasp():
                 return self.fail(goal_handle, result, "Vacuum grasp failed")
             time.sleep(GRASP_DWELL_S)
+            self.held_yaw = cube_yaw_in_tool(quaternion_of(tag_pose.rotation), tool)
 
             self.stage(goal_handle, feedback, "retreating")
             if not self.arm.go_straight(*approach_translation, tool, self.arm.fast):
@@ -339,10 +350,19 @@ class MotionServer(Node):
             if location:
                 self.keep_clear([location])
 
+            orientation = EE_DOWN
             if location:
                 tag_pose, error = self.find_tag(goal_handle, feedback, location)
                 if error:
                     return self.fail(goal_handle, result, error)
+                if self.held_yaw is not None:
+                    turn = tool_yaw_to_square(
+                        quaternion_of(tag_pose.rotation), self.held_yaw
+                    )
+                    orientation = yawed(EE_DOWN, turn)
+                    self.get_logger().info(
+                        f"Turning the tool {turn:.0f} degrees to square the cube"
+                    )
                 drop_pose = tag_pose.translation
                 drop_off = (
                     drop_pose.x,
@@ -364,7 +384,7 @@ class MotionServer(Node):
                 drop_off[1],
                 drop_off[2],
                 drop_off_approach[2],
-                EE_DOWN,
+                orientation,
             )
             if pair is None:
                 return self.fail(goal_handle, result, "No safe arm pose to place there")
@@ -390,6 +410,7 @@ class MotionServer(Node):
             if not self.arm.go_straight(*drop_off_approach, tool, self.arm.slow):
                 return self.fail(goal_handle, result, "Retreat failed")
 
+            self.held_yaw = None
             result.success = True
             if location:
                 result.message = f"Placed at {location}"
