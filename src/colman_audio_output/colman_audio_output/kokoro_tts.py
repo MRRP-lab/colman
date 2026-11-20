@@ -14,6 +14,7 @@ on the PATH. These come with the pixi env.
 import hashlib
 import os
 import queue
+import re
 import shutil
 import subprocess
 import threading
@@ -132,7 +133,9 @@ class KokoroTTSNode(Node):
 
     # ---------------------------------------------------------------- callbacks
     def _on_text(self, msg: String):
-        text = msg.data.strip()
+        # Claude sometimes writes markdown; the voice would read "**" as "asterisk".
+        text = re.sub(r"[*_`#>]+", "", msg.data)
+        text = re.sub(r"^\s*-\s+", "", text, flags=re.M).strip()
         if not text:
             return
         try:

@@ -17,6 +17,8 @@ HELD_HINT = "The arm may still be holding it. Say release to let go of it."
 NO_VIEW = "I can't see the table right now, so I won't move."
 CONFIRM_TRIES = 20  # how many times to look for a placed cube before giving up
 CONFIRM_WAIT_S = 0.4
+MOVING_TOOLS = ("stack_cube", "pick_and_place", "go_to_pose")
+SETTLE_TRIES = 12  # how long to wait for a cube that is not in view yet
 
 
 def validate_pick_and_place(args):
@@ -98,6 +100,10 @@ class PickAndPlaceExecutor:
         self._held = None  # frame of the cube the arm believes it is holding
         self._stopped = False
 
+    @property
+    def stopped(self):
+        return self._stopped
+
     def set_stopped(self, stopped):
         """The node calls this when a spoken stop reaches the arm outside run_tool."""
         self._stopped = stopped
@@ -157,6 +163,21 @@ class PickAndPlaceExecutor:
             return text + "."
         return text + f", so I haven't picked up the {view.name_of(cube)}."
 
+    def _look_until(self, verdict):
+        """Look until verdict(view) has no "can't see" complaint, for a few seconds.
+
+        The cameras need a moment after the arm moves, so a cube that is not seen yet
+        is usually seen a second later. Returns (view, complaint).
+        """
+        for _ in range(SETTLE_TRIES):
+            view = self._look()
+            complaint = verdict(view) if view is not None else None
+            if view is None or not complaint or "can't see" not in complaint:
+                return view, complaint
+            self._sleep(CONFIRM_WAIT_S)
+        view = self._look()
+        return view, (verdict(view) if view is not None else None)
+
     def _confirm(self, cube, target):
         """Wait until the camera sees the cube on top of the target's column."""
         for _ in range(CONFIRM_TRIES):
@@ -171,7 +192,7 @@ class PickAndPlaceExecutor:
         done = 0
         why = ""
         for _ in range(count):
-            view = self._look()
+            view, _ = self._look_until(lambda v: v.next_move(color, count)[2])
             if view is None:
                 return False, self._partial(color, done, count, NO_VIEW)
             cube, target, reason = view.next_move(
@@ -260,10 +281,11 @@ class PickAndPlaceExecutor:
         try:
             if self._held is not None:
                 return False, self._holding_message()
-            view = self._look()
+            view, reason = self._look_until(
+                lambda v: v.check_move(obj_frame, dest_frame)
+            )
             if view is None:
                 return False, NO_VIEW
-            reason = view.check_move(obj_frame, dest_frame)
             if reason:
                 self._log.warning(f"Rejected pick_and_place {args}: {reason}")
                 return False, reason
@@ -378,6 +400,13 @@ class PickAndPlaceExecutor:
         }
         if name not in handlers:
             return False, f"Unknown tool {name}."
+        if self._stopped and name in MOVING_TOOLS:
+            # A new command to move is a new decision: it ends the stop, no "resume"
+            # needed. A stop heard while it runs still stops it.
+            ok, message = self._stop_or_resume("resume_robot", {})
+            if not ok:
+                return False, f"The arm is stopped and could not resume. {message}"
+            self._log.info(f"{name}: a new command ended the stop")
         return handlers[name](args)
 
 

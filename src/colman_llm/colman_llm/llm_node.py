@@ -40,6 +40,9 @@ from colman_llm.stop_words import is_stop_command
 from colman_llm.world_view import WorldView
 
 QUEUE_SIZE = 10
+REPEAT_STOP_S = (
+    3.0  # a stop said again within this, still stopped, is not acted on twice
+)
 WORLD_STALE_S = 2.0  # older than this, the world_state is not trusted
 ERROR_LINE = "Sorry, something went wrong with that."
 
@@ -67,6 +70,7 @@ class LlmNode(Node):
         self._world_msg = None
         self._world_at = 0.0
         self._pick = self._place = self._move = self._stop_call = None
+        self._last_stop_s = -1e9  # when a spoken stop was last acted on
         self._stop_generation = 0  # bumped by a spoken stop; drops in-flight replies
         self._executor = self._make_executor()
         self._pub = self.create_publisher(String, "llm_response", 10)
@@ -150,6 +154,10 @@ class LlmNode(Node):
     def _emergency_stop(self, text):
         log = self.get_logger()
         log.warn(f"Stop word heard: {text}")
+        now = time.monotonic()
+        if self._executor.stopped and now - self._last_stop_s < REPEAT_STOP_S:
+            return  # said again while the first stop is still being acknowledged
+        self._last_stop_s = now
         self._stop_generation += 1
         self._executor.set_stopped(True)
         if self._stop_call is not None:

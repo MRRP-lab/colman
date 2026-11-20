@@ -65,3 +65,24 @@ def rotation_to_quaternion(x, y, z):
         return ((m01 + m10) / s, 0.25 * s, (m12 + m21) / s, (m02 - m20) / s)
     s = 2.0 * math.sqrt(1.0 + m22 - m00 - m11)
     return ((m02 + m20) / s, (m12 + m21) / s, 0.25 * s, (m10 - m01) / s)
+
+
+def yaw_of(q):
+    """Degrees the x axis of orientation q (x, y, z, w) points around the vertical."""
+    m = quaternion_to_matrix(q)
+    return math.degrees(math.atan2(m[1, 0], m[0, 0]))
+
+
+def quarter_turn(degrees):
+    """degrees folded into [-45, 45): a cube looks the same after a quarter turn."""
+    return (degrees + 45.0) % 90.0 - 45.0
+
+
+def cube_yaw_in_tool(tag_q, tool_q):
+    """How far a held cube is turned from the tool, as a fraction of a quarter turn."""
+    return quarter_turn(yaw_of(tag_q) - yaw_of(tool_q))
+
+
+def tool_yaw_to_square(dest_q, cube_in_tool):
+    """Tool turn that puts a cube held at cube_in_tool square with the tag dest_q."""
+    return quarter_turn(yaw_of(dest_q) - cube_in_tool)

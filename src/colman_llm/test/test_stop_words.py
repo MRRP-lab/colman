@@ -12,6 +12,12 @@ from colman_llm.stop_words import is_stop_command
         "Freeze.",
         "stop, stop, stop",
         "wait, stop that",
+        "Cancel that and hold still.",
+        "cancel",
+        "abort",
+        "stay still",
+        "don't move",
+        "that's enough",
         "don't stop at the red block",  # false match, the safe direction
     ],
 )
@@ -29,6 +35,9 @@ def test_stop_words_match(text):
         "the bus stops here",
         "freezer",
         "halted",
+        "cancellation",
+        "aborted",
+        "hold stillness",
     ],
 )
 def test_other_text_does_not_match(text):

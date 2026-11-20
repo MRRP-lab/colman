@@ -92,7 +92,7 @@ class WorldView:
             return None, f"I can't see any {color} cubes."
         column = columns[0]
         target = column.tags[-1]
-        if target == UNKNOWN or not column.top_seen:
+        if target == UNKNOWN:
             return None, f"I can't see the top of the {color} stack."
         return target, None
 
@@ -116,7 +116,7 @@ class WorldView:
         target, reason = self.target_of(color)
         if target is None:
             return None, None, reason
-        sources = [c for c in columns[1:] if c.top_seen and c.tags[-1] != UNKNOWN]
+        sources = [c for c in columns[1:] if c.tags[-1] != UNKNOWN]
         if not sources:
             return None, None, f"There are no other free {color} cubes to add."
         if can_pick is not None:
@@ -143,8 +143,6 @@ class WorldView:
         own = self.column_of(cube)
         if own is None:
             return f"I can't see the {self.name_of(cube)}."
-        if not own.top_seen:
-            return f"I can't see the {self.name_of(cube)} right now."
         if own.tags[-1] != cube:
             above = own.tags[own.tags.index(cube) + 1]
             return (
@@ -154,8 +152,6 @@ class WorldView:
         dest = self.column_of(target)
         if dest is None:
             return f"I can't see the {self.name_of(target)}."
-        if not dest.top_seen:
-            return f"I can't see the top of the stack with the {self.name_of(target)}."
         if dest is own:
             return f"The {self.name_of(cube)} is already on the {self.name_of(target)}."
         if dest.tags[-1] != target:

@@ -42,7 +42,7 @@ def should_publish(state, camera_alive):
 
 
 GHOST_S = 15.0  # how long a stack whose top was removed is kept while its tag is unseen
-ARM_CLEAR_M = 0.12  # the arm hides the table within this of its base-to-tip line
+ARM_CLEAR_M = 0.10  # the arm hides the table within this of its shadow line
 UNKNOWN = "unknown"
 
 
@@ -246,10 +246,15 @@ class StackModel:
                 if tag not in beliefs or tag in lost:
                     timers.pop(tag, None)
         members = {t: p for t, p in beliefs.items() if t not in lost}
+        hidden = {
+            t
+            for t, p in members.items()
+            if t not in visible and t != held and arm_hides(p[:2])
+        }
 
         columns = []
         for group in clusters(members):
-            column, dropped = self.column(group, members, visible, in_transit)
+            column, dropped = self.column(group, members, visible, in_transit, hidden)
             lost += dropped
             columns.append(column)
         if camera_alive:
@@ -452,8 +457,8 @@ class StackModel:
             if now_s - g.since < GHOST_S and not near(g.position, positions)
         ]
 
-    def column(self, group, members, visible, transit=frozenset()):
-        seen = [t for t in group if t in visible]
+    def column(self, group, members, visible, transit=frozenset(), hidden=frozenset()):
+        seen = [t for t in group if t in visible or t in hidden]
         top = max(seen or group, key=lambda t: members[t][2])
         height = level_of(members[top][2])
         dropped = []
@@ -462,7 +467,7 @@ class StackModel:
         # prefer tags we can see; the rest are remembered from before
         for tag in sorted(group, key=lambda t: (t not in visible, -members[t][2])):
             level = level_of(members[tag][2])
-            if tag not in visible and seen and level >= height:
+            if tag not in visible and tag not in hidden and seen and level >= height:
                 # The stack is shorter than this tag says. If the tag went with a top
                 # that was lifted away, keep it for the carry instead of losing it.
                 if tag not in transit:
@@ -481,5 +486,9 @@ class StackModel:
         if UNKNOWN in tags or self.uncertain.intersection(tags):
             order_known = False
         return Column(
-            tags, tuple(members[top][:2]), height, order_known, bool(seen)
+            tags,
+            tuple(members[top][:2]),
+            height,
+            order_known,
+            any(t in visible for t in group),
         ), dropped
