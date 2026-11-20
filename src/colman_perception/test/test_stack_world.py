@@ -780,3 +780,11 @@ def test_a_cube_under_a_top_seen_back_on_its_stack_is_covered_as_usual():
     assert m.in_transit({"tag_6": stack["tag_6"]}) == set()
     assert m.in_transit({"tag_6": at(0.5, 0.2, 2)}) == {"tag_5"}
     assert m.in_transit({}) == {"tag_5"}
+
+
+def test_a_lost_tag_says_which_rule_dropped_it():
+    w = World()
+    w.settle({"tag_3": at(0.4, 0.2, 1), "tag_4": at(0.4, -0.2, 1)})
+    w.settle({"tag_4": at(0.4, -0.2, 1)})
+    snap = w.settle({"tag_4": at(0.4, -0.2, 1)}, seconds=LOST_S + 1)
+    assert "not seen and not covered" in snap.lost_why["tag_3"]

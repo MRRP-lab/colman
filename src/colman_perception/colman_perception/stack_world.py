@@ -67,6 +67,7 @@ class Snapshot:
     restored: dict = field(
         default_factory=dict
     )  # tag -> pose, covered as it was dropped
+    lost_why: dict = field(default_factory=dict)  # tag -> which rule dropped it
 
     def column_of(self, tag):
         return next((c for c in self.columns if tag in c.tags), None)
@@ -107,6 +108,7 @@ class StackModel:
         self.prev_beliefs = {}  # the beliefs of the last update
         self.gone = {}  # tag -> (pose, when) of a belief dropped without being lost
         self.refused = {}  # top tag -> the last reason its slide was not carried
+        self.why = {}  # tag -> which rule dropped it in the current update
 
     def covered(self, tag, pos, visible):
         """True if a seen tag sits over this one, at a higher cube level.
@@ -139,6 +141,7 @@ class StackModel:
         beliefs = {t: p for t, p in settled.items() if t != held}
         visible = {t: p for t, p in fresh.items() if t != held}
         lost = []
+        self.why = {}
         relocated, carried, notes = {}, {}, []
         if camera_alive:
             relocated, carried = self.carry(now_s, beliefs, visible, notes)
@@ -171,11 +174,15 @@ class StackModel:
                 self.unexplained.pop(tag, None)
                 since = self.arm_hidden.setdefault(tag, now_s)
                 if now_s - since >= ARM_HIDE_MAX_S:
+                    self.why[tag] = f"hidden by the arm for {now_s - since:.0f} s"
                     lost.append(tag)
             else:
                 self.arm_hidden.pop(tag, None)
                 since = self.unexplained.setdefault(tag, now_s)
                 if now_s - since >= LOST_S:
+                    self.why[tag] = (
+                        f"not seen and not covered for {now_s - since:.0f} s"
+                    )
                     lost.append(tag)
         for timers in (self.unexplained, self.arm_hidden):
             for tag in list(timers):
@@ -200,7 +207,14 @@ class StackModel:
         placed = {t for c in columns for t in c.tags}
         missing = [t for t in self.all_tags if t not in placed and t != held]
         return Snapshot(
-            columns, missing, lost, not camera_alive, relocated, notes, restored
+            columns,
+            missing,
+            lost,
+            not camera_alive,
+            relocated,
+            notes,
+            restored,
+            dict(self.why),
         )
 
     def restore(self, now_s, beliefs, visible, notes):
@@ -377,9 +391,13 @@ class StackModel:
                 # The stack is shorter than this tag says. If the tag went with a top
                 # that was lifted away, keep it for the carry instead of losing it.
                 if tag not in transit:
+                    self.why[tag] = (
+                        f"taller than its stack (level {level}, stack {height})"
+                    )
                     dropped.append(tag)
                 order_known = False
             elif level in slots:
+                self.why[tag] = f"same level ({level}) as {slots[level]} in its column"
                 dropped.append(tag)
                 order_known = False
             else:

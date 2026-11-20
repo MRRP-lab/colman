@@ -383,7 +383,8 @@ class WorldState(Node):
                 self.belief[tag_frame] = (list(pose), belief[1])
             self.get_logger().info(f"{tag_frame}: carried with a slid stack")
         for tag_frame in snapshot.lost:
-            self.get_logger().warn(f"{tag_frame}: lost, not seen and not covered")
+            why = snapshot.lost_why.get(tag_frame, "no reason recorded")
+            self.get_logger().warn(f"{tag_frame}: lost: {why}")
             self.belief.pop(tag_frame, None)
             for source in SOURCES:
                 self.forget((tag_frame, source))
