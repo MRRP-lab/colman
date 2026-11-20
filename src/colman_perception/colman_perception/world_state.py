@@ -30,6 +30,9 @@ from colman_perception.stack_world import (
 
 BASE_FRAME = "base_link"
 TIP_FRAME = "vacuum_tip_link"
+OVERHEAD_FRAME = "overhead_camera_optical_frame"
+TAG_HEIGHT_M = 0.04  # about where a cube tag is, for the arm's shadow
+ARM_LINK_FRAMES = ("forearm_link", "wrist_1_link", "wrist_2_link", "wrist_3_link")
 WRIST_CAMERA_FRAME = "oakd_pro_camera_rgb_optical_frame_wrist"
 APRILTAG_CONFIGS = ["apriltag.yaml", "apriltag_overhead.yaml"]
 SOURCES = ["wrist", "overhead"]
@@ -262,8 +265,14 @@ class WorldState(Node):
         if self.held is None:
             return
         tag_frame = self.held[0]
+        pose = self.held_pose()
         self.held = None
-        self.belief.pop(tag_frame, None)
+        # The cube is where the arm let go of it. Remember that, so a cube the arm still
+        # hides is not lost; the camera corrects it, or drops it, once it can see.
+        if pose is not None:
+            self.belief[tag_frame] = (tuple(pose[0]), pose[1])
+        else:
+            self.belief.pop(tag_frame, None)
         for source in SOURCES:
             self.forget((tag_frame, source))
         self.get_logger().info(f"released {tag_frame}")
@@ -327,17 +336,44 @@ class WorldState(Node):
         self.broadcaster.sendTransform(msg)
 
     def arm_hides(self, tip):
-        """True if (x, y) is within ARM_CLEAR_M of the line from the base to the tip."""
+        """True if (x, y) is in the arm's shadow, as the overhead camera sees it.
+
+        The arm is a polyline through its joints. The camera is above and to one side
+        of the table, so each joint hides the table where the ray from the camera
+        through it lands, not straight below it.
+        """
         if tip is None:
             return lambda xy: False  # no robot model, so no arm in the way
-        ax, ay = tip[:2]
-        length = ax * ax + ay * ay
-        if length < 1e-9:
-            return lambda xy: False
+        camera = self.lookup(OVERHEAD_FRAME)
+        eye = position_of(camera) if camera is not None else None
+        joints = [(0.0, 0.0, 0.0)]
+        for frame in ARM_LINK_FRAMES:
+            link = self.lookup(frame)
+            if link is not None:
+                joints.append(tuple(position_of(link)))
+        joints.append(tuple(tip[:3]))
+
+        def shadow(joint):
+            if eye is None or eye[2] - joint[2] < 0.2:
+                return joint[:2]
+            k = (eye[2] - TAG_HEIGHT_M) / (eye[2] - joint[2])
+            return (eye[0] + (joint[0] - eye[0]) * k, eye[1] + (joint[1] - eye[1]) * k)
+
+        points = [shadow(j) for j in joints]
+        segments = list(zip(points, points[1:]))
 
         def hides(xy):
-            along = max(0.0, min(1.0, (xy[0] * ax + xy[1] * ay) / length))
-            return math.hypot(xy[0] - along * ax, xy[1] - along * ay) < ARM_CLEAR_M
+            for (x0, y0), (x1, y1) in segments:
+                dx, dy = x1 - x0, y1 - y0
+                length = dx * dx + dy * dy
+                along = 0.0
+                if length > 1e-9:
+                    along = ((xy[0] - x0) * dx + (xy[1] - y0) * dy) / length
+                    along = max(0.0, min(1.0, along))
+                gap = math.hypot(xy[0] - x0 - along * dx, xy[1] - y0 - along * dy)
+                if gap < ARM_CLEAR_M:
+                    return True
+            return False
 
         return hides
 
