@@ -153,7 +153,7 @@ Parse `tool_use.input` as already-decoded JSON from the SDK. Do not string-match
 
 ## Cube stacking demo
 
-The demo uses tagged cubes. Tags 1 to 4 are white cubes and tags 5 to 8 are blue cubes. Cube 1 of each colour (`tag_1`, `tag_5`) is the base of that colour's stack and never moves. The other three are loose, and the detector config (`colman_perception/config/apriltag.yaml`) registers IDs 1 to 8 at 39 mm.
+The demo uses tagged cubes. Tags 1 to 4 are white cubes and tags 5 to 8 are blue cubes. Cube 1 of each colour (`tag_1`, `tag_5`) is the base of that colour's stack and never moves. The other three are loose, and the detector config (`colman_perception/config/apriltag.yaml`) registers IDs 1 to 8 at 39.2 mm.
 
 Claude gets `stack_cube(color, count)` for building a stack, with `color` in `white` or `blue` and `count` from 1 to 3, and `pick_and_place`, `go_to_pose`, `release_cube`, `report_state`, `stop_robot` and `resume_robot` (see Tool definitions). The node, not Claude, decides which cube moves where:
 

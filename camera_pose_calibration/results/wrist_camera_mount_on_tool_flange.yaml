@@ -1,0 +1,15 @@
+child_frame: oakd_pro_camera_rgb_optical_frame_wrist
+method: grid corner reprojection, grid pose fitted, intrinsics fixed
+parent_frame: tool0
+quaternion_xyzw:
+- -0.004815688609659881
+- 0.0015296885048485278
+- 0.0002436899676971469
+- 0.999987204823888
+reprojection_rms_px: 2.502837119111592
+translation_m:
+- 0.0006091851612007314
+- -0.09947307158062448
+- 0.04389489353943559
+urdf_reprojection_rms_px: 20.61296841212136
+views: 15

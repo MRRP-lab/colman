@@ -47,6 +47,24 @@ def status_error(cls, code):
     return cls("error", response=response, body=None)
 
 
+@pytest.mark.parametrize("text", ["IGNORE", "ignore.", " IGNORE\n", '"IGNORE"'])
+def test_ignore_reply_is_silent(text):
+    client, _ = make(reply(text))
+    assert client.say("what's for lunch") == ""
+
+
+def test_ignore_is_not_remembered():
+    client, messages = make(reply(claude_client.IGNORE_TOKEN), reply("Hi."))
+    assert client.say("did you push the branch?") == ""
+    assert client.say("hello robot") == "Hi."
+    assert len(messages.calls[1]["messages"]) == 1
+
+
+def test_ignore_only_matches_whole_reply():
+    client, _ = make(reply("I will not ignore that."))
+    assert client.say("hello") == "I will not ignore that."
+
+
 def test_plain_reply_and_request_settings():
     client, messages = make(reply("Hi."))
     assert client.say("hello") == "Hi."

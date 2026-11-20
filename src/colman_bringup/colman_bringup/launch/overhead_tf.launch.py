@@ -8,11 +8,11 @@ from launch_ros.actions import Node
 
 
 def static_transform(context):
-    """Publish base_link -> overhead_camera_optical_frame from the calibration."""
+    """Publish base_link -> overhead_camera_optical_frame (the fitted overhead pose)."""
     path = os.path.join(
         get_package_share_directory("colman_perception"),
         "config",
-        "overhead_camera.yaml",
+        "overhead_camera_pose_in_base_link.yaml",
     )
     with open(path) as f:
         # [x, y, z, qx, qy, qz, qw, parent, child]

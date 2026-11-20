@@ -15,4 +15,5 @@ apriltag:
     tag:
       ids:    [1, 2, 3, 4, 5, 6, 7, 8]
       frames: ["wrist_tag_1", "wrist_tag_2", "wrist_tag_3", "wrist_tag_4", "wrist_tag_5", "wrist_tag_6", "wrist_tag_7", "wrist_tag_8"]
-      sizes:  [0.039, 0.039, 0.039, 0.039, 0.039, 0.039, 0.039, 0.039]
+      # The black square of the cube tags (1 to 8) measures 39.2 mm.
+      sizes:  [0.0392, 0.0392, 0.0392, 0.0392, 0.0392, 0.0392, 0.0392, 0.0392]

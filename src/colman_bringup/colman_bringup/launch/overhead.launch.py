@@ -14,16 +14,16 @@ from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
-CALIBRATION = "overhead_camera.yaml"
+OVERHEAD_POSE_FILE = "overhead_camera_pose_in_base_link.yaml"
 
 
 def make_nodes(context):
     """The overhead camera, its fixed base_link -> camera transform and its detector."""
     share = Path(get_package_share_directory("colman_perception"))
-    calibration = yaml.safe_load((share / "config" / CALIBRATION).read_text())
+    pose = yaml.safe_load((share / "config" / OVERHEAD_POSE_FILE).read_text())
     # [x, y, z, qx, qy, qz, qw, parent, child], as static_transform_publisher
     # takes them.
-    args = calibration["static_transform_args"]
+    args = pose["static_transform_args"]
     return [
         Node(
             package="colman_perception",
