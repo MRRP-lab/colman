@@ -140,9 +140,9 @@ def test_pick_and_place_is_rejected_while_busy():
     holder = {}
     arm = FakeArm(LOG)
 
-    def pick(frame):
+    def pick(frame, place_frame=""):
         holder["second"] = pap(holder["executor"], "white cube 3", "white cube 1")
-        return arm.do_pick(frame)
+        return arm.do_pick(frame, place_frame)
 
     holder["executor"] = PickAndPlaceExecutor(
         pick, arm.do_place, LOG, arm.world.view, sleep=lambda s: None
@@ -236,9 +236,9 @@ def test_go_to_pose_is_refused_while_busy():
     holder = {}
     arm = FakeArm(LOG)
 
-    def pick(frame):
+    def pick(frame, place_frame=""):
         holder["pose"] = holder["executor"].run_tool("go_to_pose", {"pose": "home"})
-        return arm.do_pick(frame)
+        return arm.do_pick(frame, place_frame)
 
     holder["executor"] = PickAndPlaceExecutor(
         pick,
@@ -296,3 +296,32 @@ def test_fake_executor_runs_every_tool():
     assert fake.run_tool("go_to_pose", {"pose": "home"})[0]
     assert fake.run_tool("release_cube", {})[0]
     assert fake.run_tool("report_state", {})[0]
+
+
+# ------------------------------------------- the motion server refuses a bad place
+def test_pick_and_place_tells_the_server_where_the_cube_will_go():
+    arm = FakeArm(LOG)
+    seen = []
+    real = arm.do_pick
+    arm.do_pick = lambda frame, place_frame="": (
+        seen.append(place_frame) or real(frame, place_frame)
+    )
+    pap(arm.executor(), "white cube 3", "white cube 1")
+    assert seen == ["tag_1"]
+
+
+def test_a_place_the_server_cannot_reach_is_refused_before_anything_is_picked_up():
+    arm = FakeArm(LOG, unplaceable=["tag_1"])
+    ok, message = pap(arm.executor(), "white cube 3", "white cube 1")
+    assert not ok and "Could not pick up the white cube 3" in message
+    assert "No safe arm pose to place on tag_1" in message
+    assert arm.calls == [("pick refused", "tag_3", "tag_1")]
+    # nothing was picked, so the arm is not holding anything and can try again
+    assert pap(arm.executor(), "white cube 3", "white cube 2")[0]
+
+
+def test_stack_cube_stops_when_the_server_cannot_place_on_the_stack():
+    arm = FakeArm(LOG, unplaceable=["tag_1"])
+    ok, message = arm.executor().run_tool("stack_cube", {"color": "white", "count": 2})
+    assert not ok and "No safe arm pose to place on tag_1" in message
+    assert arm.calls == [("pick refused", "tag_2", "tag_1")]

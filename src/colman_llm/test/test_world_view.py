@@ -32,7 +32,7 @@ class Scene:
     def world(self):
         return self.view
 
-    def pick(self, frame):
+    def pick(self, frame, place_frame=""):
         self.calls.append(("pick", frame))
         self.on_pick(frame)
         return True, "ok"
@@ -170,7 +170,7 @@ def test_a_place_the_camera_never_confirms_is_reported():
 
 def test_no_world_state_means_no_motion():
     executor = PickAndPlaceExecutor(
-        lambda f: (True, "ok"), lambda f: (True, "ok"), LOG, lambda: None
+        lambda f, p="": (True, "ok"), lambda f: (True, "ok"), LOG, lambda: None
     )
     ok, message = executor.run_tool("stack_cube", {"color": "white", "count": 2})
     assert not ok and "can't see the table" in message
@@ -214,8 +214,6 @@ def test_from_msg_carries_the_visibility_of_the_top():
         height=2,
         order_known=True,
         top_seen=False,
-        position=SimpleNamespace(x=0.3, y=-0.1),
     )
     view = WorldView.from_msg(SimpleNamespace(stacks=[stack], held="", missing=[]))
     assert view.columns[0].top_seen is False
-    assert view.columns[0].position == (0.3, -0.1)

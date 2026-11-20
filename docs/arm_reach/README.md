@@ -34,4 +34,4 @@ The picture is an overhead 4K still with the reach drawn on the table plane. The
 
 ## Where the node uses it
 
-`colman_llm/reach.py` is a numpy model of the same arm that the LLM node asks before it picks anything up: can the arm pick this cube, and can it place on the top of that stack? It uses the same joint chain, joint limits, tool tip and quarter turns as above and refuses anything within 0.16 m of the base, which matches the near edge of this map. At the far edge it is within about 2 cm of the map. See the Cube stacking demo section of [`../plan.md`](../plan.md).
+The map is a kinematic estimate. The real check is made by the motion server: the LLM node puts the destination in the `Pick` goal's `place_location`, and the server solves the place with MoveIt's IK and collision checks before it picks, so a place outside this map is refused before the cube is lifted. See the Cube stacking demo section of [`../plan.md`](../plan.md).

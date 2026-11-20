@@ -65,7 +65,10 @@ def validate_stack_cube(args):
 
 
 class PickAndPlaceExecutor:
-    """pick(frame) and place(frame) each return (ok, message) and may block.
+    """pick(frame, place_frame) and place(frame) return (ok, message) and may block.
+
+    pick is told which cube the picked one will go on, so the motion server can refuse
+    before it lifts anything if it cannot place there.
 
     world() returns the latest WorldView (what the overhead camera sees), or None if
     there is none. Which cube is on which is read from it every time, never remembered.
@@ -82,11 +85,7 @@ class PickAndPlaceExecutor:
         release=None,
         move_to=None,
         sleep=time.sleep,
-        reach=None,
     ):
-        # reach has can_pick(x, y, z) and can_place_on(x, y, z), as colman_llm.reach
-        # does. None means no reach check.
-        self._reach = reach
         self._world = world
         self._sleep = sleep
         self._pick = pick
@@ -141,28 +140,6 @@ class PickAndPlaceExecutor:
     def _look(self):
         return self._world()
 
-    def _can_pick(self, view, cube):
-        """False only if the cube's position is known and the arm cannot reach it."""
-        point = view.tag_point(cube)
-        return self._reach is None or point is None or self._reach.can_pick(*point)
-
-    def _can_place_on(self, view, target):
-        point = view.tag_point(target)
-        return self._reach is None or point is None or self._reach.can_place_on(*point)
-
-    def _cannot_pick_reason(self, view, cube):
-        return (
-            f"The {view.name_of(cube)} is out of the arm's reach, so I haven't moved."
-        )
-
-    def _cannot_place_reason(self, view, target, cube=None):
-        text = (
-            f"The arm can't reach the top of the stack with the {view.name_of(target)}"
-        )
-        if cube is None:
-            return text + "."
-        return text + f", so I haven't picked up the {view.name_of(cube)}."
-
     def _look_until(self, verdict):
         """Look until verdict(view) has no "can't see" complaint, for a few seconds.
 
@@ -195,11 +172,7 @@ class PickAndPlaceExecutor:
             view, _ = self._look_until(lambda v: v.next_move(color, count)[2])
             if view is None:
                 return False, self._partial(color, done, count, NO_VIEW)
-            cube, target, reason = view.next_move(
-                color, count, lambda tag: self._can_pick(view, tag)
-            )
-            if cube is not None and not self._can_place_on(view, target):
-                cube, reason = None, self._cannot_place_reason(view, target)
+            cube, target, reason = view.next_move(color, count)
             if cube is None:
                 if done == 0:
                     already = view.height(color) >= count
@@ -208,7 +181,7 @@ class PickAndPlaceExecutor:
                 break
             name = view.name_of(cube)
             self._log.info(f"stack_cube: {name} ({cube}) onto {target}")
-            ok, message = self._pick(cube)
+            ok, message = self._pick(cube, target)
             if not ok:
                 return False, self._partial(
                     color, done, count, f"Could not pick up the {name}. {message}"
@@ -226,14 +199,6 @@ class PickAndPlaceExecutor:
             if new_target != target:
                 self._log.info(f"stack_cube: top changed, {target} -> {new_target}")
                 target = new_target
-                if not self._can_place_on(view, target):
-                    return False, self._partial(
-                        color,
-                        done,
-                        count,
-                        f"Picked up the {name}. "
-                        f"{self._cannot_place_reason(view, target)} {HELD_HINT}",
-                    )
             ok, message = self._place(target)
             if not ok:
                 return False, self._partial(
@@ -289,19 +254,11 @@ class PickAndPlaceExecutor:
             if reason:
                 self._log.warning(f"Rejected pick_and_place {args}: {reason}")
                 return False, reason
-            if not self._can_pick(view, obj_frame):
-                reason = self._cannot_pick_reason(view, obj_frame)
-                self._log.warning(f"Rejected pick_and_place {args}: {reason}")
-                return False, reason
-            if not self._can_place_on(view, dest_frame):
-                reason = self._cannot_place_reason(view, dest_frame, obj_frame)
-                self._log.warning(f"Rejected pick_and_place {args}: {reason}")
-                return False, reason
             obj, dest = args["object"], args["destination"]
             self._log.info(
                 f"pick_and_place: {obj} ({obj_frame}) -> {dest} ({dest_frame})"
             )
-            ok, message = self._pick(obj_frame)
+            ok, message = self._pick(obj_frame, dest_frame)
             if not ok:
                 return False, f"Could not pick up the {obj}. {message}"
             self._held = obj_frame
@@ -413,7 +370,6 @@ class PickAndPlaceExecutor:
 def FakeExecutor(logger):  # noqa: N802
     """Dry run: every pick, place, stop, resume, release and move succeeds, and the
     cubes really move on a pretend table."""
-    from colman_llm import reach
     from colman_llm.fake_arm import FakeArm
 
-    return FakeArm(logger, reach=reach).executor()
+    return FakeArm(logger).executor()

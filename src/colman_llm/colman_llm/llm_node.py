@@ -30,7 +30,6 @@ from std_srvs.srv import Trigger
 
 from colman_interfaces.action import MoveTo, Pick, Place
 from colman_interfaces.msg import WorldState
-from colman_llm import reach
 from colman_llm.action_call import ActionCall
 from colman_llm.claude_client import ClaudeClient
 from colman_llm.env_file import load_env_file
@@ -130,7 +129,9 @@ class LlmNode(Node):
         place_s = self.get_parameter("place_timeout_s").value
         move_s = self.get_parameter("move_timeout_s").value
         return PickAndPlaceExecutor(
-            lambda frame: pick.call(Pick.Goal(frame=frame), pick_s),
+            lambda frame, place_frame="": pick.call(
+                Pick.Goal(frame=frame, place_location=place_frame), pick_s
+            ),
             lambda frame: place.call(Place.Goal(location=frame), place_s),
             log,
             self._world,
@@ -138,7 +139,6 @@ class LlmNode(Node):
             resume=resume.call,
             release=release.call,
             move_to=lambda pose: move.call(MoveTo.Goal(pose_name=pose), move_s),
-            reach=reach,
         )
 
     def _on_speech(self, msg):

@@ -21,6 +21,7 @@ TAG_XY = {
     6: (0.40, 0.05),
     7: (0.15, -0.15),
     8: (0.40, -0.10),
+    9: (0.85, 0.0),  # a cube on the table that the arm cannot reach
 }
 TAG_Z = cube_top_z(1)  # what world_state publishes for a cube on the table
 

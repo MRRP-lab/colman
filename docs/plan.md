@@ -13,7 +13,7 @@ Design for adding voice-driven control to the robot. For how the rest of the rep
 - `colman_perception` has a second AprilTag detector for the fixed overhead camera and a `world_state` node that fuses both detectors into `tag_N` frames and the `/world_state` topic (`colman_interfaces/msg/WorldState`): which cube is on which, which cubes are hidden by the arm, and whether the overhead camera is alive. The LLM node and the motion server both plan from it.
 - `pixi run stack` starts the whole pipeline (driver, cameras, detectors, `world_state`, motion server, Kokoro, Parakeet and `llm_node`); `pixi run stack-dry` runs it without the arm driver and with `dry_run:=true`.
 
-The `Pick` action takes a `frame` (for example `tag_3`) and reports a `stage` as feedback. The `Place` action takes a `location` frame and an optional `position`. Both return `success` and `message`.
+The `Pick` action takes a `frame` (for example `tag_3`) and an optional `place_location`, and reports a `stage` as feedback. The `Place` action takes a `location` frame and an optional `position`. Both return `success` and `message`.
 
 Behaviours of the motion server that the LLM node must respect:
 
@@ -64,7 +64,6 @@ src/colman_llm/
     service_call.py    # one blocking Trigger service call
     stop_words.py      # whole-word stop/halt/freeze match
     world_view.py      # what the camera says is on the table (from /world_state)
-    reach.py           # can the arm reach a cube? a kinematic model, checked before a pick
     fake_arm.py        # pretend arm and table for dry run and tests
   resource/colman_llm
   package.xml
@@ -136,7 +135,7 @@ CUBE_NAMES = {"white cube 1": "tag_1", "white cube 2": "tag_2", ..., "blue cube 
 POSES = {"home": "home", "compact": "Compact"}
 ```
 
-`pick_and_place(object, destination)` picks one cube and places it on top of any other cube, in any colour. Claude never names a tag; the node maps the spoken names above to frames. The node also checks the move against the latest `/world_state` (what the overhead camera sees) before the arm moves, and again after the pick, and refuses with a plain-language reason if the cube has a cube on top of it, is already on the destination, or the destination is covered. It also asks `reach.py` whether the arm can reach the cube and the top of the destination, and refuses before the pick if not, so a cube is never picked up that cannot then be put down. There is no height limit in the node; the reach check is what stops a stack too tall or too far away (see `docs/arm_reach`). It then waits for the camera to see the cube on the destination before reporting success.
+`pick_and_place(object, destination)` picks one cube and places it on top of any other cube, in any colour. Claude never names a tag; the node maps the spoken names above to frames. The node also checks the move against the latest `/world_state` (what the overhead camera sees) before the arm moves, and again after the pick, and refuses with a plain-language reason if the cube has a cube on top of it, is already on the destination, or the destination is covered. It also passes the destination to the motion server as the `Pick` goal's `place_location`, and the server refuses the pick before it moves if it cannot place there (see Cube stacking demo), so a cube is never picked up that cannot then be put down. There is no height limit in the node; that check is what stops a stack too tall or too far away (see `docs/arm_reach`). It then waits for the camera to see the cube on the destination before reporting success.
 
 Even with `strict: true` the executor re-checks every value against these dicts before sending a goal, because the node is the safety boundary.
 
@@ -159,7 +158,7 @@ The demo uses tagged cubes. Tags 1 to 4 are white cubes and tags 5 to 8 are blue
 Claude gets `stack_cube(color, count)` for building a stack, with `color` in `white` or `blue` and `count` from 2 to 4, the number of cubes in the finished stack, and `pick_and_place`, `go_to_pose`, `release_cube`, `report_state`, `stop_robot` and `resume_robot` (see Tool definitions). The node, not Claude, decides which cube moves where:
 
 - The stacks come from the `world_state` node, which reads them off the overhead camera every frame; nothing remembers the arm's own moves. The height of a column is `round(corrected z / 50 mm)` of its top tag (`overhead_correction.py` fixes the overhead depth bias), tags at the same x, y form a column, a tag covered by a taller tag at the same x, y is remembered, and a tag that vanishes with nothing over it and the arm out of the way is dropped after 2 s. If what the camera sees contradicts what was remembered (a cube pulled from under a stack) the camera wins and the order is marked uncertain. `stack_cube` builds on the tallest column made only of that colour, whichever cube is at its bottom, and adds the top cube of the shortest other column of that colour, so loose cubes go first. Each is picked with `/pick` and placed with `/place` on the top of the stack. Columns that hold another colour, or a cube the camera cannot identify, are left alone. `/place` with a `location` already drops 50 mm above the tag, which is one cube height, so the cube lands on top of the cube carrying that tag.
-- `colman_llm/reach.py` is a numpy model of the UR3e with the vacuum tool (the same link offsets, joint limits and tool tip as the robot description, the tool straight down, the motion server's four quarter turns, and the same low-and-approach pair of poses on one IK branch). A pick only needs a point within 1.5 cm to be reachable, because the motion server refuses an unreachable pick before it moves. A place needs the point and four points 1 cm around it, because a failed place leaves the cube in the gripper. Nothing within 0.16 m of the base counts. It knows nothing about collisions, and its copies of the robot numbers are guarded by `test_reach.py`, which fails if they drift from `ur_config.yaml`, `joint_limits.yaml`, the xacro, `motion_server.py` or `arm_control.py`. `stack_cube` skips cubes it cannot reach, and stops before picking if the stack's top is out of reach.
+- Before a pick the motion server checks the place. `Pick` has an optional `place_location`, the frame of the cube this one will go on. The server finds that tag, then solves the same drop pose (one cube above the tag) and approach pose (0.05 m higher) that `/place` will, with the cube modelled on the tip and the destination column left out of the scene, using `vertical_pair` (MoveIt/TRAC-IK, collision checked, all four quarter turns). Nothing moves. If there is no solution the goal fails at once with "No safe arm pose to place on `<tag>`, so `<tag>` was not picked up". The cube's yaw in the tool is not known until it is grasped, so the squaring turn `/place` adds afterwards is left out of the check. `stack_cube` stops at that refusal and reports it.
 - A stack that is already tall enough is reported, not rebuilt, and a count the free cubes cannot reach stops and says so. A failed pick or place, or a spoken stop, ends the run and reports how many were stacked. A failed cube is not counted, so a retry targets the same cube and spot.
 - The state is in memory. Restarting the node resets it, and the stacks are read from the camera, so a restart loses nothing.
 - `pick_and_place` and `stack_cube` share one model of which cube sits on which, so a cube moved by one is where the other expects it. A cube left in the gripper after a failed place blocks every other arm tool until `release_cube`.
@@ -263,4 +262,4 @@ Kokoro speaks the response
 9. (Done) Add `stack_cube`, with stacks read from the overhead camera through `world_state`.
 10. (Done) Add `pixi run stack` and `stack-dry`, which start the whole pipeline.
 11. (Done) Let any cube go on any other and let Claude say what it is doing, with `IGNORE` for speech that is not for the arm.
-12. (Done) Check that the arm can reach a cube and its destination before the pick.
+12. (Done) Check, in the motion server, that the cube can be placed on its destination before the pick.

@@ -222,7 +222,7 @@ Every command above is a pixi task defined in [`pixi.toml`](pixi.toml).
 | --- | --- |
 | `colman_audio_input` | Parakeet speech-to-text node; mutes while the robot speaks. |
 | `colman_audio_output` | Kokoro-82M text-to-speech node. |
-| `colman_llm` | The LLM node: Claude client, tool allow-lists, executor, reach check, world view. |
+| `colman_llm` | The LLM node: Claude client, tool allow-lists, executor, world view. |
 | `colman_motion` | MoveItPy motion server, arm and vacuum control, planning-scene boxes for stacks, demos and calibration capture tools. |
 | `colman_perception` | Camera publisher, AprilTag post-processing, `world_state`, the overhead height correction, and the calibration fitting tools. |
 | `colman_interfaces` | `MoveTo`, `MovePose`, `Pick`, `Place` actions and the `WorldState` / `WorldStack` messages. |
@@ -241,7 +241,7 @@ Every command above is a pixi task defined in [`pixi.toml`](pixi.toml).
 | --- | --- | --- |
 | `/move_to` (`MoveTo`) | `pose_name` | Named pose from the SRDF (`home`, `Compact`, …). |
 | `/move_pose` (`MovePose`) | `pose`, `slow` | A Cartesian target. Not exposed to the LLM. |
-| `/pick` (`Pick`) | `frame` (e.g. `tag_3`) | Waits up to 4 s for the fused tag pose. Leaves the cube held. |
+| `/pick` (`Pick`) | `frame` (e.g. `tag_3`), optional `place_location` | Waits up to 4 s for the fused tag pose. If `place_location` is set, refuses before moving when it could not place there. Leaves the cube held. |
 | `/place` (`Place`) | `location` frame, or `position` | Drops one cube height above the tag, square with the cube below. |
 
 **Services** (`std_srvs/Trigger`): `/stop`, `/resume` (the arm), `/grasp`, `/release`
@@ -286,9 +286,10 @@ How it behaves:
   sentence in its own words. The node speaks it immediately, while the arm works. There is
   no fixed "on it".
 - **Checking before moving.** The executor refuses a move the camera contradicts (a cube
-  that is covered, already placed, or not visible) and a move the arm cannot reach
-  (`colman_llm/reach.py`), with a plain reason Claude relays. A place that is out of reach is
-  refused *before* the pick, so the arm is never left holding a cube it cannot put down.
+  that is covered, already placed, or not visible) with a plain reason Claude relays. It
+  also tells the motion server where the picked cube will go (`place_location` on the
+  `Pick` goal), and the server solves that place with the real MoveIt IK and collision
+  checks *before* it picks, so the arm is never left holding a cube it cannot put down.
 - **Stopping.** Saying "stop", "halt", "freeze", "cancel", "abort", "hold still", "stay
   still", "don't move" or "that's enough" calls `/stop`, cancels the running goal and drops
   the queue before anything else is processed. The reply is a fixed "Stopped." so it is
@@ -460,8 +461,9 @@ Known open items:
 - **Overhead exposure.** The overhead camera clips the white tag cells and its raw tag
   depth reads low; the height correction hides this rather than fixing the exposure.
 - **Calibration at height.** The camera fits are checked only at table height.
-- **Reach check.** `reach.py` is a kinematic model: it ignores collisions and its edge is
-  good to about 1–2 cm. The motion server remains the final judge.
+- **Place check.** The motion server checks the place pose before a pick using the cube's
+  yaw before it is grasped, so the final squaring turn is not part of the check. It is
+  almost always the same answer, but not guaranteed.
 - **Architecture diagram.** `docs/architecture/architecture.svg` predates the overhead
   camera and `world_state`.
 - **CI scope.** Lint covers `src/` only, and the ament flake8 and pep257 tests are skipped.

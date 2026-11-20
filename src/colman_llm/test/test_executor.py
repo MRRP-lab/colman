@@ -74,10 +74,10 @@ def test_invalid_arguments_never_reach_the_arm():
 def test_second_pick_and_place_while_busy_is_rejected():
     holder = {}
 
-    def pick(frame):
+    def pick(frame, place_frame=""):
         # A second call arrives while the first is still picking.
         holder["second"] = holder["executor"].run_tool("pick_and_place", GOOD)
-        return arm.do_pick(frame)
+        return arm.do_pick(frame, place_frame)
 
     arm = FakeArm(LOG)
     holder["executor"] = PickAndPlaceExecutor(
@@ -157,15 +157,15 @@ def test_stop_takes_no_arguments():
 def test_stop_works_while_a_pick_and_place_holds_the_lock():
     holder = {}
 
-    def pick(frame):
+    def pick(frame, place_frame=""):
         holder["stop"] = holder["executor"].run_tool("stop_robot", {})
         return True, "picked"
 
     arm = FakeArm(LOG)
 
-    def pick_then_stop(frame):
+    def pick_then_stop(frame, place_frame=""):
         pick(frame)
-        return arm.do_pick(frame)
+        return arm.do_pick(frame, place_frame)
 
     executor = PickAndPlaceExecutor(
         pick_then_stop,
