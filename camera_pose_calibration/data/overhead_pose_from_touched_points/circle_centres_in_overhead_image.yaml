@@ -1,0 +1,17 @@
+points:
+- label: 1
+  pixel: [1247.3, 1211.26]
+- label: 2
+  pixel: [1608.48, 996.27]
+- label: 3
+  pixel: [1680.81, 692.13]
+- label: 4
+  pixel: [2035.79, 697.18]
+- label: 5
+  pixel: [2062.1, 1104.49]
+- label: 6
+  pixel: [2373.3, 676.27]
+- label: 7
+  pixel: [2452.97, 1032.88]
+- label: 8
+  pixel: [2853.85, 1218.0]

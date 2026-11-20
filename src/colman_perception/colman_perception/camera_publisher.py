@@ -21,7 +21,7 @@ STALL_S = 3.0
 
 # Topic prefix, frame, image size and frame rate for each named camera (names are in
 # config/cameras.yaml). The wrist camera keeps the names the rest of the stack already
-# uses. The overhead camera is 1.83 m from the table, where a 39 mm tag is only ~30 px
+# uses. The overhead camera is 1.83 m from the table, where a 39.2 mm tag is only ~30 px
 # wide at 1080p, so it runs at 4K. A 4K BGR frame is ~25 MB, so the rate is kept low to
 # stay inside USB3 bandwidth; the cubes are static.
 CAMERAS = {
