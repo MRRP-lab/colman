@@ -322,3 +322,20 @@ def test_no_view_is_said_plainly_and_a_failing_view_does_not_stop_it():
         "m", LOG, client=SimpleNamespace(messages=messages), world=broken
     )
     assert client.say("two") == "b"
+
+
+def test_a_spoken_announcement_is_in_the_history_for_the_next_reply():
+    messages = FakeMessages(reply("ok"))
+    client = ClaudeClient("m", LOG, client=SimpleNamespace(messages=messages))
+    client.note_spoken("I can't see the blue cube.")
+    client.say("where did it go")
+    sent = messages.calls[0]["messages"]
+    assert sent[1] == {"role": "assistant", "content": "I can't see the blue cube."}
+    assert sent[-1]["content"] == "where did it go"
+
+
+def test_announcements_do_not_grow_the_history_without_limit():
+    client = ClaudeClient("m", LOG, client=SimpleNamespace(messages=FakeMessages()))
+    for i in range(20):
+        client.note_spoken(f"change {i}")
+    assert len(client._exchanges) == claude_client.MAX_EXCHANGES

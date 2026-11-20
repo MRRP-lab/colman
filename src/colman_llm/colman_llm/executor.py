@@ -100,6 +100,11 @@ class PickAndPlaceExecutor:
     def stopped(self):
         return self._stopped
 
+    @property
+    def busy(self):
+        """True while a tool call is running, so the arm's own moves are not news."""
+        return self._busy.locked()
+
     def set_stopped(self, stopped):
         """The node calls this when a spoken stop reaches the arm outside run_tool."""
         self._stopped = stopped

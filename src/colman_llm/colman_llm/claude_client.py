@@ -137,6 +137,19 @@ class ClaudeClient:
     def _is_ignore(text):
         return text.strip(" .!\"'\n").upper() == IGNORE_TOKEN
 
+    def note_spoken(self, text):
+        """Record something the arm said unprompted, so the next reply can follow it.
+
+        Only call this while no say() is running.
+        """
+        self._exchanges.append(
+            [
+                {"role": "user", "content": "(The table changed by itself.)"},
+                {"role": "assistant", "content": text},
+            ]
+        )
+        del self._exchanges[:-MAX_EXCHANGES]
+
     def _create(self, messages):
         try:
             response = self._client.messages.create(
