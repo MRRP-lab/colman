@@ -11,12 +11,17 @@ pulled from under a stack), the camera wins and the order is marked uncertain.
 import math
 from dataclasses import dataclass, field
 
-CUBE_M = 0.05  # a cube is 5 cm, so a tag on the top of level n is n * CUBE_M high
+from colman_description.workcell import CUBE_SIZE_M, TABLE_TOP_Z
+
+CUBE_M = CUBE_SIZE_M  # a cube is exactly 50 mm; see colman_description.workcell
 XY_TOL_M = 0.03  # tags closer than this in x, y are in the same column
 LOST_S = 10.0  # how long a tag may vanish with no explanation before it is lost
 # A cube placed on another can take several seconds to be detected, and its hand may
 # linger over it, so a covered tag must outlast that before it is called lost.
-ARM_HIDE_MAX_S = 30.0  # the arm may explain a missing tag for this long, no longer
+# The arm may explain a missing tag for this long, no longer. A pick or a place keeps
+# the arm over the table for a minute or more, and a cube dropped in the middle of one
+# cannot be found when the place looks for it.
+ARM_HIDE_MAX_S = 120.0
 CARRY_MEMORY_S = 60.0  # how long a stack's covered cubes are remembered for a slide
 RESTORE_S = 8.0  # a deleted tag comes back if a cube lands on its spot within this
 OUTAGE_S = 10.0  # after the camera was down this long, remembered cubes are doubted
@@ -55,7 +60,22 @@ def shifted(a, b, xy_m, z_m):
 
 
 def level_of(z):
-    return max(1, round(z / CUBE_M))
+    return max(1, round((z - TABLE_TOP_Z) / CUBE_M))
+
+
+def level_height(level):
+    """The exact height of a tag on the top of the cube at this level."""
+    return TABLE_TOP_Z + level * CUBE_M
+
+
+def exact_heights(columns):
+    """{tag: exact height} for every identified cube in the columns."""
+    return {
+        tag: level_height(i + 1)
+        for column in columns
+        for i, tag in enumerate(column.tags)
+        if tag != UNKNOWN
+    }
 
 
 def xy_gap(a, b):
@@ -376,7 +396,7 @@ class StackModel:
                 continue
             for i, tag in enumerate(moving):
                 if tag in under:
-                    beliefs[tag] = (q[0], q[1], CUBE_M * (i + 1))
+                    beliefs[tag] = (q[0], q[1], level_height(i + 1))
                     relocated[tag] = beliefs[tag]
                     self.unexplained.pop(tag, None)
                     self.arm_hidden.pop(tag, None)

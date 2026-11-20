@@ -1,24 +1,31 @@
-"""Correct the height of a tag seen by the overhead camera, and its x and y with it.
+"""Estimate the height of a tag seen by the overhead camera, and correct its x and y.
 
 The overhead camera gets a tag's depth from how big the tag looks, and a 39 mm tag is
-only about 60 px wide at 4K from 1.8 m, so its height comes out a little low. The error
-is repeatable. It was fitted by least squares against tags at known heights (single
-cubes 0.05 m, stacks of 2 to 8 cubes), and the fit is applied here. A wrong depth also
-moves the tag along the camera's line of sight, so x and y are moved back along that
-line to where it meets the corrected height.
+only about 60 px wide at 4K from 1.8 m, so its height comes out low, by an amount that
+changes from place to place on the table: for single cubes of the same true height the
+raw reading spans about 20 mm. A least-squares fit to tags at exactly known heights
+removes the average, and what is left (about 1.5 cm at worst) is why this height is only
+used to decide which level a cube is on, never to tell the arm where the cube is: the
+arm is given the exact height of the level (see stack_world.level_height). A wrong depth
+also moves the tag along the camera's line of sight, so x and y are moved back along
+that line to where it meets the corrected height.
+
+The known heights are those of a cube top: the table surface is at z = -0.005 in
+base_link (the touched table marks average -0.006 and the MoveIt table box has its top
+at -0.005), and a cube is exactly 50 mm, so n cubes up is -0.005 + 0.05 n.
 """
 
 # The overhead camera's position in base_link: the static_transform_args in
 # config/overhead_camera_pose_in_base_link.yaml (a test keeps them in step).
 CAMERA_XYZ = (0.33275, 0.05225, 1.82645)
 
-# true z = Z_SLOPE * measured z + Z_OFFSET, fitted at 4K with the 39.2 mm tag size and
-# the camera pose in config/overhead_camera_pose_in_base_link.yaml. Ten tags from 5 to
-# 40 cm (three singles at different places, stacks of 2 and 3, one stack grown from 4
-# to 8): rms residual 3.0 mm, worst 5.6 mm. Refit if the tag size, the camera pose or
-# the camera focus changes.
-Z_SLOPE = 0.9781
-Z_OFFSET = 0.0288
+# true z = Z_SLOPE * measured z + Z_OFFSET. Fitted at 4K with the 39.2 mm tag size and
+# the camera pose in config/overhead_camera_pose_in_base_link.yaml, to 22 tags between 1
+# and 8 cubes high (eight singles spread over the table, stacks of 2 and 3, one stack
+# grown from 4 to 8): rms residual 6.4 mm, worst 15.6 mm. Position terms did no better
+# under leave-one-out. Refit if the tag size, the camera pose or the focus changes.
+Z_SLOPE = 1.0059
+Z_OFFSET = 0.0148
 
 
 def corrected_z(z):

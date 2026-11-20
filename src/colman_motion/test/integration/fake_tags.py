@@ -6,11 +6,12 @@ dynamic TF, not static.
 """
 
 import rclpy
+from colman_description.workcell import cube_top_z
 from geometry_msgs.msg import TransformStamped
 from rclpy.node import Node
 from tf2_ros import TransformBroadcaster
 
-# tag_n -> (x, y) in base_link. The tag is on top of a 39.2 mm cube on the table.
+# tag_n -> (x, y) in base_link. Each tag is on the top of a 50 mm cube on the table.
 TAG_XY = {
     1: (0.30, 0.15),
     2: (0.30, -0.10),
@@ -21,7 +22,7 @@ TAG_XY = {
     7: (0.15, -0.15),
     8: (0.40, -0.10),
 }
-TAG_Z = 0.0392
+TAG_Z = cube_top_z(1)  # what world_state publishes for a cube on the table
 
 
 class FakeTags(Node):
